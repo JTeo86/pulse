@@ -48,7 +48,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { venues, currentVenue, setCurrentVenue, isAdmin } = useVenue();
+  const { venues, currentVenue, setCurrentVenue, isAdmin, isDemoMode } = useVenue();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -186,34 +186,50 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* User Menu */}
         <div className="p-4 border-t border-sidebar-border">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          {isDemoMode ? (
+            <div className="p-3 rounded-lg bg-accent/10 border border-accent/20">
+              <p className="text-xs font-medium text-accent mb-2">Demo Mode</p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Viewing sample data
+              </p>
               <Button 
-                variant="ghost" 
-                className="w-full justify-start text-left font-normal h-auto py-2"
+                size="sm" 
+                className="w-full btn-primary-editorial"
+                onClick={() => navigate('/auth')}
               >
-                <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center mr-3">
-                  <span className="text-sm font-medium text-accent">
-                    {user?.email?.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex flex-col items-start flex-1 min-w-0">
-                  <span className="text-sm font-medium truncate max-w-[140px]">
-                    {user?.email}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {isAdmin ? 'Admin' : 'Staff'}
-                  </span>
-                </div>
+                Sign In
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </div>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start text-left font-normal h-auto py-2"
+                >
+                  <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center mr-3">
+                    <span className="text-sm font-medium text-accent">
+                      {user?.email?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-start flex-1 min-w-0">
+                    <span className="text-sm font-medium truncate max-w-[140px]">
+                      {user?.email}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {isAdmin ? 'Admin' : 'Staff'}
+                    </span>
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </aside>
 

@@ -22,7 +22,7 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const { venues, loading: venueLoading } = useVenue();
+  const { venues, loading: venueLoading, isDemoMode } = useVenue();
 
   if (loading || venueLoading) {
     return (
@@ -30,6 +30,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
         <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  // Allow demo mode to bypass auth
+  if (isDemoMode && venues.length > 0) {
+    return <>{children}</>;
   }
 
   if (!user) {
