@@ -33,7 +33,7 @@ const VenueContext = createContext<VenueContextType | undefined>(undefined);
 const DEMO_VENUE_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 export function VenueProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [currentVenue, setCurrentVenue] = useState<Venue | null>(null);
   const [currentMember, setCurrentMember] = useState<VenueMember | null>(null);
@@ -123,8 +123,10 @@ export function VenueProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Wait for auth to finish loading before fetching venues
+    if (authLoading) return;
     refreshVenues();
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (currentVenue) {
