@@ -23,10 +23,14 @@ interface VenueContextType {
   setCurrentVenue: (venue: Venue | null) => void;
   loading: boolean;
   isAdmin: boolean;
+  isDemoMode: boolean;
   refreshVenues: () => Promise<void>;
 }
 
 const VenueContext = createContext<VenueContextType | undefined>(undefined);
+
+// Demo venue ID for sample data viewing
+const DEMO_VENUE_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 export function VenueProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -34,15 +38,45 @@ export function VenueProvider({ children }: { children: ReactNode }) {
   const [currentVenue, setCurrentVenue] = useState<Venue | null>(null);
   const [currentMember, setCurrentMember] = useState<VenueMember | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+
+  const loadDemoVenue = async () => {
+    try {
+      const { data: venue, error } = await supabase
+        .from('venues')
+        .select('*')
+        .eq('id', DEMO_VENUE_ID)
+        .single();
+
+      if (error || !venue) {
+        setLoading(false);
+        return;
+      }
+
+      setVenues([venue]);
+      setCurrentVenue(venue);
+      setCurrentMember({
+        id: 'demo-member',
+        venue_id: DEMO_VENUE_ID,
+        user_id: 'demo-user',
+        role: 'admin',
+      });
+      setIsDemoMode(true);
+    } catch (error) {
+      console.error('Error loading demo venue:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const refreshVenues = async () => {
     if (!user) {
-      setVenues([]);
-      setCurrentVenue(null);
-      setCurrentMember(null);
-      setLoading(false);
+      // Load demo venue for preview purposes
+      await loadDemoVenue();
       return;
     }
+
+    setIsDemoMode(false);
 
     try {
       // Get all venue memberships for this user
@@ -108,6 +142,7 @@ export function VenueProvider({ children }: { children: ReactNode }) {
       setCurrentVenue,
       loading,
       isAdmin,
+      isDemoMode,
       refreshVenues,
     }}>
       {children}
