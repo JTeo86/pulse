@@ -87,7 +87,7 @@ export function VenueProvider({ children }: { children: ReactNode }) {
 
       if (memberError) throw memberError;
 
-      if (memberships && memberships.length > 0) {
+    if (memberships && memberships.length > 0) {
         // Get venue details
         const venueIds = memberships.map(m => m.venue_id);
         const { data: venueData, error: venueError } = await supabase
@@ -110,14 +110,13 @@ export function VenueProvider({ children }: { children: ReactNode }) {
           const member = memberships.find(m => m.venue_id === venue.id);
           setCurrentMember(member as VenueMember || null);
         }
+        setLoading(false);
       } else {
-        setVenues([]);
-        setCurrentVenue(null);
-        setCurrentMember(null);
+        // Load demo venue as fallback for authenticated users with no venues
+        await loadDemoVenue();
       }
     } catch (error) {
       console.error('Error fetching venues:', error);
-    } finally {
       setLoading(false);
     }
   };
