@@ -23,7 +23,7 @@ import {
   PanelLeft
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { useBrand } from '@/lib/brand-context';
+import { useVenue } from '@/lib/venue-context';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -88,7 +88,8 @@ function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { brands, currentBrand, setCurrentBrand, isAdmin, isDemoMode } = useBrand();
+  // Use venue context directly, treat as "brand" in UI
+  const { venues: brands, currentVenue: currentBrand, setCurrentVenue: setCurrentBrand, isAdmin, isDemoMode } = useVenue();
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
 

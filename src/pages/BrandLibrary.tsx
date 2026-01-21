@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FolderOpen, Image, Upload as UploadIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useBrand } from '@/lib/brand-context';
+import { useVenue } from '@/lib/venue-context';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,7 +27,7 @@ interface UploadItem {
 }
 
 export default function BrandLibraryPage() {
-  const { currentBrand } = useBrand();
+  const { currentVenue: currentBrand } = useVenue();
   const navigate = useNavigate();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
