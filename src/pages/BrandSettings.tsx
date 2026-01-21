@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Settings, Building2, Trash2 } from 'lucide-react';
-import { useBrand } from '@/lib/brand-context';
+import { useVenue } from '@/lib/venue-context';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
 export default function BrandSettingsPage() {
-  const { currentBrand, isAdmin } = useBrand();
+  const { currentVenue: currentBrand, isAdmin } = useVenue();
   const [brandName, setBrandName] = useState(currentBrand?.name || '');
 
   return (

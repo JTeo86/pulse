@@ -12,7 +12,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useBrand } from '@/lib/brand-context';
+import { useVenue } from '@/lib/venue-context';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 
@@ -24,7 +24,7 @@ interface BrandStats {
 }
 
 export default function BrandOverviewPage() {
-  const { currentBrand } = useBrand();
+  const { currentVenue: currentBrand } = useVenue();
   const [stats, setStats] = useState<BrandStats>({ uploads: 0, drafts: 0, approved: 0, published: 0 });
   const [loading, setLoading] = useState(true);
 
