@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* TheEditor.ai Design System
-   Premium, editorial aesthetic for hospitality venues
+/* Creative Brand Studio Design System
+   Premium, dark, studio-like aesthetic
    All colors in HSL format
 */
 
@@ -11,7 +11,7 @@
 
 @layer base {
   :root {
-    /* Core palette - warm, sophisticated */
+    /* Light mode - kept for compatibility but dark is default */
     --background: 40 20% 98%;
     --foreground: 20 10% 10%;
 
@@ -21,46 +21,36 @@
     --popover: 40 25% 99%;
     --popover-foreground: 20 10% 10%;
 
-    /* Primary - Deep charcoal with warmth */
     --primary: 25 8% 15%;
     --primary-foreground: 40 20% 98%;
 
-    /* Secondary - Warm cream */
     --secondary: 40 30% 95%;
     --secondary-foreground: 25 8% 15%;
 
-    /* Muted - Soft warm gray */
     --muted: 40 15% 92%;
     --muted-foreground: 25 6% 45%;
 
-    /* Accent - Subtle gold */
     --accent: 42 65% 55%;
     --accent-foreground: 25 8% 10%;
 
-    /* Destructive */
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Success - Sage green */
     --success: 145 30% 42%;
     --success-foreground: 0 0% 100%;
 
-    /* Warning - Warm amber */
     --warning: 38 92% 50%;
     --warning-foreground: 25 8% 10%;
 
-    /* Info - Soft blue */
     --info: 210 40% 50%;
     --info-foreground: 0 0% 100%;
 
-    /* UI Elements */
     --border: 40 20% 88%;
     --input: 40 20% 88%;
     --ring: 42 65% 55%;
 
     --radius: 0.625rem;
 
-    /* Sidebar */
     --sidebar-background: 40 25% 97%;
     --sidebar-foreground: 25 8% 25%;
     --sidebar-primary: 25 8% 15%;
@@ -70,7 +60,6 @@
     --sidebar-border: 40 20% 90%;
     --sidebar-ring: 42 65% 55%;
 
-    /* Custom gradients and shadows */
     --gradient-gold: linear-gradient(135deg, hsl(42 65% 55%), hsl(38 70% 60%));
     --gradient-warm: linear-gradient(180deg, hsl(40 25% 99%), hsl(40 20% 96%));
     --shadow-soft: 0 2px 8px -2px hsl(25 8% 15% / 0.08);
@@ -79,54 +68,69 @@
   }
 
   .dark {
-    --background: 20 10% 8%;
-    --foreground: 40 15% 95%;
+    /* Dark mode - Premium studio aesthetic */
+    --background: 220 15% 6%;
+    --foreground: 220 10% 95%;
 
-    --card: 20 10% 10%;
-    --card-foreground: 40 15% 95%;
+    --card: 220 15% 8%;
+    --card-foreground: 220 10% 95%;
 
-    --popover: 20 10% 10%;
-    --popover-foreground: 40 15% 95%;
+    --popover: 220 15% 10%;
+    --popover-foreground: 220 10% 95%;
 
-    --primary: 40 20% 95%;
-    --primary-foreground: 20 10% 8%;
+    --primary: 220 10% 95%;
+    --primary-foreground: 220 15% 6%;
 
-    --secondary: 20 8% 18%;
-    --secondary-foreground: 40 15% 95%;
+    --secondary: 220 12% 14%;
+    --secondary-foreground: 220 10% 85%;
 
-    --muted: 20 8% 18%;
-    --muted-foreground: 40 10% 60%;
+    --muted: 220 12% 14%;
+    --muted-foreground: 220 8% 55%;
 
-    --accent: 42 65% 55%;
-    --accent-foreground: 20 10% 8%;
+    --accent: 42 75% 55%;
+    --accent-foreground: 220 15% 6%;
 
-    --destructive: 0 62% 50%;
+    --destructive: 0 62% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 145 30% 50%;
+    --success: 145 40% 45%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 20 10% 8%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 220 15% 6%;
 
-    --border: 20 8% 20%;
-    --input: 20 8% 20%;
-    --ring: 42 65% 55%;
+    --info: 210 50% 55%;
+    --info-foreground: 0 0% 100%;
 
-    --sidebar-background: 20 10% 8%;
-    --sidebar-foreground: 40 15% 90%;
-    --sidebar-primary: 40 20% 95%;
-    --sidebar-primary-foreground: 20 10% 8%;
-    --sidebar-accent: 20 8% 15%;
-    --sidebar-accent-foreground: 40 15% 95%;
-    --sidebar-border: 20 8% 18%;
-    --sidebar-ring: 42 65% 55%;
+    --border: 220 12% 16%;
+    --input: 220 12% 16%;
+    --ring: 42 75% 55%;
+
+    --sidebar-background: 220 15% 7%;
+    --sidebar-foreground: 220 10% 80%;
+    --sidebar-primary: 220 10% 95%;
+    --sidebar-primary-foreground: 220 15% 6%;
+    --sidebar-accent: 220 12% 12%;
+    --sidebar-accent-foreground: 220 10% 95%;
+    --sidebar-border: 220 12% 14%;
+    --sidebar-ring: 42 75% 55%;
+
+    --gradient-gold: linear-gradient(135deg, hsl(42 75% 55%), hsl(38 80% 50%));
+    --gradient-dark: linear-gradient(180deg, hsl(220 15% 8%), hsl(220 15% 6%));
+    --shadow-soft: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
+    --shadow-medium: 0 8px 24px -4px hsl(0 0% 0% / 0.4);
+    --shadow-elevated: 0 16px 48px -8px hsl(0 0% 0% / 0.5);
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+  }
+
+  html {
+    /* Dark mode by default */
+    color-scheme: dark;
   }
 
   body {
@@ -156,7 +160,13 @@
   
   .card-hover:hover {
     box-shadow: var(--shadow-medium);
-    @apply -translate-y-0.5;
+    @apply -translate-y-0.5 border-accent/30;
+  }
+
+  /* Premium glass effect */
+  .card-glass {
+    @apply bg-card/80 backdrop-blur-xl rounded-xl border border-border/50;
+    box-shadow: var(--shadow-soft);
   }
 
   .status-chip {
@@ -180,7 +190,7 @@
   }
 
   .status-published {
-    @apply bg-accent/20 text-accent-foreground;
+    @apply bg-accent/20 text-accent;
   }
 
   .text-editorial {
@@ -224,6 +234,26 @@
   .divider {
     @apply border-t border-border/60;
   }
+
+  /* Module card styling */
+  .module-card {
+    @apply relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card to-card/50 p-6;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .module-card::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 transition-opacity duration-300;
+  }
+
+  .module-card:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Coming soon badge */
+  .coming-soon-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent border border-accent/20;
+  }
 }
 
 @layer utilities {
@@ -237,6 +267,10 @@
 
   .animate-scale-in {
     animation: scaleIn 0.3s ease-out;
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
   }
 
   @keyframes fadeIn {
@@ -267,6 +301,15 @@
     to {
       opacity: 1;
       transform: scale(1);
+    }
+  }
+
+  @keyframes glow {
+    from {
+      box-shadow: 0 0 20px hsl(42 75% 55% / 0.1);
+    }
+    to {
+      box-shadow: 0 0 30px hsl(42 75% 55% / 0.2);
     }
   }
 }
