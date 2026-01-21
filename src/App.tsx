@@ -5,14 +5,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { VenueProvider, useVenue } from "@/lib/venue-context";
+import { BrandProvider } from "@/lib/brand-context";
 
 import Auth from "./pages/Auth";
 import CreateVenue from "./pages/CreateVenue";
-import Dashboard from "./pages/Dashboard";
+import BrandOverview from "./pages/BrandOverview";
 import BrandKit from "./pages/BrandKit";
-import Upload from "./pages/Upload";
-import Drafts from "./pages/Drafts";
-import Publishing from "./pages/Publishing";
+import BrandLibrary from "./pages/BrandLibrary";
+import TheEditor from "./pages/TheEditor";
+import ContentStudio from "./pages/ContentStudio";
+import SocialPlanner from "./pages/SocialPlanner";
+import EmailCampaigns from "./pages/EmailCampaigns";
+import CompetitorIntel from "./pages/CompetitorIntel";
+import BrandPerformance from "./pages/BrandPerformance";
+import AIInsights from "./pages/AIInsights";
+import BrandSettings from "./pages/BrandSettings";
 import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
@@ -32,7 +39,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Allow demo mode to bypass auth
   if (isDemoMode && venues.length > 0) {
     return <>{children}</>;
   }
@@ -42,7 +48,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (venues.length === 0) {
-    return <Navigate to="/create-venue" replace />;
+    return <Navigate to="/create-brand" replace />;
   }
 
   return <>{children}</>;
@@ -52,16 +58,43 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/auth" element={<Auth />} />
-      <Route path="/create-venue" element={<CreateVenue />} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/brand-kit" element={<ProtectedRoute><BrandKit /></ProtectedRoute>} />
-      <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
-      <Route path="/drafts" element={<ProtectedRoute><Drafts /></ProtectedRoute>} />
-      <Route path="/publishing" element={<ProtectedRoute><Publishing /></ProtectedRoute>} />
-      <Route path="/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
-      <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
-      <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+      <Route path="/create-brand" element={<CreateVenue />} />
+      <Route path="/" element={<Navigate to="/brand/overview" replace />} />
+      
+      {/* Brand Section */}
+      <Route path="/brand/overview" element={<ProtectedRoute><BrandOverview /></ProtectedRoute>} />
+      <Route path="/brand/identity" element={<ProtectedRoute><BrandKit /></ProtectedRoute>} />
+      <Route path="/brand/library" element={<ProtectedRoute><BrandLibrary /></ProtectedRoute>} />
+      
+      {/* Studio Section */}
+      <Route path="/studio/content" element={<ProtectedRoute><ContentStudio /></ProtectedRoute>} />
+      <Route path="/studio/planner" element={<ProtectedRoute><SocialPlanner /></ProtectedRoute>} />
+      <Route path="/studio/email" element={<ProtectedRoute><EmailCampaigns /></ProtectedRoute>} />
+      <Route path="/studio/competitors" element={<ProtectedRoute><CompetitorIntel /></ProtectedRoute>} />
+      
+      {/* Modules Section */}
+      <Route path="/modules/editor" element={<ProtectedRoute><TheEditor /></ProtectedRoute>} />
+      
+      {/* Analytics Section */}
+      <Route path="/analytics/performance" element={<ProtectedRoute><BrandPerformance /></ProtectedRoute>} />
+      <Route path="/analytics/insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
+      
+      {/* Settings Section */}
+      <Route path="/settings/brand" element={<ProtectedRoute><BrandSettings /></ProtectedRoute>} />
+      <Route path="/settings/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
+      <Route path="/settings/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
+      <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+      
+      {/* Legacy redirects */}
+      <Route path="/dashboard" element={<Navigate to="/brand/overview" replace />} />
+      <Route path="/brand-kit" element={<Navigate to="/brand/identity" replace />} />
+      <Route path="/upload" element={<Navigate to="/modules/editor" replace />} />
+      <Route path="/drafts" element={<Navigate to="/modules/editor" replace />} />
+      <Route path="/publishing" element={<Navigate to="/modules/editor" replace />} />
+      <Route path="/team" element={<Navigate to="/settings/team" replace />} />
+      <Route path="/integrations" element={<Navigate to="/settings/integrations" replace />} />
+      <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
+      
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -75,7 +108,9 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <VenueProvider>
-            <AppRoutes />
+            <BrandProvider>
+              <AppRoutes />
+            </BrandProvider>
           </VenueProvider>
         </AuthProvider>
       </BrowserRouter>
