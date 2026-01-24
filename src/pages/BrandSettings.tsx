@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Settings, Building2, Trash2 } from 'lucide-react';
+import { Building2, Trash2, AlertTriangle } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -10,8 +12,55 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 
 export default function BrandSettingsPage() {
-  const { currentVenue: currentBrand, isAdmin } = useVenue();
+  const { currentVenue: currentBrand, isAdmin, isDemoMode, refreshVenues } = useVenue();
+  const { toast } = useToast();
   const [brandName, setBrandName] = useState(currentBrand?.name || '');
+  const [saving, setSaving] = useState(false);
+
+  // Sync local state when venue changes
+  useEffect(() => {
+    setBrandName(currentBrand?.name || '');
+  }, [currentBrand?.name]);
+
+  const handleSaveBrandName = async () => {
+    if (!currentBrand || !isAdmin) return;
+
+    if (isDemoMode) {
+      toast({
+        variant: 'destructive',
+        title: 'Demo Mode',
+        description: 'Changes cannot be saved in demo mode. Create your own brand first.',
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from('venues')
+        .update({ name: brandName })
+        .eq('id', currentBrand.id)
+        .select();
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        throw new Error('Update failed - you may not have permission');
+      }
+
+      await refreshVenues();
+      toast({ title: 'Brand name updated successfully' });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error saving brand name',
+        description: error.message,
+      });
+      setBrandName(currentBrand.name);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -24,6 +73,18 @@ export default function BrandSettingsPage() {
           title="Brand Settings"
           description="Manage your brand configuration"
         />
+
+        {isDemoMode && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6 flex items-start gap-3 max-w-2xl">
+            <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-amber-200 font-medium">Demo Mode</p>
+              <p className="text-amber-200/70 text-sm">
+                You're viewing demo data. Create your own brand to save changes.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="max-w-2xl space-y-8">
           {/* Brand Info */}
@@ -66,8 +127,12 @@ export default function BrandSettingsPage() {
             </div>
 
             {isAdmin && (
-              <Button className="btn-primary-editorial">
-                Save Changes
+              <Button 
+                className="btn-primary-editorial" 
+                onClick={handleSaveBrandName}
+                disabled={saving || brandName === currentBrand?.name}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
               </Button>
             )}
           </div>
