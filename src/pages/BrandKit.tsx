@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Palette, Image, UtensilsCrossed, Plus, Star, Trash2, AlertTriangle } from 'lucide-react';
+import { Palette, Image, UtensilsCrossed, Plus, Star, Trash2, AlertTriangle, ImageIcon } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
@@ -494,9 +494,22 @@ export default function BrandKitPage() {
         transition={{ duration: 0.3 }}
       >
         <PageHeader
-          title="Brand Kit"
-          description="Define your visual identity for AI-generated content"
+          title="Brand Assets & Identity"
+          description="These assets ensure visual consistency across all generated content."
         />
+
+        {/* Informational Callout */}
+        <div className="bg-muted/50 border border-border rounded-lg p-4 mb-6 flex items-start gap-3">
+          <ImageIcon className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm text-foreground">
+              This section controls <em>how your content looks</em>.
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Uploading assets here does not change what the AI says — only how it's presented.
+            </p>
+          </div>
+        </div>
 
         {/* Demo Mode Warning Banner */}
         {isDemoMode && (
@@ -627,8 +640,8 @@ export default function BrandKitPage() {
               <AssetGallery
                 assets={backgroundAssets}
                 bucket="background"
-                title="Background Library"
-                description="Upload photos of your venue's atmosphere, decor, and ambiance. Mark up to 3 as primary references."
+                title="Upload Brand Imagery"
+                description="Upload photos of your venue's atmosphere, decor, and ambiance. These control the visual style of generated content. Mark up to 3 as primary references."
               />
             </div>
           </TabsContent>
@@ -638,12 +651,17 @@ export default function BrandKitPage() {
               <AssetGallery
                 assets={crockeryAssets}
                 bucket="crockery"
-                title="Crockery Library"
-                description="Upload photos of your plates, glasses, and presentation style. Mark up to 3 as primary references."
+                title="Upload Presentation Style"
+                description="Upload photos of your plates, glasses, and presentation style. These inform how food imagery is styled. Mark up to 3 as primary references."
               />
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Bottom Reassurance Note */}
+        <p className="text-xs text-muted-foreground mt-6">
+          You can generate content without uploading assets here. If empty, default styling will be used.
+        </p>
       </motion.div>
     </AppLayout>
   );
