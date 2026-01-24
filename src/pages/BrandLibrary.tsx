@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Image, Upload as UploadIcon } from 'lucide-react';
+import { FolderOpen, Image, Upload as UploadIcon, FileText, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -86,8 +86,8 @@ export default function BrandLibraryPage() {
         transition={{ duration: 0.3 }}
       >
         <PageHeader
-          title="Brand Library"
-          description="All your brand assets and uploads in one place"
+          title="Brand Library & Brief"
+          description="Your brand materials, assets, and AI briefing in one place"
           action={
             <Button onClick={() => navigate('/modules/editor')} className="btn-primary-editorial">
               <UploadIcon className="w-4 h-4 mr-2" />
@@ -96,8 +96,12 @@ export default function BrandLibraryPage() {
           }
         />
 
-        <Tabs defaultValue="uploads" className="space-y-6">
+        <Tabs defaultValue="brief" className="space-y-6">
           <TabsList>
+            <TabsTrigger value="brief" className="gap-2">
+              <FileText className="w-4 h-4" />
+              Brand Brief
+            </TabsTrigger>
             <TabsTrigger value="uploads" className="gap-2">
               <Image className="w-4 h-4" />
               Uploads ({uploads.length})
@@ -107,6 +111,51 @@ export default function BrandLibraryPage() {
               Brand Assets ({assets.length})
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="brief" className="space-y-6">
+            <div className="space-y-4">
+              <div>
+                <h2 className="font-serif text-xl font-medium">Brand Brief (for AI)</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  This information guides how the AI thinks, writes, and represents your brand.
+                </p>
+              </div>
+
+              {/* Informational Callout */}
+              <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-start gap-3">
+                <Info className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-foreground">
+                    Think of this as the briefing document you would give a copywriter or marketer.
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    The AI uses this to decide <em>what to say</em>, not how things look.
+                  </p>
+                </div>
+              </div>
+
+              {/* Placeholder for future brief content */}
+              <div className="card-elevated p-6 space-y-4">
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm">What to include in your brief:</h3>
+                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Brand positioning and unique value proposition</li>
+                    <li>Target audience and customer personas</li>
+                    <li>Tone of voice (e.g., casual, professional, playful)</li>
+                    <li>Key messaging and taglines</li>
+                    <li>Website copy, menu descriptions, or brand notes</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-muted-foreground italic">
+                  The more context you provide, the better the AI can write in your voice.
+                </p>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                If this section is left empty, the AI will use generic hospitality assumptions.
+              </p>
+            </div>
+          </TabsContent>
 
           <TabsContent value="uploads">
             {uploads.length === 0 ? (
