@@ -8,8 +8,7 @@ import {
   Send, 
   ArrowUpRight,
   TrendingUp,
-  Users,
-  Calendar
+  Info
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -72,7 +71,7 @@ export default function BrandOverviewPage() {
   ];
 
   const quickActions = [
-    { label: 'Brand Identity', description: 'Define your brand voice and visual style', href: '/brand/identity', icon: Sparkles },
+    { label: 'Brand Assets & Identity', description: 'Upload visual assets that control how content looks', href: '/brand/identity', icon: Sparkles },
     { label: 'TheEditor Module', description: 'Create hospitality-grade social content', href: '/modules/editor', icon: Image },
     { label: 'Content Library', description: 'Browse all your brand assets', href: '/brand/library', icon: FileEdit },
   ];
@@ -96,9 +95,22 @@ export default function BrandOverviewPage() {
         className="space-y-8"
       >
         <PageHeader
-          title={`Welcome to ${currentBrand?.name || 'Your Brand'}`}
-          description="Your creative brand studio at a glance"
+          title="Brand Brief (for AI)"
+          description="This information guides how the AI thinks, writes, and represents your brand."
         />
+
+        {/* Informational Callout */}
+        <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-start gap-3">
+          <Info className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm text-foreground">
+              Think of this as the briefing document you would give a copywriter or marketer.
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              The AI uses this to decide <em>what to say</em>, not how things look.
+            </p>
+          </div>
+        </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -162,7 +174,7 @@ export default function BrandOverviewPage() {
           
           <div className="grid grid-cols-3 gap-4 mt-4">
             <div className="p-3 rounded-lg bg-muted/50">
-              <p className="text-xs text-muted-foreground mb-1">Identity</p>
+              <p className="text-xs text-muted-foreground mb-1">Brief</p>
               <p className="text-sm font-medium text-accent">Configured</p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50">
@@ -175,6 +187,11 @@ export default function BrandOverviewPage() {
             </div>
           </div>
         </div>
+
+        {/* Bottom Note */}
+        <p className="text-xs text-muted-foreground mt-6">
+          If this section is left empty, the AI will use generic hospitality assumptions.
+        </p>
       </motion.div>
     </AppLayout>
   );
