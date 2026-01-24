@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Palette, Image, UtensilsCrossed, Plus, Star, Trash2 } from 'lucide-react';
+import { Palette, Image, UtensilsCrossed, Plus, Star, Trash2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
@@ -36,7 +36,7 @@ interface BrandAsset {
 }
 
 export default function BrandKitPage() {
-  const { currentVenue, isAdmin } = useVenue();
+  const { currentVenue, isAdmin, isDemoMode } = useVenue();
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -47,6 +47,17 @@ export default function BrandKitPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [newExampleUrl, setNewExampleUrl] = useState('');
+
+  // Helper to check if user can edit and show demo mode warning
+  const canEdit = isAdmin && !isDemoMode;
+
+  const showDemoModeWarning = () => {
+    toast({
+      variant: 'destructive',
+      title: 'Demo Mode',
+      description: 'Changes cannot be saved while viewing demo data. Create your own brand to save changes.',
+    });
+  };
 
   const fetchBrandKit = useCallback(async () => {
     if (!currentVenue) return;
@@ -99,18 +110,31 @@ export default function BrandKitPage() {
   const handlePresetChange = async (preset: 'casual' | 'midrange' | 'luxury') => {
     if (!brandKit || !isAdmin) return;
 
+    if (isDemoMode) {
+      showDemoModeWarning();
+      return;
+    }
+
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('brand_kits')
         .update({ preset })
-        .eq('id', brandKit.id);
+        .eq('id', brandKit.id)
+        .select();
 
       if (error) throw error;
+      
+      // Verify the update actually happened
+      if (!data || data.length === 0) {
+        throw new Error('Update failed - you may not have permission to edit this brand kit');
+      }
       
       setBrandKit({ ...brandKit, preset });
       toast({ title: 'Brand preset updated' });
     } catch (error: any) {
+      // Revert local state to match database
+      await fetchBrandKit();
       toast({
         variant: 'destructive',
         title: 'Error updating preset',
@@ -124,18 +148,33 @@ export default function BrandKitPage() {
   const handleRulesChange = async (rules_text: string) => {
     if (!brandKit || !isAdmin) return;
 
+    if (isDemoMode) {
+      showDemoModeWarning();
+      // Revert local state
+      await fetchBrandKit();
+      return;
+    }
+
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('brand_kits')
         .update({ rules_text })
-        .eq('id', brandKit.id);
+        .eq('id', brandKit.id)
+        .select();
 
       if (error) throw error;
+      
+      // Verify the update actually happened
+      if (!data || data.length === 0) {
+        throw new Error('Update failed - you may not have permission to edit this brand kit');
+      }
       
       setBrandKit({ ...brandKit, rules_text });
       toast({ title: 'Brand rules saved' });
     } catch (error: any) {
+      // Revert local state to match database
+      await fetchBrandKit();
       toast({
         variant: 'destructive',
         title: 'Error saving rules',
@@ -149,21 +188,32 @@ export default function BrandKitPage() {
   const addExampleUrl = async () => {
     if (!brandKit || !isAdmin || !newExampleUrl.trim()) return;
 
+    if (isDemoMode) {
+      showDemoModeWarning();
+      return;
+    }
+
     const urls = [...(brandKit.example_urls || []), newExampleUrl.trim()];
     
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('brand_kits')
         .update({ example_urls: urls })
-        .eq('id', brandKit.id);
+        .eq('id', brandKit.id)
+        .select();
 
       if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        throw new Error('Update failed - you may not have permission to edit this brand kit');
+      }
       
       setBrandKit({ ...brandKit, example_urls: urls });
       setNewExampleUrl('');
       toast({ title: 'Example added' });
     } catch (error: any) {
+      await fetchBrandKit();
       toast({
         variant: 'destructive',
         title: 'Error adding example',
@@ -177,20 +227,31 @@ export default function BrandKitPage() {
   const removeExampleUrl = async (index: number) => {
     if (!brandKit || !isAdmin) return;
 
+    if (isDemoMode) {
+      showDemoModeWarning();
+      return;
+    }
+
     const urls = brandKit.example_urls.filter((_, i) => i !== index);
     
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('brand_kits')
         .update({ example_urls: urls })
-        .eq('id', brandKit.id);
+        .eq('id', brandKit.id)
+        .select();
 
       if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        throw new Error('Update failed - you may not have permission to edit this brand kit');
+      }
       
       setBrandKit({ ...brandKit, example_urls: urls });
       toast({ title: 'Example removed' });
     } catch (error: any) {
+      await fetchBrandKit();
       toast({
         variant: 'destructive',
         title: 'Error removing example',
@@ -204,6 +265,11 @@ export default function BrandKitPage() {
   const uploadAsset = async (bucket: 'background' | 'crockery', file: File) => {
     if (!currentVenue || !user || !isAdmin) return;
 
+    if (isDemoMode) {
+      showDemoModeWarning();
+      return;
+    }
+
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
@@ -216,16 +282,23 @@ export default function BrandKitPage() {
 
       if (uploadError) throw uploadError;
 
-      const { error: insertError } = await supabase
+      const { data, error: insertError } = await supabase
         .from('brand_assets')
         .insert({
           venue_id: currentVenue.id,
           bucket,
           storage_path: storagePath,
           uploaded_by: user.id,
-        });
+        })
+        .select();
 
       if (insertError) throw insertError;
+      
+      if (!data || data.length === 0) {
+        // Clean up uploaded file if insert failed
+        await supabase.storage.from('venue-assets').remove([storagePath]);
+        throw new Error('Insert failed - you may not have permission to add assets');
+      }
 
       await fetchBrandKit();
       toast({ title: 'Asset uploaded' });
@@ -243,6 +316,11 @@ export default function BrandKitPage() {
   const togglePrimary = async (asset: BrandAsset) => {
     if (!isAdmin) return;
 
+    if (isDemoMode) {
+      showDemoModeWarning();
+      return;
+    }
+
     const assets = asset.bucket === 'background' ? backgroundAssets : crockeryAssets;
     const primaryCount = assets.filter(a => a.is_primary).length;
 
@@ -256,12 +334,18 @@ export default function BrandKitPage() {
     }
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('brand_assets')
         .update({ is_primary: !asset.is_primary })
-        .eq('id', asset.id);
+        .eq('id', asset.id)
+        .select();
 
       if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        throw new Error('Update failed - you may not have permission to edit this asset');
+      }
+      
       await fetchBrandKit();
     } catch (error: any) {
       toast({
@@ -275,17 +359,28 @@ export default function BrandKitPage() {
   const deleteAsset = async (asset: BrandAsset) => {
     if (!isAdmin) return;
 
+    if (isDemoMode) {
+      showDemoModeWarning();
+      return;
+    }
+
     try {
       await supabase.storage
         .from('venue-assets')
         .remove([asset.storage_path]);
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('brand_assets')
         .delete()
-        .eq('id', asset.id);
+        .eq('id', asset.id)
+        .select();
 
       if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        throw new Error('Delete failed - you may not have permission to delete this asset');
+      }
+      
       await fetchBrandKit();
       toast({ title: 'Asset deleted' });
     } catch (error: any) {
@@ -319,7 +414,7 @@ export default function BrandKitPage() {
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
 
-      {isAdmin && (
+      {canEdit && (
         <div className="flex gap-2">
           <Input
             type="file"
@@ -349,7 +444,7 @@ export default function BrandKitPage() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              {isAdmin && (
+              {canEdit && (
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button
                     size="icon"
@@ -403,6 +498,19 @@ export default function BrandKitPage() {
           description="Define your visual identity for AI-generated content"
         />
 
+        {/* Demo Mode Warning Banner */}
+        {isDemoMode && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-200">You're viewing demo data</p>
+              <p className="text-sm text-amber-200/70 mt-1">
+                Changes cannot be saved in demo mode. Create your own brand to save your guidelines and assets.
+              </p>
+            </div>
+          </div>
+        )}
+
         <Tabs defaultValue="settings" className="space-y-6">
           <TabsList>
             <TabsTrigger value="settings" className="gap-2">
@@ -431,7 +539,7 @@ export default function BrandKitPage() {
               <Select
                 value={brandKit?.preset || 'casual'}
                 onValueChange={(value) => handlePresetChange(value as any)}
-                disabled={!isAdmin || saving}
+                disabled={!canEdit || saving}
               >
                 <SelectTrigger className="w-full md:w-64">
                   <SelectValue />
@@ -458,7 +566,7 @@ export default function BrandKitPage() {
                 onBlur={(e) => handleRulesChange(e.target.value)}
                 placeholder="e.g., Never use emojis. Always mention our signature cocktails. Avoid promotional language..."
                 className="min-h-[120px] input-editorial"
-                disabled={!isAdmin}
+                disabled={!canEdit}
               />
             </div>
 
@@ -471,7 +579,7 @@ export default function BrandKitPage() {
                 </p>
               </div>
               
-              {isAdmin && (
+              {canEdit && (
                 <div className="flex gap-2">
                   <Input
                     value={newExampleUrl}
@@ -497,7 +605,7 @@ export default function BrandKitPage() {
                       className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg"
                     >
                       <span className="flex-1 truncate text-sm">{url}</span>
-                      {isAdmin && (
+                      {canEdit && (
                         <Button
                           size="icon"
                           variant="ghost"
