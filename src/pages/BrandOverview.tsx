@@ -7,8 +7,7 @@ import {
   FileEdit, 
   Send, 
   ArrowUpRight,
-  TrendingUp,
-  Info
+  TrendingUp
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -71,9 +70,9 @@ export default function BrandOverviewPage() {
   ];
 
   const quickActions = [
+    { label: 'Brand Library & Brief', description: 'Set up your AI briefing and browse assets', href: '/brand/library', icon: FileEdit },
     { label: 'Brand Assets & Identity', description: 'Upload visual assets that control how content looks', href: '/brand/identity', icon: Sparkles },
     { label: 'TheEditor Module', description: 'Create hospitality-grade social content', href: '/modules/editor', icon: Image },
-    { label: 'Content Library', description: 'Browse all your brand assets', href: '/brand/library', icon: FileEdit },
   ];
 
   if (loading) {
@@ -95,22 +94,9 @@ export default function BrandOverviewPage() {
         className="space-y-8"
       >
         <PageHeader
-          title="Brand Brief (for AI)"
-          description="This information guides how the AI thinks, writes, and represents your brand."
+          title="Brand Overview"
+          description="At-a-glance view of your brand's content and activity"
         />
-
-        {/* Informational Callout */}
-        <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-start gap-3">
-          <Info className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-sm text-foreground">
-              Think of this as the briefing document you would give a copywriter or marketer.
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              The AI uses this to decide <em>what to say</em>, not how things look.
-            </p>
-          </div>
-        </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -187,11 +173,6 @@ export default function BrandOverviewPage() {
             </div>
           </div>
         </div>
-
-        {/* Bottom Note */}
-        <p className="text-xs text-muted-foreground mt-6">
-          If this section is left empty, the AI will use generic hospitality assumptions.
-        </p>
       </motion.div>
     </AppLayout>
   );
