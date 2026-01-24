@@ -13,9 +13,7 @@ import BrandOverview from "./pages/BrandOverview";
 import BrandKit from "./pages/BrandKit";
 import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
-import ContentStudio from "./pages/ContentStudio";
-import SocialPlanner from "./pages/SocialPlanner";
-import EmailCampaigns from "./pages/EmailCampaigns";
+import StudioHub from "./pages/StudioHub";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
 import AIInsights from "./pages/AIInsights";
@@ -59,7 +57,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/auth" element={<Auth />} />
       <Route path="/create-brand" element={<CreateVenue />} />
-      <Route path="/" element={<Navigate to="/brand/overview" replace />} />
+      <Route path="/" element={<Navigate to="/studio/editor" replace />} />
       
       {/* Brand Section */}
       <Route path="/brand/overview" element={<ProtectedRoute><BrandOverview /></ProtectedRoute>} />
@@ -67,16 +65,12 @@ function AppRoutes() {
       <Route path="/brand/library" element={<ProtectedRoute><BrandLibrary /></ProtectedRoute>} />
       
       {/* Studio Section */}
-      <Route path="/studio/content" element={<ProtectedRoute><ContentStudio /></ProtectedRoute>} />
-      <Route path="/studio/planner" element={<ProtectedRoute><SocialPlanner /></ProtectedRoute>} />
-      <Route path="/studio/email" element={<ProtectedRoute><EmailCampaigns /></ProtectedRoute>} />
-      <Route path="/studio/competitors" element={<ProtectedRoute><CompetitorIntel /></ProtectedRoute>} />
-      
-      {/* Modules Section */}
-      <Route path="/modules/editor" element={<ProtectedRoute><TheEditor /></ProtectedRoute>} />
+      <Route path="/studio/editor" element={<ProtectedRoute><TheEditor /></ProtectedRoute>} />
+      <Route path="/studio/content" element={<ProtectedRoute><StudioHub /></ProtectedRoute>} />
       
       {/* Analytics Section */}
       <Route path="/analytics/performance" element={<ProtectedRoute><BrandPerformance /></ProtectedRoute>} />
+      <Route path="/analytics/competitors" element={<ProtectedRoute><CompetitorIntel /></ProtectedRoute>} />
       <Route path="/analytics/insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
       
       {/* Settings Section */}
@@ -88,9 +82,13 @@ function AppRoutes() {
       {/* Legacy redirects */}
       <Route path="/dashboard" element={<Navigate to="/brand/overview" replace />} />
       <Route path="/brand-kit" element={<Navigate to="/brand/identity" replace />} />
-      <Route path="/upload" element={<Navigate to="/modules/editor" replace />} />
-      <Route path="/drafts" element={<Navigate to="/modules/editor" replace />} />
-      <Route path="/publishing" element={<Navigate to="/modules/editor" replace />} />
+      <Route path="/modules/editor" element={<Navigate to="/studio/editor" replace />} />
+      <Route path="/upload" element={<Navigate to="/studio/editor" replace />} />
+      <Route path="/drafts" element={<Navigate to="/studio/editor" replace />} />
+      <Route path="/publishing" element={<Navigate to="/studio/editor" replace />} />
+      <Route path="/studio/planner" element={<Navigate to="/settings/integrations" replace />} />
+      <Route path="/studio/email" element={<Navigate to="/studio/content" replace />} />
+      <Route path="/studio/competitors" element={<Navigate to="/analytics/competitors" replace />} />
       <Route path="/team" element={<Navigate to="/settings/team" replace />} />
       <Route path="/integrations" element={<Navigate to="/settings/integrations" replace />} />
       <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />

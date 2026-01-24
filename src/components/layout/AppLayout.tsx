@@ -62,24 +62,19 @@ const brandNavigation = [
 ];
 
 const studioNavigation = [
-  { name: 'Content Studio', href: '/studio/content', icon: PenTool },
-  { name: 'Social Planner', href: '/studio/planner', icon: Calendar },
-  { name: 'Email Campaigns', href: '/studio/email', icon: Mail },
-  { name: 'Competitor Intel', href: '/studio/competitors', icon: Target },
-];
-
-const modulesNavigation = [
-  { name: 'TheEditor', href: '/modules/editor', icon: Sparkles, badge: 'Hospitality' },
+  { name: 'TheEditor', href: '/studio/editor', icon: Sparkles, badge: 'Hospitality' },
+  { name: 'Studio Hub', href: '/studio/content', icon: PenTool, badge: 'Coming Soon' },
 ];
 
 const analyticsNavigation = [
   { name: 'Brand Performance', href: '/analytics/performance', icon: BarChart3 },
+  { name: 'Competitors', href: '/analytics/competitors', icon: Target },
   { name: 'AI Insights', href: '/analytics/insights', icon: Brain },
 ];
 
 const settingsNavigation = [
   { name: 'Brand Settings', href: '/settings/brand', icon: Settings },
-  { name: 'Members & Roles', href: '/settings/team', icon: Users },
+  { name: 'Team', href: '/settings/team', icon: Users },
   { name: 'Integrations', href: '/settings/integrations', icon: Plug },
   { name: 'Billing', href: '/settings/billing', icon: CreditCard },
 ];
@@ -204,7 +199,6 @@ function AppSidebar() {
       <SidebarContent className="py-2">
         <NavSection label="Brand" items={brandNavigation} />
         <NavSection label="Studio" items={studioNavigation} />
-        <NavSection label="Modules" items={modulesNavigation} />
         <NavSection label="Analytics" items={analyticsNavigation} />
         {isAdmin && <NavSection label="Settings" items={settingsNavigation} />}
       </SidebarContent>
@@ -260,7 +254,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  const allNavItems = [...brandNavigation, ...studioNavigation, ...modulesNavigation, ...analyticsNavigation, ...settingsNavigation];
+  const allNavItems = [...brandNavigation, ...studioNavigation, ...analyticsNavigation, ...settingsNavigation];
 
   return (
     <SidebarProvider>
