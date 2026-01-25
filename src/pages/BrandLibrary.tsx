@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Image, Upload as UploadIcon, FileText, Info } from 'lucide-react';
+import { FolderOpen, Image, FileText, Info, Trash2, Loader2, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -9,14 +9,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-
-interface Asset {
-  id: string;
-  storage_path: string;
-  bucket: string;
-  created_at: string;
-  is_primary: boolean;
-}
+import { useToast } from '@/hooks/use-toast';
+import { BrandKitUploader } from '@/components/brand/BrandKitUploader';
+import { BrandKitFileList } from '@/components/brand/BrandKitFileList';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface UploadItem {
   id: string;
@@ -26,46 +32,102 @@ interface UploadItem {
   notes: string | null;
 }
 
+interface BrandKitFile {
+  id: string;
+  file_name: string;
+  file_type: string;
+  category: string | null;
+  storage_path: string;
+  size_bytes: number | null;
+  created_at: string;
+}
+
 export default function BrandLibraryPage() {
-  const { currentVenue: currentBrand } = useVenue();
+  const { currentVenue: currentBrand, isAdmin, isDemoMode } = useVenue();
   const navigate = useNavigate();
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const { toast } = useToast();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [brandKitFiles, setBrandKitFiles] = useState<BrandKitFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const canEdit = isAdmin && !isDemoMode;
+
+  const fetchLibrary = async () => {
+    if (!currentBrand) return;
+
+    try {
+      const [uploadsResult, brandKitResult] = await Promise.all([
+        supabase
+          .from('uploads')
+          .select('*')
+          .eq('venue_id', currentBrand.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('brand_kit_files')
+          .select('*')
+          .eq('venue_id', currentBrand.id)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      if (uploadsResult.data) setUploads(uploadsResult.data as UploadItem[]);
+      if (brandKitResult.data) setBrandKitFiles(brandKitResult.data as BrandKitFile[]);
+    } catch (error) {
+      console.error('Error fetching library:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentBrand) return;
-
-    const fetchLibrary = async () => {
-      try {
-        const [assetsResult, uploadsResult] = await Promise.all([
-          supabase
-            .from('brand_assets')
-            .select('*')
-            .eq('venue_id', currentBrand.id)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('uploads')
-            .select('*')
-            .eq('venue_id', currentBrand.id)
-            .order('created_at', { ascending: false }),
-        ]);
-
-        if (assetsResult.data) setAssets(assetsResult.data);
-        if (uploadsResult.data) setUploads(uploadsResult.data as UploadItem[]);
-      } catch (error) {
-        console.error('Error fetching library:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchLibrary();
   }, [currentBrand]);
 
   const getPublicUrl = (path: string) => {
     const { data } = supabase.storage.from('venue-assets').getPublicUrl(path);
     return data.publicUrl;
+  };
+
+  const handleDeleteUpload = async (upload: UploadItem) => {
+    setDeletingId(upload.id);
+
+    try {
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from('venue-assets')
+        .remove([upload.storage_path]);
+
+      if (storageError) {
+        console.error('Storage delete error:', storageError);
+      }
+
+      // Delete DB record
+      const { error: dbError } = await supabase
+        .from('uploads')
+        .delete()
+        .eq('id', upload.id);
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      toast({
+        title: 'Photo deleted',
+        description: 'The photo has been removed from your gallery.',
+      });
+
+      setUploads((prev) => prev.filter((u) => u.id !== upload.id));
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: 'Delete failed',
+        description: 'Could not delete photo. You may not have permission.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (loading) {
@@ -88,12 +150,6 @@ export default function BrandLibraryPage() {
         <PageHeader
           title="Brand Library & Brief"
           description="Your brand materials, assets, and AI briefing in one place"
-          action={
-            <Button onClick={() => navigate('/modules/editor')} className="btn-primary-editorial">
-              <UploadIcon className="w-4 h-4 mr-2" />
-              Upload New
-            </Button>
-          }
         />
 
         <Tabs defaultValue="brief" className="space-y-6">
@@ -102,16 +158,17 @@ export default function BrandLibraryPage() {
               <FileText className="w-4 h-4" />
               Brand Brief
             </TabsTrigger>
-          <TabsTrigger value="uploads" className="gap-2">
-            <Image className="w-4 h-4" />
-            Gallery ({uploads.length})
-          </TabsTrigger>
-          <TabsTrigger value="assets" className="gap-2">
-            <FolderOpen className="w-4 h-4" />
-            Brand Kit ({assets.length})
-          </TabsTrigger>
+            <TabsTrigger value="gallery" className="gap-2">
+              <Image className="w-4 h-4" />
+              Gallery ({uploads.length})
+            </TabsTrigger>
+            <TabsTrigger value="brand-kit" className="gap-2">
+              <FolderOpen className="w-4 h-4" />
+              Brand Kit ({brandKitFiles.length})
+            </TabsTrigger>
           </TabsList>
 
+          {/* Brand Brief Tab */}
           <TabsContent value="brief" className="space-y-6">
             <div className="space-y-4">
               <div>
@@ -121,7 +178,6 @@ export default function BrandLibraryPage() {
                 </p>
               </div>
 
-              {/* Informational Callout */}
               <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-start gap-3">
                 <Info className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                 <div>
@@ -134,7 +190,6 @@ export default function BrandLibraryPage() {
                 </div>
               </div>
 
-              {/* Placeholder for future brief content */}
               <div className="card-elevated p-6 space-y-4">
                 <div className="space-y-2">
                   <h3 className="font-medium text-sm">What to include in your brief:</h3>
@@ -157,15 +212,26 @@ export default function BrandLibraryPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="uploads" className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Photos created or uploaded via the Editor. Used for content generation.
-            </p>
+          {/* Gallery Tab - Content photos from Editor */}
+          <TabsContent value="gallery" className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-sm text-muted-foreground">
+                Photos uploaded via the Editor for content creation. Manage and delete them here.
+              </p>
+              <Button
+                onClick={() => navigate('/studio/editor')}
+                className="btn-primary-editorial flex-shrink-0"
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                Open Editor
+              </Button>
+            </div>
+
             {uploads.length === 0 ? (
               <EmptyState
                 icon={Image}
                 title="No photos in gallery"
-                description="Photos will appear here once you create content in the Editor"
+                description="Photos will appear here once you upload them in the Editor"
               />
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -175,52 +241,92 @@ export default function BrandLibraryPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.2, delay: index * 0.02 }}
-                    className="aspect-square rounded-lg overflow-hidden border border-border bg-muted"
+                    className="aspect-square rounded-lg overflow-hidden border border-border bg-muted relative group"
                   >
                     <img
                       src={getPublicUrl(upload.storage_path)}
-                      alt=""
+                      alt={upload.notes || ''}
                       className="w-full h-full object-cover"
                     />
+                    {canEdit && (
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="h-8 w-8"
+                              disabled={deletingId === upload.id}
+                            >
+                              {deletingId === upload.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete photo?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete this photo from your gallery. Any content using this photo may be affected.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteUpload(upload)}
+                                className="bg-destructive hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    )}
+                    {upload.notes && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                        <p className="text-xs text-white truncate">{upload.notes}</p>
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="assets" className="space-y-4">
+          {/* Brand Kit Tab - Brand identity files */}
+          <TabsContent value="brand-kit" className="space-y-6">
             <p className="text-sm text-muted-foreground">
-              Brand rules and references used to keep all content visually and tonally consistent.
+              Upload brand guidelines, logos, fonts, and tone-of-voice docs. These keep your content consistent.
             </p>
-            {assets.length === 0 ? (
+
+            {canEdit && currentBrand && (
+              <BrandKitUploader
+                venueId={currentBrand.id}
+                onUploadComplete={fetchLibrary}
+              />
+            )}
+
+            {isDemoMode && (
+              <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm text-muted-foreground">
+                You're viewing demo data. Sign in and select your brand to upload files.
+              </div>
+            )}
+
+            {brandKitFiles.length === 0 && !canEdit ? (
               <EmptyState
                 icon={FolderOpen}
-                title="No brand kit assets"
-                description="Add logos, brand guidelines, colour palettes, and visual references"
+                title="No brand kit files"
+                description="Brand guidelines, logos, and fonts will appear here"
               />
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {assets.map((asset, index) => (
-                  <motion.div
-                    key={asset.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.2, delay: index * 0.02 }}
-                    className="aspect-square rounded-lg overflow-hidden border border-border bg-muted relative"
-                  >
-                    <img
-                      src={getPublicUrl(asset.storage_path)}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                    {asset.is_primary && (
-                      <div className="absolute top-2 right-2 px-2 py-0.5 bg-accent/90 text-accent-foreground text-xs rounded">
-                        Primary
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
+              <BrandKitFileList
+                files={brandKitFiles}
+                canEdit={canEdit}
+                onDeleteComplete={fetchLibrary}
+              />
             )}
           </TabsContent>
         </Tabs>
