@@ -102,14 +102,14 @@ export default function BrandLibraryPage() {
               <FileText className="w-4 h-4" />
               Brand Brief
             </TabsTrigger>
-            <TabsTrigger value="uploads" className="gap-2">
-              <Image className="w-4 h-4" />
-              Uploads ({uploads.length})
-            </TabsTrigger>
-            <TabsTrigger value="assets" className="gap-2">
-              <FolderOpen className="w-4 h-4" />
-              Brand Assets ({assets.length})
-            </TabsTrigger>
+          <TabsTrigger value="uploads" className="gap-2">
+            <Image className="w-4 h-4" />
+            Content Photos ({uploads.length})
+          </TabsTrigger>
+          <TabsTrigger value="assets" className="gap-2">
+            <FolderOpen className="w-4 h-4" />
+            Brand Reference Assets ({assets.length})
+          </TabsTrigger>
           </TabsList>
 
           <TabsContent value="brief" className="space-y-6">
@@ -157,11 +157,14 @@ export default function BrandLibraryPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="uploads">
+          <TabsContent value="uploads" className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Photos uploaded for content creation. Use the Editor to turn these into posts.
+            </p>
             {uploads.length === 0 ? (
               <EmptyState
                 icon={Image}
-                title="No uploads yet"
+                title="No content photos yet"
                 description="Upload photos from your brand to start creating content"
               />
             ) : (
@@ -185,12 +188,15 @@ export default function BrandLibraryPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="assets">
+          <TabsContent value="assets" className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Visual reference assets (backgrounds, crockery, styling) used to maintain brand consistency.
+            </p>
             {assets.length === 0 ? (
               <EmptyState
                 icon={FolderOpen}
-                title="No brand assets"
-                description="Add backgrounds, crockery, and other visual assets in Brand Identity"
+                title="No brand reference assets"
+                description="Add backgrounds, crockery, and other visual assets in Brand Assets & Identity"
               />
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
