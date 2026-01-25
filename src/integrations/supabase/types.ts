@@ -88,6 +88,50 @@ export type Database = {
           },
         ]
       }
+      brand_kit_files: {
+        Row: {
+          category: string | null
+          created_at: string
+          file_name: string
+          file_type: string
+          id: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string
+          venue_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          file_name: string
+          file_type: string
+          id?: string
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by: string
+          venue_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          file_name?: string
+          file_type?: string
+          id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_kit_files_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_kits: {
         Row: {
           created_at: string
