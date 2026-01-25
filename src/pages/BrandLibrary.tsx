@@ -104,11 +104,11 @@ export default function BrandLibraryPage() {
             </TabsTrigger>
           <TabsTrigger value="uploads" className="gap-2">
             <Image className="w-4 h-4" />
-            Content Photos ({uploads.length})
+            Gallery ({uploads.length})
           </TabsTrigger>
           <TabsTrigger value="assets" className="gap-2">
             <FolderOpen className="w-4 h-4" />
-            Brand Reference Assets ({assets.length})
+            Brand Kit ({assets.length})
           </TabsTrigger>
           </TabsList>
 
@@ -159,13 +159,13 @@ export default function BrandLibraryPage() {
 
           <TabsContent value="uploads" className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Photos uploaded for content creation. Use the Editor to turn these into posts.
+              Photos created or uploaded via the Editor. Used for content generation.
             </p>
             {uploads.length === 0 ? (
               <EmptyState
                 icon={Image}
-                title="No content photos yet"
-                description="Upload photos from your brand to start creating content"
+                title="No photos in gallery"
+                description="Photos will appear here once you create content in the Editor"
               />
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -190,13 +190,13 @@ export default function BrandLibraryPage() {
 
           <TabsContent value="assets" className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Visual reference assets (backgrounds, crockery, styling) used to maintain brand consistency.
+              Brand rules and references used to keep all content visually and tonally consistent.
             </p>
             {assets.length === 0 ? (
               <EmptyState
                 icon={FolderOpen}
-                title="No brand reference assets"
-                description="Add backgrounds, crockery, and other visual assets in Brand Assets & Identity"
+                title="No brand kit assets"
+                description="Add logos, brand guidelines, colour palettes, and visual references"
               />
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
