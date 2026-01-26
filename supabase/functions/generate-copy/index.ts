@@ -10,6 +10,7 @@ interface GenerateCopyRequest {
   venue_id: string;
   module: 'email' | 'blog' | 'ad_copy' | 'sms_push';
   goal: string;
+  preset?: string | null;
   inputs: {
     key_message: string;
     call_to_action: string;
@@ -17,31 +18,83 @@ interface GenerateCopyRequest {
     tone?: string;
     platform?: string;
     length?: 'short' | 'medium' | 'long';
+    preset_context?: string;
+    urgency?: string;
   };
 }
 
 const moduleConfig = {
   email: {
     name: 'Email Campaign',
-    format: 'subject line and body',
-    lengthGuide: { short: '50-100 words', medium: '100-200 words', long: '200-400 words' }
+    format: `Return JSON with this exact structure:
+{
+  "variations": [
+    {
+      "title": "Subject line here",
+      "content": "Full email body with greeting, main message, and sign-off"
+    }
+  ]
+}`,
+    lengthGuide: { short: '50-100 words', medium: '100-200 words', long: '200-400 words' },
+    outputHints: 'Include subject line as title. Body should have greeting, main message, CTA, and sign-off.',
   },
   blog: {
     name: 'Blog Post',
-    format: 'title and full article',
-    lengthGuide: { short: '300-500 words', medium: '500-800 words', long: '800-1200 words' }
+    format: `Return JSON with this exact structure:
+{
+  "variations": [
+    {
+      "title": "Blog post title here",
+      "content": "Full article with introduction, body paragraphs with subheadings (use ## for H2), and conclusion"
+    }
+  ]
+}`,
+    lengthGuide: { short: '300-500 words', medium: '500-800 words', long: '800-1200 words' },
+    outputHints: 'Include SEO-friendly title. Content should have intro, structured body with H2 headings (##), and conclusion.',
   },
   ad_copy: {
     name: 'Ad Copy',
-    format: 'headline and body copy',
-    lengthGuide: { short: '25-50 words', medium: '50-100 words', long: '100-150 words' }
+    format: `Return JSON with this exact structure:
+{
+  "variations": [
+    {
+      "title": "Headline (max 40 chars for Meta, 30 for Google)",
+      "content": "Primary text / description (keep under 125 chars for Meta)"
+    }
+  ]
+}`,
+    lengthGuide: { short: '25-50 words', medium: '50-100 words', long: '100-150 words' },
+    outputHints: 'Headline in title field. Primary text in content. Keep within platform character limits.',
   },
   sms_push: {
     name: 'SMS/Push Notification',
-    format: 'concise message',
-    lengthGuide: { short: '50-80 characters', medium: '80-120 characters', long: '120-160 characters' }
-  }
+    format: `Return JSON with this exact structure:
+{
+  "variations": [
+    {
+      "title": "Push notification title (optional, for push only)",
+      "content": "SMS/Push message body - keep under 160 chars for SMS"
+    }
+  ]
+}`,
+    lengthGuide: { short: '50-80 characters', medium: '80-120 characters', long: '120-160 characters' },
+    outputHints: 'For SMS: no title, message under 160 chars. For Push: short title + body.',
+  },
 };
+
+// Compliance rules - CRITICAL for hospitality
+const complianceRules = `
+COMPLIANCE RULES (STRICTLY FOLLOW):
+1. NEVER invent prices, discounts, percentages, or specific monetary values
+2. NEVER make health, medical, or nutritional claims
+3. NEVER use superlatives like "best", "number one", "guaranteed", "will sell out"
+4. NEVER create false urgency unless explicitly provided by the user
+5. NEVER invent dates, times, or availability claims not provided by user
+6. NEVER make legal, financial, or regulated advice statements
+7. If specific details are missing, write flexible, non-specific copy
+8. Avoid clichés and hyperbole - be genuine and credible
+9. Focus on experience and atmosphere, not unverifiable claims
+`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -72,9 +125,8 @@ serve(async (req) => {
       });
     }
 
-    const { venue_id, module, goal, inputs } = await req.json() as GenerateCopyRequest;
+    const { venue_id, module, goal, preset, inputs } = await req.json() as GenerateCopyRequest;
 
-    // Validate required fields
     if (!venue_id || !module || !goal || !inputs?.key_message || !inputs?.call_to_action) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
@@ -82,14 +134,13 @@ serve(async (req) => {
       });
     }
 
-    // Fetch brand brief and identity from brand_kits
+    // Fetch brand brief and identity
     const { data: brandKit } = await supabase
       .from("brand_kits")
       .select("preset, rules_text")
       .eq("venue_id", venue_id)
       .maybeSingle();
 
-    // Fetch venue name for context
     const { data: venue } = await supabase
       .from("venues")
       .select("name")
@@ -101,48 +152,62 @@ serve(async (req) => {
     const lengthGuide = config.lengthGuide[length];
 
     // Build brand context
-    const brandContext = [];
-    if (venue?.name) brandContext.push(`Business Name: ${venue.name}`);
-    if (brandKit?.preset) brandContext.push(`Brand Tone Preset: ${brandKit.preset} (casual = friendly/approachable, midrange = professional/warm, luxury = sophisticated/exclusive)`);
-    if (brandKit?.rules_text) brandContext.push(`Brand Voice Guidelines: ${brandKit.rules_text}`);
-    if (inputs.tone) brandContext.push(`Requested Tone Override: ${inputs.tone}`);
-    if (inputs.audience) brandContext.push(`Target Audience: ${inputs.audience}`);
+    const brandContext: string[] = [];
+    if (venue?.name) brandContext.push(`Business: ${venue.name}`);
+    
+    // Map preset to tone description
+    const toneMap: Record<string, string> = {
+      casual: 'friendly, approachable, conversational',
+      midrange: 'professional yet warm, balanced',
+      luxury: 'sophisticated, exclusive, refined',
+    };
+    
+    if (brandKit?.preset && toneMap[brandKit.preset]) {
+      brandContext.push(`Brand Tone: ${toneMap[brandKit.preset]}`);
+    }
+    if (brandKit?.rules_text) {
+      brandContext.push(`Brand Voice Guidelines: ${brandKit.rules_text}`);
+    }
+    if (inputs.tone) {
+      brandContext.push(`Requested Tone: ${inputs.tone}`);
+    }
+    if (inputs.audience) {
+      brandContext.push(`Target Audience: ${inputs.audience}`);
+    }
+    if (inputs.urgency && inputs.urgency !== 'none') {
+      brandContext.push(`Urgency Level: ${inputs.urgency}`);
+    }
+    if (inputs.preset_context) {
+      brandContext.push(`Context: ${inputs.preset_context}`);
+    }
 
-    const systemPrompt = `You are an expert hospitality copywriter creating ${config.name} content. You write compelling, on-brand copy that drives action while maintaining brand consistency.
+    const systemPrompt = `You are a senior hospitality copywriter specializing in ${config.name} content.
 
 BRAND CONTEXT:
 ${brandContext.join('\n')}
 
-OUTPUT FORMAT:
+${complianceRules}
+
+OUTPUT REQUIREMENTS:
 - Generate exactly 3 different variations
-- Each variation should have a distinct angle/approach while staying on-brand
-- Format as ${config.format}
+- Each variation should take a distinct angle while staying on-brand
 - Target length: ${lengthGuide}
-- Make the copy actionable and engaging
-- No emojis unless the brand tone is casual
-- Focus on benefits, not features
+- ${config.outputHints}
+- Make copy actionable and engaging
+- No emojis unless tone is casual/playful or module is SMS
+- Focus on experience and benefits, not unverifiable claims
 
-For each variation, return:
-1. A catchy title/subject line (if applicable)
-2. The main content
+${config.format}`;
 
-Respond in JSON format:
-{
-  "variations": [
-    { "title": "string or null", "content": "string" },
-    { "title": "string or null", "content": "string" },
-    { "title": "string or null", "content": "string" }
-  ]
-}`;
-
-    const userPrompt = `Generate ${config.name} content with the following details:
+    const userPrompt = `Create ${config.name} content for:
 
 GOAL: ${goal}
+${preset ? `PRESET: ${preset}` : ''}
 KEY MESSAGE: ${inputs.key_message}
 CALL TO ACTION: ${inputs.call_to_action}
 ${inputs.platform ? `PLATFORM: ${inputs.platform}` : ''}
 
-Create 3 compelling variations that drive the desired action.`;
+Generate 3 compelling, compliant variations.`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -153,7 +218,7 @@ Create 3 compelling variations that drive the desired action.`;
       });
     }
 
-    console.log(`Generating ${module} copy for venue ${venue_id} with goal: ${goal}`);
+    console.log(`Generating ${module} copy for venue ${venue_id}, goal: ${goal}, preset: ${preset || 'none'}`);
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -195,7 +260,7 @@ Create 3 compelling variations that drive the desired action.`;
 
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content;
-    
+
     if (!content) {
       console.error("No content in AI response");
       return new Response(JSON.stringify({ error: "Failed to generate copy" }), {

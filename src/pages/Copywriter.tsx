@@ -18,7 +18,7 @@ export default function CopywriterPage() {
     <AppLayout>
       <PageHeader
         title="Copywriter"
-        description="AI-powered copy generation for email, blog, ads, and more"
+        description="Generate on-brand email, blog, ad, and SMS/push copy in minutes."
       />
 
       <div className="space-y-8">

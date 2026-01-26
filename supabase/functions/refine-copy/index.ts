@@ -7,17 +7,30 @@ const corsHeaders = {
 
 interface RefineCopyRequest {
   content: string;
-  title?: string;
-  refinement: 'shorter' | 'more_premium' | 'more_direct' | 'more_playful' | 'add_urgency';
+  title?: string | null;
+  refinement: string;
+  module?: string;
 }
 
-const refinementInstructions: Record<string, string> = {
-  shorter: "Make this copy more concise. Cut unnecessary words while preserving the key message and call to action. Aim to reduce length by 30-50%.",
-  more_premium: "Elevate the tone to feel more luxurious and exclusive. Use sophisticated language, avoid casual expressions, and emphasize quality, craftsmanship, and exclusivity.",
-  more_direct: "Make this copy more direct and action-oriented. Use shorter sentences, active voice, and clear imperatives. Get to the point faster.",
-  more_playful: "Add more personality and warmth. Use friendlier language, clever wordplay if appropriate, and make it feel more conversational and engaging.",
-  add_urgency: "Add a sense of urgency without being pushy. Emphasize limited time, limited availability, or time-sensitive benefits. Create FOMO tastefully.",
+const refinementPrompts: Record<string, string> = {
+  shorter: "Make this copy more concise. Cut unnecessary words while keeping the core message and CTA intact.",
+  more_premium: "Elevate the tone to feel more sophisticated and exclusive. Use refined language without being pretentious.",
+  more_direct: "Make this more direct and action-oriented. Get to the point faster with a stronger CTA.",
+  more_playful: "Add warmth and personality. Make it more engaging and fun while staying professional.",
+  add_urgency: "Add genuine urgency without making false claims. Emphasize timeliness or limited nature if applicable.",
+  more_urgent: "Make the message feel more time-sensitive. Emphasize the need to act now.",
+  add_emojis: "Add 1-2 relevant emojis to make the message more engaging. Don't overdo it.",
 };
+
+// Compliance rules - must be followed even during refinement
+const complianceRules = `
+COMPLIANCE (STRICTLY FOLLOW):
+- NEVER invent prices, discounts, or specific values
+- NEVER make health/medical claims
+- NEVER use "best", "guaranteed", "will sell out"
+- NEVER create false urgency not in original
+- Keep copy genuine and credible
+`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,15 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { content, title, refinement } = await req.json() as RefineCopyRequest;
+    const { content, title, refinement, module } = await req.json() as RefineCopyRequest;
 
     if (!content || !refinement) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -42,13 +47,7 @@ serve(async (req) => {
       });
     }
 
-    const instruction = refinementInstructions[refinement];
-    if (!instruction) {
-      return new Response(JSON.stringify({ error: "Invalid refinement type" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const refinementInstruction = refinementPrompts[refinement] || refinement;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -58,24 +57,32 @@ serve(async (req) => {
       });
     }
 
-    const systemPrompt = `You are an expert copywriter. Your task is to refine existing copy according to specific instructions while preserving the core message.
+    // Module-specific constraints
+    let moduleConstraint = "";
+    if (module === "sms_push") {
+      moduleConstraint = "IMPORTANT: Keep SMS messages under 160 characters. Push titles under 50 chars, bodies under 100 chars.";
+    } else if (module === "ad_copy") {
+      moduleConstraint = "IMPORTANT: Keep headlines under 40 characters. Primary text under 125 characters.";
+    }
 
-REFINEMENT INSTRUCTION:
-${instruction}
+    const systemPrompt = `You are a hospitality copywriting expert. Refine the given copy according to the instruction.
 
-OUTPUT FORMAT:
-Return the refined copy in JSON format:
+${complianceRules}
+
+${moduleConstraint}
+
+Return JSON:
 {
-  "title": "refined title or null if no title was provided",
+  "title": "refined title or null if not applicable",
   "content": "refined content"
-}
+}`;
 
-Keep the same general structure but apply the refinement. Do not add new information unless specifically asked.`;
+    const userPrompt = `REFINEMENT INSTRUCTION: ${refinementInstruction}
 
-    const userPrompt = `Please refine this copy:
+ORIGINAL TITLE: ${title || "(none)"}
+ORIGINAL CONTENT: ${content}
 
-${title ? `TITLE: ${title}\n\n` : ''}CONTENT:
-${content}`;
+Apply the refinement while maintaining brand voice and compliance.`;
 
     console.log(`Refining copy with: ${refinement}`);
 
@@ -119,7 +126,7 @@ ${content}`;
 
     const aiData = await aiResponse.json();
     const responseContent = aiData.choices?.[0]?.message?.content;
-    
+
     if (!responseContent) {
       return new Response(JSON.stringify({ error: "Failed to refine copy" }), {
         status: 500,

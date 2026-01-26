@@ -1,18 +1,36 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, Download, Minus, Crown, Zap, Smile, Clock, Loader2, Check } from 'lucide-react';
+import { Copy, Download, Minus, Crown, Zap, Smile, Clock, Loader2, Check, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import type { CopyModule } from './copywriter-config';
 
 interface Variation {
   title: string | null;
   content: string;
+  structured?: {
+    subjectLines?: string[];
+    previewTexts?: string[];
+    body?: string;
+    ctaLabel?: string;
+    headlines?: string[];
+    primaryTexts?: string[];
+    descriptions?: string[];
+    titleOptions?: string[];
+    outline?: string;
+    metaTitle?: string;
+    metaDescription?: string;
+    smsMessages?: { text: string; charCount: number }[];
+    pushTitles?: string[];
+    pushBodies?: string[];
+  };
 }
 
 interface CopyOutputProps {
+  module: CopyModule;
   variations: Variation[];
   selectedIndex: number;
   onSelectVariation: (index: number) => void;
@@ -21,7 +39,7 @@ interface CopyOutputProps {
   isRefining: boolean;
 }
 
-const refinements = [
+const baseRefinements = [
   { id: 'shorter', label: 'Shorter', icon: Minus },
   { id: 'more_premium', label: 'More Premium', icon: Crown },
   { id: 'more_direct', label: 'More Direct', icon: Zap },
@@ -29,7 +47,15 @@ const refinements = [
   { id: 'add_urgency', label: 'Add Urgency', icon: Clock },
 ];
 
+const smsRefinements = [
+  { id: 'shorter', label: 'Shorter', icon: Minus },
+  { id: 'more_urgent', label: 'More Urgent', icon: Clock },
+  { id: 'more_playful', label: 'More Playful', icon: Smile },
+  { id: 'add_emojis', label: 'Add Emojis', icon: Hash },
+];
+
 export function CopyOutput({
+  module,
   variations,
   selectedIndex,
   onSelectVariation,
@@ -41,12 +67,13 @@ export function CopyOutput({
   const [copied, setCopied] = useState(false);
 
   const currentVariation = variations[selectedIndex];
+  const refinements = module === 'sms_push' ? smsRefinements : baseRefinements;
 
   const handleCopy = async () => {
-    const text = currentVariation.title 
+    const text = currentVariation.title
       ? `${currentVariation.title}\n\n${currentVariation.content}`
       : currentVariation.content;
-    
+
     await navigator.clipboard.writeText(text);
     setCopied(true);
     toast({ title: 'Copied to clipboard' });
@@ -54,18 +81,22 @@ export function CopyOutput({
   };
 
   const handleExport = () => {
-    const text = currentVariation.title 
-      ? `${currentVariation.title}\n\n${currentVariation.content}`
+    const text = currentVariation.title
+      ? `# ${currentVariation.title}\n\n${currentVariation.content}`
       : currentVariation.content;
-    
+
     const blob = new Blob([text], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `copy-${Date.now()}.md`;
+    a.download = `${module}-copy-${Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: 'Exported as Markdown' });
+  };
+
+  const getCharacterCount = (text: string) => {
+    return text.length;
   };
 
   if (variations.length === 0) {
@@ -101,7 +132,14 @@ export function CopyOutput({
       <div className="space-y-4">
         {currentVariation.title !== null && (
           <div>
-            <label className="text-sm font-medium text-muted-foreground">Title / Subject</label>
+            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              {module === 'email' ? 'Subject Line' : module === 'blog' ? 'Title' : module === 'ad_copy' ? 'Headline' : 'Message Title'}
+              {module === 'sms_push' && (
+                <Badge variant="outline" className="text-xs">
+                  {getCharacterCount(currentVariation.title || '')} chars
+                </Badge>
+              )}
+            </label>
             <Input
               value={currentVariation.title || ''}
               onChange={(e) => onUpdateVariation(selectedIndex, 'title', e.target.value)}
@@ -111,13 +149,59 @@ export function CopyOutput({
         )}
 
         <div>
-          <label className="text-sm font-medium text-muted-foreground">Content</label>
+          <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            {module === 'email' ? 'Email Body' : module === 'blog' ? 'Article Content' : module === 'ad_copy' ? 'Ad Copy' : 'Message Body'}
+            {module === 'sms_push' && (
+              <Badge variant={getCharacterCount(currentVariation.content) > 160 ? 'destructive' : 'outline'} className="text-xs">
+                {getCharacterCount(currentVariation.content)}/160 chars
+              </Badge>
+            )}
+          </label>
           <Textarea
             value={currentVariation.content}
             onChange={(e) => onUpdateVariation(selectedIndex, 'content', e.target.value)}
-            className="mt-1.5 min-h-[200px]"
+            className="mt-1.5 min-h-[200px] font-mono text-sm"
           />
+          {module === 'sms_push' && getCharacterCount(currentVariation.content) > 160 && (
+            <p className="text-xs text-destructive mt-1">
+              Message exceeds 160 characters and may be split into multiple SMS
+            </p>
+          )}
         </div>
+
+        {/* Module-specific structured output hints */}
+        {module === 'email' && (
+          <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Quick tips</p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li>• Subject lines under 50 characters perform best</li>
+              <li>• Include a clear CTA button in your email</li>
+              <li>• Preview text should complement, not repeat, the subject</li>
+            </ul>
+          </div>
+        )}
+
+        {module === 'blog' && (
+          <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">SEO checklist</p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li>• Meta title: 50-60 characters</li>
+              <li>• Meta description: 150-160 characters</li>
+              <li>• Include target keyword in H1 and first paragraph</li>
+            </ul>
+          </div>
+        )}
+
+        {module === 'ad_copy' && (
+          <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Platform limits</p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li>• Meta headline: 40 characters</li>
+              <li>• Meta primary text: 125 characters</li>
+              <li>• Google headline: 30 characters</li>
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Quick Refinements */}
