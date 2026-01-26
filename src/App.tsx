@@ -13,7 +13,7 @@ import BrandOverview from "./pages/BrandOverview";
 import BrandKit from "./pages/BrandKit";
 import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
-import StudioHub from "./pages/StudioHub";
+import Copywriter from "./pages/Copywriter";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
 import AIInsights from "./pages/AIInsights";
@@ -66,7 +66,7 @@ function AppRoutes() {
       
       {/* Studio Section */}
       <Route path="/studio/editor" element={<ProtectedRoute><TheEditor /></ProtectedRoute>} />
-      <Route path="/studio/content" element={<ProtectedRoute><StudioHub /></ProtectedRoute>} />
+      <Route path="/studio/content" element={<ProtectedRoute><Copywriter /></ProtectedRoute>} />
       
       {/* Analytics Section */}
       <Route path="/analytics/performance" element={<ProtectedRoute><BrandPerformance /></ProtectedRoute>} />
