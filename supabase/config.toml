@@ -1,1 +1,7 @@
 project_id = "ofyhknmqewvhmoyozftv"
+
+[functions.generate-copy]
+verify_jwt = false
+
+[functions.refine-copy]
+verify_jwt = false

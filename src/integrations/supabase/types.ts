@@ -248,6 +248,79 @@ export type Database = {
           },
         ]
       }
+      copy_outputs: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          project_id: string
+          title: string | null
+          version: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          project_id: string
+          title?: string | null
+          version?: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          title?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_outputs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "copy_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copy_projects: {
+        Row: {
+          created_at: string
+          created_by: string
+          goal: string
+          id: string
+          inputs: Json
+          module: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          goal: string
+          id?: string
+          inputs?: Json
+          module: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          goal?: string
+          id?: string
+          inputs?: Json
+          module?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copy_projects_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uploads: {
         Row: {
           created_at: string
