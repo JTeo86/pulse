@@ -8,13 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
-interface CopyProject {
-  id: string;
-  module: string;
-  goal: string;
-  inputs: Record<string, any>;
-  created_at: string;
-}
 
 const moduleIcons: Record<string, typeof Mail> = {
   email: Mail,
@@ -39,11 +32,20 @@ const goalLabels: Record<string, string> = {
   last_minute: 'Last-Minute',
 };
 
-interface RecentDraftsProps {
-  refreshTrigger?: number;
+export interface CopyProject {
+  id: string;
+  module: string;
+  goal: string;
+  inputs: Record<string, any>;
+  created_at: string;
 }
 
-export function RecentDrafts({ refreshTrigger }: RecentDraftsProps) {
+interface RecentDraftsProps {
+  refreshTrigger?: number;
+  onSelectProject?: (project: CopyProject) => void;
+}
+
+export function RecentDrafts({ refreshTrigger, onSelectProject }: RecentDraftsProps) {
   const { currentVenue, isAdmin, isDemoMode } = useVenue();
   const { toast } = useToast();
   const [projects, setProjects] = useState<CopyProject[]>([]);
@@ -139,7 +141,8 @@ export function RecentDrafts({ refreshTrigger }: RecentDraftsProps) {
           return (
             <div
               key={project.id}
-              className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50 hover:border-border transition-colors group"
+              className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50 hover:border-border transition-colors group cursor-pointer"
+              onClick={() => onSelectProject?.(project)}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <Icon className="h-4 w-4 text-muted-foreground shrink-0" />

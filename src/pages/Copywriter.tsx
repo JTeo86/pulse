@@ -5,13 +5,23 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { CopywriterModule } from '@/components/copywriter/CopywriterModule';
-import { RecentDrafts } from '@/components/copywriter/RecentDrafts';
+import { RecentDrafts, type CopyProject } from '@/components/copywriter/RecentDrafts';
 
 export default function CopywriterPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [selectedProject, setSelectedProject] = useState<CopyProject | null>(null);
 
   const handleProjectSaved = () => {
     setRefreshTrigger(prev => prev + 1);
+    setSelectedProject(null);
+  };
+
+  const handleSelectProject = (project: CopyProject) => {
+    setSelectedProject(project);
+  };
+
+  const handleCloseProject = () => {
+    setSelectedProject(null);
   };
 
   return (
@@ -47,7 +57,10 @@ export default function CopywriterPage() {
         </motion.div>
 
         {/* Recent Drafts */}
-        <RecentDrafts refreshTrigger={refreshTrigger} />
+        <RecentDrafts 
+          refreshTrigger={refreshTrigger} 
+          onSelectProject={handleSelectProject}
+        />
 
         {/* Module Cards */}
         <motion.div
@@ -56,7 +69,11 @@ export default function CopywriterPage() {
           transition={{ duration: 0.4, delay: 0.1 }}
         >
           <h2 className="text-sm font-medium text-muted-foreground mb-4">Create New Copy</h2>
-          <CopywriterModule onProjectSaved={handleProjectSaved} />
+          <CopywriterModule 
+            onProjectSaved={handleProjectSaved} 
+            existingProject={selectedProject}
+            onCloseProject={handleCloseProject}
+          />
         </motion.div>
       </div>
     </AppLayout>

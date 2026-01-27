@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Sparkles, ArrowLeft, ArrowRight, Loader2, Zap } from 'lucide-react';
+import { X, Sparkles, ArrowLeft, ArrowRight, Loader2, Zap, RefreshCw, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { CopyOutput } from './CopyOutput';
+import { type CopyProject } from './RecentDrafts';
 import {
   type CopyModule,
   moduleGoals,
@@ -30,6 +31,7 @@ interface CopyWizardProps {
   module: CopyModule;
   onClose: () => void;
   onProjectSaved: () => void;
+  existingProject?: CopyProject | null;
 }
 
 interface Variation {
@@ -53,7 +55,7 @@ interface Variation {
   };
 }
 
-export function CopyWizard({ module, onClose, onProjectSaved }: CopyWizardProps) {
+export function CopyWizard({ module, onClose, onProjectSaved, existingProject }: CopyWizardProps) {
   const { currentVenue, isAdmin, isDemoMode } = useVenue();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -63,8 +65,10 @@ export function CopyWizard({ module, onClose, onProjectSaved }: CopyWizardProps)
 
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingOutputs, setIsLoadingOutputs] = useState(false);
   const [variations, setVariations] = useState<Variation[]>([]);
   const [selectedVariation, setSelectedVariation] = useState<number>(0);
+  const [existingProjectId, setExistingProjectId] = useState<string | null>(null);
 
   // Form state
   const [selectedGoal, setSelectedGoal] = useState('');
@@ -76,9 +80,68 @@ export function CopyWizard({ module, onClose, onProjectSaved }: CopyWizardProps)
   const [platform, setPlatform] = useState('');
   const [length, setLength] = useState<'short' | 'medium' | 'long'>('medium');
 
-  // Apply smart defaults when goal or preset changes
+  // Load existing project data when provided
   useEffect(() => {
-    if (selectedGoal) {
+    if (existingProject) {
+      const loadExistingProject = async () => {
+        setIsLoadingOutputs(true);
+        try {
+          // Pre-populate form from project inputs
+          const inputs = existingProject.inputs || {};
+          setSelectedGoal(existingProject.goal);
+          setKeyMessage(inputs.key_message || '');
+          setCallToAction(inputs.call_to_action || '');
+          setAudience(inputs.audience || '');
+          setTone(inputs.tone || '');
+          setPlatform(inputs.platform || '');
+          setLength(inputs.length || 'medium');
+          setExistingProjectId(existingProject.id);
+
+          // Find matching preset if any
+          if (inputs.preset) {
+            const matchingPreset = presets.find(p => p.id === inputs.preset);
+            if (matchingPreset) setSelectedPreset(matchingPreset);
+          }
+
+          // Fetch saved outputs
+          const { data: outputs, error } = await supabase
+            .from('copy_outputs')
+            .select('id, version, title, content, created_at')
+            .eq('project_id', existingProject.id)
+            .order('version', { ascending: true });
+
+          if (error) throw error;
+
+          if (outputs && outputs.length > 0) {
+            const loadedVariations: Variation[] = outputs.map(o => ({
+              title: o.title,
+              content: o.content,
+            }));
+            setVariations(loadedVariations);
+            setStep(3);
+          } else {
+            // No outputs found - stay on step 3 with empty state
+            setStep(3);
+          }
+        } catch (error: any) {
+          console.error('Failed to load project outputs:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Failed to load draft',
+            description: error.message || 'Could not load saved outputs.',
+          });
+        } finally {
+          setIsLoadingOutputs(false);
+        }
+      };
+
+      loadExistingProject();
+    }
+  }, [existingProject, toast]);
+
+  // Apply smart defaults when goal or preset changes (skip if loading existing project)
+  useEffect(() => {
+    if (selectedGoal && !existingProject) {
       const defaults = goalDefaults[selectedGoal];
       if (defaults) {
         if (!callToAction) setCallToAction(defaults.cta);
@@ -86,7 +149,7 @@ export function CopyWizard({ module, onClose, onProjectSaved }: CopyWizardProps)
         setLength(defaults.length === 'very_short' ? 'short' : defaults.length as 'short' | 'medium' | 'long');
       }
     }
-  }, [selectedGoal]);
+  }, [selectedGoal, existingProject]);
 
   useEffect(() => {
     if (selectedPreset) {
@@ -482,15 +545,47 @@ export function CopyWizard({ module, onClose, onProjectSaved }: CopyWizardProps)
 
             {/* Step 3: Output */}
             {step === 3 && (
-              <CopyOutput
-                module={module}
-                variations={variations}
-                selectedIndex={selectedVariation}
-                onSelectVariation={setSelectedVariation}
-                onRefine={handleRefine}
-                onUpdateVariation={updateVariation}
-                isRefining={isGenerating}
-              />
+              isLoadingOutputs ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Loading saved outputs...</p>
+                </div>
+              ) : variations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                    <FileText className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-foreground mb-1">No saved outputs found</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                      This draft doesn't have any saved outputs. Regenerate to create new variations.
+                    </p>
+                  </div>
+                  <Button onClick={handleGenerate} disabled={isGenerating} className="btn-accent">
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Regenerate Copy
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <CopyOutput
+                  module={module}
+                  variations={variations}
+                  selectedIndex={selectedVariation}
+                  onSelectVariation={setSelectedVariation}
+                  onRefine={handleRefine}
+                  onUpdateVariation={updateVariation}
+                  isRefining={isGenerating}
+                />
+              )
             )}
 
             {/* Navigation */}
