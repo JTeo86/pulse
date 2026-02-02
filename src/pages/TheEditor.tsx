@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload as UploadIcon, FileEdit, Send, Sparkles } from 'lucide-react';
+import { Upload as UploadIcon, FileEdit, Send, Sparkles, Wand2 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeader } from '@/components/ui/page-header';
 
 // Import existing functionality
 import UploadTab from '@/components/editor/UploadTab';
 import DraftsTab from '@/components/editor/DraftsTab';
 import PublishingTab from '@/components/editor/PublishingTab';
 
+// Import new Visual Editor
+import VisualEditor from '@/components/editor/visual/VisualEditor';
+
 export default function TheEditorPage() {
-  const [activeTab, setActiveTab] = useState('upload');
+  const [activeTab, setActiveTab] = useState('visual');
 
   return (
     <AppLayout>
@@ -50,9 +52,13 @@ export default function TheEditorPage() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-muted/50">
+            <TabsTrigger value="visual" className="gap-2">
+              <Wand2 className="w-4 h-4" />
+              Visual Editor
+            </TabsTrigger>
             <TabsTrigger value="upload" className="gap-2">
               <UploadIcon className="w-4 h-4" />
-              Upload
+              Quick Upload
             </TabsTrigger>
             <TabsTrigger value="drafts" className="gap-2">
               <FileEdit className="w-4 h-4" />
@@ -63,6 +69,10 @@ export default function TheEditorPage() {
               Publishing
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="visual" className="mt-6">
+            <VisualEditor />
+          </TabsContent>
 
           <TabsContent value="upload" className="mt-6">
             <UploadTab />

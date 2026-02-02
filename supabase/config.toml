@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.refine-copy]
 verify_jwt = false
+
+[functions.photoroom-edit]
+verify_jwt = false
