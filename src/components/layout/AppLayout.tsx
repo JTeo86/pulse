@@ -260,7 +260,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  const allNavItems = [...brandNavigation, ...studioNavigation, ...analyticsNavigation, ...settingsNavigation];
+  const allNavItems = [...brandNavigation, ...studioNavigation, ...analyticsNavigation, ...settingsNavigation, ...adminNavigation];
 
   return (
     <SidebarProvider>
