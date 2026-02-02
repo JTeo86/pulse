@@ -21,6 +21,7 @@ import BrandSettings from "./pages/BrandSettings";
 import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
+import PlatformAdmin from "./pages/admin/PlatformAdmin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -77,6 +78,7 @@ function AppRoutes() {
       <Route path="/settings/brand" element={<ProtectedRoute><BrandSettings /></ProtectedRoute>} />
       <Route path="/settings/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
       <Route path="/settings/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
+      <Route path="/admin/platform" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
       <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
       
       {/* Legacy redirects */}

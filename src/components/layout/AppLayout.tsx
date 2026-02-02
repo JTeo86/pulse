@@ -20,7 +20,8 @@ import {
   LogOut,
   Menu,
   X,
-  PanelLeft
+  PanelLeft,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -77,6 +78,10 @@ const settingsNavigation = [
   { name: 'Team', href: '/settings/team', icon: Users },
   { name: 'Integrations', href: '/settings/integrations', icon: Plug },
   { name: 'Billing', href: '/settings/billing', icon: CreditCard },
+];
+
+const adminNavigation = [
+  { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' },
 ];
 
 function AppSidebar() {
@@ -201,6 +206,7 @@ function AppSidebar() {
         <NavSection label="Studio" items={studioNavigation} />
         <NavSection label="Analytics" items={analyticsNavigation} />
         {isAdmin && <NavSection label="Settings" items={settingsNavigation} />}
+        {isAdmin && <NavSection label="Platform" items={adminNavigation} />}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">

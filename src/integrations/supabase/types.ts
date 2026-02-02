@@ -14,6 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_models: {
+        Row: {
+          allow_in_production: boolean
+          commercial_safe_status: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at: string
+          display_name: string
+          id: string
+          license_summary: string | null
+          license_url: string | null
+          model_key: string
+          provider_id: string
+          task_types: string[]
+        }
+        Insert: {
+          allow_in_production?: boolean
+          commercial_safe_status?: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at?: string
+          display_name: string
+          id?: string
+          license_summary?: string | null
+          license_url?: string | null
+          model_key: string
+          provider_id: string
+          task_types?: string[]
+        }
+        Update: {
+          allow_in_production?: boolean
+          commercial_safe_status?: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at?: string
+          display_name?: string
+          id?: string
+          license_summary?: string | null
+          license_url?: string | null
+          model_key?: string
+          provider_id?: string
+          task_types?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_models_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_providers: {
+        Row: {
+          commercial_use_allowed: boolean
+          created_at: string
+          docs_url: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          type: Database["public"]["Enums"]["ai_provider_type"]
+        }
+        Insert: {
+          commercial_use_allowed?: boolean
+          created_at?: string
+          docs_url?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          type: Database["public"]["Enums"]["ai_provider_type"]
+        }
+        Update: {
+          commercial_use_allowed?: boolean
+          created_at?: string
+          docs_url?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          type?: Database["public"]["Enums"]["ai_provider_type"]
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -46,6 +126,65 @@ export type Database = {
           venue_id?: string
         }
         Relationships: []
+      }
+      background_assets: {
+        Row: {
+          allow_in_production: boolean
+          category: string
+          commercial_safe_status: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at: string
+          file_url: string
+          id: string
+          license_proof_file_url: string | null
+          license_type: Database["public"]["Enums"]["license_type"]
+          license_url: string | null
+          name: string
+          storage_path: string | null
+          uploaded_by: string | null
+          venue_id: string | null
+          vibe_tags: string[]
+        }
+        Insert: {
+          allow_in_production?: boolean
+          category: string
+          commercial_safe_status?: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at?: string
+          file_url: string
+          id?: string
+          license_proof_file_url?: string | null
+          license_type?: Database["public"]["Enums"]["license_type"]
+          license_url?: string | null
+          name: string
+          storage_path?: string | null
+          uploaded_by?: string | null
+          venue_id?: string | null
+          vibe_tags?: string[]
+        }
+        Update: {
+          allow_in_production?: boolean
+          category?: string
+          commercial_safe_status?: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at?: string
+          file_url?: string
+          id?: string
+          license_proof_file_url?: string | null
+          license_type?: Database["public"]["Enums"]["license_type"]
+          license_url?: string | null
+          name?: string
+          storage_path?: string | null
+          uploaded_by?: string | null
+          venue_id?: string | null
+          vibe_tags?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "background_assets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       brand_assets: {
         Row: {
@@ -165,6 +304,53 @@ export type Database = {
             foreignKeyName: "brand_kits_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_visual_presets: {
+        Row: {
+          created_at: string
+          default_background_category: string | null
+          grade_settings_json: Json
+          id: string
+          is_default: boolean
+          overlay_style_json: Json
+          preset_name: string
+          updated_at: string
+          venue_id: string
+          vibe: Database["public"]["Enums"]["venue_vibe"]
+        }
+        Insert: {
+          created_at?: string
+          default_background_category?: string | null
+          grade_settings_json?: Json
+          id?: string
+          is_default?: boolean
+          overlay_style_json?: Json
+          preset_name: string
+          updated_at?: string
+          venue_id: string
+          vibe?: Database["public"]["Enums"]["venue_vibe"]
+        }
+        Update: {
+          created_at?: string
+          default_background_category?: string | null
+          grade_settings_json?: Json
+          id?: string
+          is_default?: boolean
+          overlay_style_json?: Json
+          preset_name?: string
+          updated_at?: string
+          venue_id?: string
+          vibe?: Database["public"]["Enums"]["venue_vibe"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_visual_presets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
             referencedRelation: "venues"
             referencedColumns: ["id"]
           },
@@ -321,6 +507,164 @@ export type Database = {
           },
         ]
       }
+      edited_assets: {
+        Row: {
+          compliance_notes: string | null
+          compliance_status: string | null
+          created_at: string
+          created_by: string
+          engine_version: Database["public"]["Enums"]["engine_version"]
+          id: string
+          model_id: string | null
+          output_types: string[]
+          output_urls: string[]
+          provider_id: string | null
+          settings_json: Json
+          source_asset_id: string | null
+          source_url: string | null
+          venue_id: string
+        }
+        Insert: {
+          compliance_notes?: string | null
+          compliance_status?: string | null
+          created_at?: string
+          created_by: string
+          engine_version?: Database["public"]["Enums"]["engine_version"]
+          id?: string
+          model_id?: string | null
+          output_types?: string[]
+          output_urls?: string[]
+          provider_id?: string | null
+          settings_json?: Json
+          source_asset_id?: string | null
+          source_url?: string | null
+          venue_id: string
+        }
+        Update: {
+          compliance_notes?: string | null
+          compliance_status?: string | null
+          created_at?: string
+          created_by?: string
+          engine_version?: Database["public"]["Enums"]["engine_version"]
+          id?: string
+          model_id?: string | null
+          output_types?: string[]
+          output_urls?: string[]
+          provider_id?: string | null
+          settings_json?: Json
+          source_asset_id?: string | null
+          source_url?: string | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edited_assets_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "ai_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edited_assets_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edited_assets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_flags: {
+        Row: {
+          config_json: Json
+          created_at: string
+          flag_key: string
+          id: string
+          is_enabled: boolean
+          updated_at: string
+          venue_id: string | null
+        }
+        Insert: {
+          config_json?: Json
+          created_at?: string
+          flag_key: string
+          id?: string
+          is_enabled?: boolean
+          updated_at?: string
+          venue_id?: string | null
+        }
+        Update: {
+          config_json?: Json
+          created_at?: string
+          flag_key?: string
+          id?: string
+          is_enabled?: boolean
+          updated_at?: string
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flags_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      overlay_templates: {
+        Row: {
+          allow_in_production: boolean
+          commercial_safe_status: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at: string
+          id: string
+          layout_schema: Json
+          license_type: Database["public"]["Enums"]["license_type"]
+          name: string
+          preview_url: string | null
+          style_tags: string[]
+          venue_id: string | null
+        }
+        Insert: {
+          allow_in_production?: boolean
+          commercial_safe_status?: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at?: string
+          id?: string
+          layout_schema?: Json
+          license_type?: Database["public"]["Enums"]["license_type"]
+          name: string
+          preview_url?: string | null
+          style_tags?: string[]
+          venue_id?: string | null
+        }
+        Update: {
+          allow_in_production?: boolean
+          commercial_safe_status?: Database["public"]["Enums"]["commercial_safe_status"]
+          created_at?: string
+          id?: string
+          layout_schema?: Json
+          license_type?: Database["public"]["Enums"]["license_type"]
+          name?: string
+          preview_url?: string | null
+          style_tags?: string[]
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overlay_templates_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uploads: {
         Row: {
           created_at: string
@@ -427,7 +771,16 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      ai_provider_type: "image" | "video" | "text"
+      commercial_safe_status: "approved" | "blocked" | "review_required"
+      engine_version: "v1" | "v2"
+      license_type:
+        | "owned"
+        | "commercial_stock"
+        | "cc0"
+        | "user_uploaded"
+        | "other"
+      venue_vibe: "casual" | "premium" | "luxury" | "nightlife" | "family"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -554,6 +907,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      ai_provider_type: ["image", "video", "text"],
+      commercial_safe_status: ["approved", "blocked", "review_required"],
+      engine_version: ["v1", "v2"],
+      license_type: [
+        "owned",
+        "commercial_stock",
+        "cc0",
+        "user_uploaded",
+        "other",
+      ],
+      venue_vibe: ["casual", "premium", "luxury", "nightlife", "family"],
+    },
   },
 } as const
