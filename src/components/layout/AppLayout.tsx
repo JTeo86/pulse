@@ -6,8 +6,7 @@ import {
   Palette, 
   FolderOpen,
   PenTool,
-  Calendar,
-  Mail,
+  CalendarDays,
   Target,
   Sparkles,
   BarChart3,
@@ -65,6 +64,7 @@ const brandNavigation = [
 const studioNavigation = [
   { name: 'TheEditor', href: '/studio/editor', icon: Sparkles, badge: 'Hospitality' },
   { name: 'Copywriter', href: '/studio/content', icon: PenTool },
+  { name: 'Events Planner', href: '/studio/events', icon: CalendarDays },
 ];
 
 const analyticsNavigation = [

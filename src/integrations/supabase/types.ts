@@ -580,6 +580,144 @@ export type Database = {
           },
         ]
       }
+      event_plan_links: {
+        Row: {
+          content_item_id: string | null
+          copy_project_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          plan_id: string
+          updated_at: string
+        }
+        Insert: {
+          content_item_id?: string | null
+          copy_project_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          plan_id: string
+          updated_at?: string
+        }
+        Update: {
+          content_item_id?: string | null
+          copy_project_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          plan_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_plan_links_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_plan_links_copy_project_id_fkey"
+            columns: ["copy_project_id"]
+            isOneToOne: false
+            referencedRelation: "copy_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_plan_links_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_plan_tasks: {
+        Row: {
+          created_at: string
+          id: string
+          is_done: boolean
+          plan_id: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_done?: boolean
+          plan_id: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_done?: boolean
+          plan_id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_plan_tasks_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events_catalog: {
+        Row: {
+          category: string | null
+          city: string | null
+          country_code: string | null
+          created_at: string
+          ends_at: string | null
+          id: string
+          raw: Json | null
+          source: string
+          source_id: string | null
+          starts_at: string
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          category?: string | null
+          city?: string | null
+          country_code?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          raw?: Json | null
+          source: string
+          source_id?: string | null
+          starts_at: string
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          category?: string | null
+          city?: string | null
+          country_code?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          raw?: Json | null
+          source?: string
+          source_id?: string | null
+          starts_at?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
       feature_flags: {
         Row: {
           config_json: Json
@@ -703,6 +841,69 @@ export type Database = {
           },
         ]
       }
+      venue_event_plans: {
+        Row: {
+          ai_recommendation: Json | null
+          created_at: string
+          decision: Json
+          deployed_at: string | null
+          ends_at: string | null
+          event_id: string | null
+          id: string
+          skip_reason: string | null
+          starts_at: string
+          status: string
+          title: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          ai_recommendation?: Json | null
+          created_at?: string
+          decision?: Json
+          deployed_at?: string | null
+          ends_at?: string | null
+          event_id?: string | null
+          id?: string
+          skip_reason?: string | null
+          starts_at: string
+          status?: string
+          title: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          ai_recommendation?: Json | null
+          created_at?: string
+          decision?: Json
+          deployed_at?: string | null
+          ends_at?: string | null
+          event_id?: string | null
+          id?: string
+          skip_reason?: string | null
+          starts_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_event_plans_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_event_plans_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_members: {
         Row: {
           created_at: string
@@ -737,22 +938,37 @@ export type Database = {
       }
       venues: {
         Row: {
+          city: string | null
+          country_code: string
           created_at: string
           id: string
+          lat: number | null
+          lng: number | null
           name: string
           plan: string | null
+          timezone: string
         }
         Insert: {
+          city?: string | null
+          country_code?: string
           created_at?: string
           id?: string
+          lat?: number | null
+          lng?: number | null
           name: string
           plan?: string | null
+          timezone?: string
         }
         Update: {
+          city?: string | null
+          country_code?: string
           created_at?: string
           id?: string
+          lat?: number | null
+          lng?: number | null
           name?: string
           plan?: string | null
+          timezone?: string
         }
         Relationships: []
       }

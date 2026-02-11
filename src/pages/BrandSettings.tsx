@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Trash2, AlertTriangle } from 'lucide-react';
+import { Building2, Trash2, AlertTriangle, MapPin } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -10,6 +10,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const COUNTRY_OPTIONS = [
+  { code: 'GB', name: 'United Kingdom' }, { code: 'US', name: 'United States' },
+  { code: 'IE', name: 'Ireland' }, { code: 'FR', name: 'France' },
+  { code: 'DE', name: 'Germany' }, { code: 'ES', name: 'Spain' },
+  { code: 'IT', name: 'Italy' }, { code: 'NL', name: 'Netherlands' },
+  { code: 'AU', name: 'Australia' }, { code: 'AE', name: 'UAE' },
+];
+
+const TIMEZONE_OPTIONS = [
+  'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin',
+  'Europe/Madrid', 'Europe/Rome', 'Europe/Amsterdam',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'Australia/Sydney', 'Asia/Dubai',
+];
 
 export default function BrandSettingsPage() {
   const { currentVenue: currentBrand, isAdmin, isDemoMode, refreshVenues } = useVenue();
@@ -17,10 +33,23 @@ export default function BrandSettingsPage() {
   const [brandName, setBrandName] = useState(currentBrand?.name || '');
   const [saving, setSaving] = useState(false);
 
+  // Location fields
+  const [countryCode, setCountryCode] = useState((currentBrand as any)?.country_code || 'GB');
+  const [city, setCity] = useState((currentBrand as any)?.city || '');
+  const [timezone, setTimezone] = useState((currentBrand as any)?.timezone || 'Europe/London');
+  const [lat, setLat] = useState((currentBrand as any)?.lat?.toString() || '');
+  const [lng, setLng] = useState((currentBrand as any)?.lng?.toString() || '');
+  const [savingLocation, setSavingLocation] = useState(false);
+
   // Sync local state when venue changes
   useEffect(() => {
     setBrandName(currentBrand?.name || '');
-  }, [currentBrand?.name]);
+    setCountryCode((currentBrand as any)?.country_code || 'GB');
+    setCity((currentBrand as any)?.city || '');
+    setTimezone((currentBrand as any)?.timezone || 'Europe/London');
+    setLat((currentBrand as any)?.lat?.toString() || '');
+    setLng((currentBrand as any)?.lng?.toString() || '');
+  }, [currentBrand]);
 
   const handleSaveBrandName = async () => {
     if (!currentBrand || !isAdmin) return;
@@ -136,6 +165,91 @@ export default function BrandSettingsPage() {
               </Button>
             )}
           </div>
+
+          {/* Location Settings */}
+          {isAdmin && (
+            <div className="card-elevated p-6 space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <MapPin className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Location</h3>
+                  <p className="text-sm text-muted-foreground">Used for Events Planner and local content</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Country</Label>
+                  <Select value={countryCode} onValueChange={setCountryCode}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {COUNTRY_OPTIONS.map(c => (
+                        <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g., London" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Timezone</Label>
+                  <Select value={timezone} onValueChange={setTimezone}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TIMEZONE_OPTIONS.map(tz => (
+                        <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
+                    <Label>Latitude</Label>
+                    <Input value={lat} onChange={e => setLat(e.target.value)} placeholder="51.5074" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Longitude</Label>
+                    <Input value={lng} onChange={e => setLng(e.target.value)} placeholder="-0.1278" />
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                className="btn-primary-editorial"
+                disabled={savingLocation}
+                onClick={async () => {
+                  if (!currentBrand) return;
+                  setSavingLocation(true);
+                  try {
+                    const updates: any = {
+                      country_code: countryCode,
+                      city: city || null,
+                      timezone,
+                      lat: lat ? parseFloat(lat) : null,
+                      lng: lng ? parseFloat(lng) : null,
+                    };
+                    const { error } = await supabase
+                      .from('venues')
+                      .update(updates)
+                      .eq('id', currentBrand.id);
+                    if (error) throw error;
+                    await refreshVenues();
+                    toast({ title: 'Location updated' });
+                  } catch (err: any) {
+                    toast({ variant: 'destructive', title: 'Error', description: err.message });
+                  } finally {
+                    setSavingLocation(false);
+                  }
+                }}
+              >
+                {savingLocation ? 'Saving...' : 'Save Location'}
+              </Button>
+            </div>
+          )}
 
           {/* Danger Zone */}
           {isAdmin && (

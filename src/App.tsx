@@ -22,6 +22,8 @@ import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
+import EventsPlanner from "./pages/EventsPlanner";
+import EventPlanDetail from "./pages/EventPlanDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -68,6 +70,8 @@ function AppRoutes() {
       {/* Studio Section */}
       <Route path="/studio/editor" element={<ProtectedRoute><TheEditor /></ProtectedRoute>} />
       <Route path="/studio/content" element={<ProtectedRoute><Copywriter /></ProtectedRoute>} />
+      <Route path="/studio/events" element={<ProtectedRoute><EventsPlanner /></ProtectedRoute>} />
+      <Route path="/studio/events/:planId" element={<ProtectedRoute><EventPlanDetail /></ProtectedRoute>} />
       
       {/* Analytics Section */}
       <Route path="/analytics/performance" element={<ProtectedRoute><BrandPerformance /></ProtectedRoute>} />
