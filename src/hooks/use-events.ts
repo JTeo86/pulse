@@ -64,7 +64,7 @@ export function useEventsCatalog() {
     setLoading(true);
     try {
       const now = new Date().toISOString();
-      const future = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+      const future = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
 
       const { data, error } = await supabase
         .from('events_catalog')
@@ -316,11 +316,17 @@ export function useSeedEvents() {
     const year = new Date().getFullYear();
 
     try {
-      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${cc}`);
-      if (!res.ok) throw new Error('Nager API failed');
-      const holidays = await res.json();
+      const nextYear = year + 1;
+      const [res1, res2] = await Promise.all([
+        fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${cc}`),
+        fetch(`https://date.nager.at/api/v3/PublicHolidays/${nextYear}/${cc}`),
+      ]);
+      if (!res1.ok) throw new Error('Nager API failed for current year');
+      const holidays1 = await res1.json();
+      const holidays2 = res2.ok ? await res2.json() : [];
+      const allHolidays = [...holidays1, ...holidays2];
 
-      for (const h of holidays) {
+      for (const h of allHolidays) {
         await supabase
           .from('events_catalog')
           .upsert(
@@ -336,7 +342,7 @@ export function useSeedEvents() {
             { onConflict: 'source,source_id' }
           );
       }
-      toast({ title: 'Holidays synced', description: `${holidays.length} public holidays imported.` });
+      toast({ title: 'Holidays synced', description: `${allHolidays.length} public holidays imported.` });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Holiday sync failed', description: err.message });
     } finally {
