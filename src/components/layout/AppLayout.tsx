@@ -62,9 +62,9 @@ const brandNavigation = [
 ];
 
 const studioNavigation = [
-  { name: 'TheEditor', href: '/studio/editor', icon: Sparkles, badge: 'Hospitality' },
-  { name: 'Copywriter', href: '/studio/content', icon: PenTool },
   { name: 'Events Planner', href: '/studio/events', icon: CalendarDays },
+  { name: 'Copywriter', href: '/studio/content', icon: PenTool },
+  { name: 'TheEditor', href: '/studio/editor', icon: Sparkles, badge: 'Hospitality' },
 ];
 
 const analyticsNavigation = [
