@@ -803,6 +803,88 @@ export type Database = {
           },
         ]
       }
+      review_sources: {
+        Row: {
+          created_at: string
+          external_id: string
+          id: string
+          is_enabled: boolean
+          source: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_id: string
+          id?: string
+          is_enabled?: boolean
+          source: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string
+          id?: string
+          is_enabled?: boolean
+          source?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_sources_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reviews: {
+        Row: {
+          author_name: string | null
+          created_at: string
+          external_review_id: string
+          id: string
+          rating: number | null
+          raw_payload: Json | null
+          review_date: string | null
+          review_text: string | null
+          source: string
+          venue_id: string
+        }
+        Insert: {
+          author_name?: string | null
+          created_at?: string
+          external_review_id: string
+          id?: string
+          rating?: number | null
+          raw_payload?: Json | null
+          review_date?: string | null
+          review_text?: string | null
+          source: string
+          venue_id: string
+        }
+        Update: {
+          author_name?: string | null
+          created_at?: string
+          external_review_id?: string
+          id?: string
+          rating?: number | null
+          raw_payload?: Json | null
+          review_date?: string | null
+          review_text?: string | null
+          source?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uploads: {
         Row: {
           created_at: string
@@ -971,6 +1053,50 @@ export type Database = {
           timezone?: string
         }
         Relationships: []
+      }
+      weekly_review_reports: {
+        Row: {
+          action_items: Json | null
+          created_at: string
+          id: string
+          reply_templates: Json | null
+          stats: Json | null
+          summary_md: string | null
+          venue_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          action_items?: Json | null
+          created_at?: string
+          id?: string
+          reply_templates?: Json | null
+          stats?: Json | null
+          summary_md?: string | null
+          venue_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          action_items?: Json | null
+          created_at?: string
+          id?: string
+          reply_templates?: Json | null
+          stats?: Json | null
+          summary_md?: string | null
+          venue_id?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_review_reports_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
