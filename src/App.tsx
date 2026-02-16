@@ -24,6 +24,7 @@ import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
 import EventsPlanner from "./pages/EventsPlanner";
 import EventPlanDetail from "./pages/EventPlanDetail";
+import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -77,6 +78,7 @@ function AppRoutes() {
       <Route path="/analytics/performance" element={<ProtectedRoute><BrandPerformance /></ProtectedRoute>} />
       <Route path="/analytics/competitors" element={<ProtectedRoute><CompetitorIntel /></ProtectedRoute>} />
       <Route path="/analytics/insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
+      <Route path="/analytics/reviews" element={<ProtectedRoute><ReviewsAnalytics /></ProtectedRoute>} />
       
       {/* Settings Section */}
       <Route path="/settings/brand" element={<ProtectedRoute><BrandSettings /></ProtectedRoute>} />

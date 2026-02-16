@@ -11,6 +11,7 @@ import {
   Sparkles,
   BarChart3,
   Brain,
+  MessageSquareText,
   Settings,
   Users, 
   Plug, 
@@ -71,6 +72,7 @@ const analyticsNavigation = [
   { name: 'Brand Performance', href: '/analytics/performance', icon: BarChart3 },
   { name: 'Competitors', href: '/analytics/competitors', icon: Target },
   { name: 'AI Insights', href: '/analytics/insights', icon: Brain },
+  { name: 'Reviews', href: '/analytics/reviews', icon: MessageSquareText },
 ];
 
 const settingsNavigation = [
