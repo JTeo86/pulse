@@ -803,6 +803,36 @@ export type Database = {
           },
         ]
       }
+      platform_api_keys: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_configured: boolean
+          key_name: string
+          key_value: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_configured?: boolean
+          key_name: string
+          key_value?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_configured?: boolean
+          key_name?: string
+          key_value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       review_sources: {
         Row: {
           created_at: string
