@@ -580,6 +580,118 @@ export type Database = {
           },
         ]
       }
+      editor_jobs: {
+        Row: {
+          created_at: string
+          created_by: string
+          cutout_url: string | null
+          error_message: string | null
+          fidelity_confirmed: boolean
+          fidelity_confirmed_at: string | null
+          final_image_url: string | null
+          final_image_variants: Json | null
+          final_video_url: string | null
+          hook_text: string | null
+          id: string
+          input_image_height: number | null
+          input_image_url: string | null
+          input_image_width: number | null
+          mode: string
+          realism_mode: string
+          replated_url: string | null
+          status: string
+          style_preset: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          cutout_url?: string | null
+          error_message?: string | null
+          fidelity_confirmed?: boolean
+          fidelity_confirmed_at?: string | null
+          final_image_url?: string | null
+          final_image_variants?: Json | null
+          final_video_url?: string | null
+          hook_text?: string | null
+          id?: string
+          input_image_height?: number | null
+          input_image_url?: string | null
+          input_image_width?: number | null
+          mode?: string
+          realism_mode?: string
+          replated_url?: string | null
+          status?: string
+          style_preset?: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          cutout_url?: string | null
+          error_message?: string | null
+          fidelity_confirmed?: boolean
+          fidelity_confirmed_at?: string | null
+          final_image_url?: string | null
+          final_image_variants?: Json | null
+          final_video_url?: string | null
+          hook_text?: string | null
+          id?: string
+          input_image_height?: number | null
+          input_image_url?: string | null
+          input_image_width?: number | null
+          mode?: string
+          realism_mode?: string
+          replated_url?: string | null
+          status?: string
+          style_preset?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editor_jobs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      editor_usage: {
+        Row: {
+          id: string
+          month: string
+          pro_photo_used: number
+          reel_used: number
+          venue_id: string
+        }
+        Insert: {
+          id?: string
+          month: string
+          pro_photo_used?: number
+          reel_used?: number
+          venue_id: string
+        }
+        Update: {
+          id?: string
+          month?: string
+          pro_photo_used?: number
+          reel_used?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editor_usage_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_plan_links: {
         Row: {
           content_item_id: string | null
@@ -833,6 +945,24 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       review_sources: {
         Row: {
           created_at: string
@@ -1014,6 +1144,35 @@ export type Database = {
             foreignKeyName: "venue_event_plans_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_limits: {
+        Row: {
+          monthly_pro_photo_credits: number
+          monthly_reel_credits: number
+          reset_day: number
+          venue_id: string
+        }
+        Insert: {
+          monthly_pro_photo_credits?: number
+          monthly_reel_credits?: number
+          reset_day?: number
+          venue_id: string
+        }
+        Update: {
+          monthly_pro_photo_credits?: number
+          monthly_reel_credits?: number
+          reset_day?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_limits_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
             referencedRelation: "venues"
             referencedColumns: ["id"]
           },

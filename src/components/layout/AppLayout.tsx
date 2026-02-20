@@ -8,7 +8,7 @@ import {
   PenTool,
   CalendarDays,
   Target,
-  Sparkles,
+  Camera,
   BarChart3,
   Brain,
   MessageSquareText,
@@ -65,7 +65,7 @@ const brandNavigation = [
 const studioNavigation = [
   { name: 'AI Marketing Assistant', href: '/studio/events', icon: CalendarDays },
   { name: 'Campaign Engine', href: '/studio/content', icon: PenTool },
-  { name: 'TheEditor', href: '/studio/editor', icon: Sparkles, badge: 'Hospitality' },
+  { name: 'Editor', href: '/editor', icon: Camera },
 ];
 
 const analyticsNavigation = [
@@ -84,6 +84,7 @@ const settingsNavigation = [
 
 const adminNavigation = [
   { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' },
+  { name: 'Integrations', href: '/admin/integrations', icon: Plug, badge: 'Admin' },
 ];
 
 function AppSidebar() {

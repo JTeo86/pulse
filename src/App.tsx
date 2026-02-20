@@ -23,7 +23,9 @@ import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
+import AdminIntegrations from "./pages/admin/AdminIntegrations";
 import EventsPlanner from "./pages/EventsPlanner";
+import EditorPage from "./pages/Editor";
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import NotFound from "./pages/NotFound";
@@ -90,6 +92,8 @@ function AppRoutes() {
       <Route path="/settings/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
       <Route path="/settings/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
       <Route path="/admin/platform" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
+      <Route path="/admin/integrations" element={<ProtectedRoute><AdminIntegrations /></ProtectedRoute>} />
+      <Route path="/editor" element={<ProtectedRoute><EditorPage /></ProtectedRoute>} />
       <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
       
       {/* Legacy redirects */}

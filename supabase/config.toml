@@ -17,3 +17,10 @@ verify_jwt = false
 
 [functions.generate-weekly-review-report]
 verify_jwt = false
+
+[functions.editor-generate-pro-photo]
+verify_jwt = false
+
+[functions.editor-generate-reel]
+verify_jwt = false
+
