@@ -12,10 +12,11 @@ serve(async (req) => {
   }
 
   try {
-    const { venue_id } = await req.json();
-    if (!venue_id) {
-      return new Response(JSON.stringify({ error: "venue_id required" }), {
-        status: 400,
+    // Verify caller is authenticated
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
