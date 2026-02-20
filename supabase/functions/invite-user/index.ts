@@ -35,16 +35,15 @@ Deno.serve(async (req: Request) => {
   });
 
   // Verify caller is authenticated
-  const token = authHeader.replace('Bearer ', '');
-  const { data: claimsData, error: claimsError } = await callerClient.auth.getClaims(token);
-  if (claimsError || !claimsData?.claims) {
+  const { data: { user: callerUser }, error: callerError } = await callerClient.auth.getUser();
+  if (callerError || !callerUser) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  const callerId = claimsData.claims.sub;
+  const callerId = callerUser.id;
 
   let body: { venueId: string; email: string; role: 'admin' | 'staff' };
   try {
@@ -92,50 +91,89 @@ Deno.serve(async (req: Request) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Determine redirect URL
-  const appUrl =
-    Deno.env.get('APP_URL') ||
-    req.headers.get('origin') ||
-    req.headers.get('referer')?.replace(/\/$/, '') ||
-    'https://pulseai-app.lovable.app';
+  const normalizedEmail = email.toLowerCase().trim();
 
-  const redirectTo = `${appUrl}/auth?invite=1`;
-
-  // Send Supabase invite email
-  const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-    email,
-    { redirectTo }
-  );
-
-  if (inviteError) {
-    console.error('Invite error:', inviteError);
-    return new Response(JSON.stringify({ error: inviteError.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  // Check if user already exists in auth
+  const { data: existingUsersData, error: listError } = await adminClient.auth.admin.listUsers();
+  let existingUser = null;
+  if (!listError && existingUsersData?.users) {
+    existingUser = existingUsersData.users.find(
+      (u) => u.email?.toLowerCase() === normalizedEmail
+    );
   }
 
-  // Upsert into venue_invites (track the pending invite)
+  let resultUserId: string | undefined;
+
+  if (existingUser) {
+    // User already exists — add them directly to the venue without sending another invite email
+    const { error: memberInsertError } = await adminClient
+      .from('venue_members')
+      .upsert(
+        { venue_id: venueId, user_id: existingUser.id, role },
+        { onConflict: 'venue_id,user_id' }
+      );
+
+    if (memberInsertError) {
+      console.error('Member insert error:', memberInsertError);
+      return new Response(JSON.stringify({ error: 'Failed to add existing user to venue' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    resultUserId = existingUser.id;
+    console.log('Existing user added directly to venue:', normalizedEmail);
+  } else {
+    // New user — send Supabase invite email
+    const appUrl =
+      Deno.env.get('APP_URL') ||
+      req.headers.get('origin') ||
+      req.headers.get('referer')?.replace(/\/$/, '') ||
+      'https://pulseai-app.lovable.app';
+
+    const redirectTo = `${appUrl}/auth?invite=1`;
+
+    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+      normalizedEmail,
+      { redirectTo }
+    );
+
+    if (inviteError) {
+      console.error('Invite error:', inviteError);
+      return new Response(JSON.stringify({ error: inviteError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    resultUserId = inviteData?.user?.id;
+  }
+
+  // Upsert into venue_invites to track the invite/addition
   const { error: upsertError } = await adminClient
     .from('venue_invites')
     .upsert(
       {
         venue_id: venueId,
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
         role,
         invited_by: callerId,
-        accepted_at: null,
-        accepted_by: null,
+        accepted_at: existingUser ? new Date().toISOString() : null,
+        accepted_by: existingUser ? existingUser.id : null,
       },
       { onConflict: 'venue_id,email' }
     );
 
   if (upsertError) {
     console.error('Upsert invite error:', upsertError);
-    // Non-fatal — email was sent, just log the tracking failure
+    // Non-fatal — continue
   }
 
-  return new Response(JSON.stringify({ ok: true, userId: inviteData?.user?.id }), {
+  const message = existingUser
+    ? 'User already exists and has been added to the venue'
+    : 'Invite email sent successfully';
+
+  return new Response(JSON.stringify({ ok: true, userId: resultUserId, message }), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
