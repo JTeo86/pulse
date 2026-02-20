@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate, Link, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/auth-context';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
 
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -19,6 +23,10 @@ type AuthFormData = z.infer<typeof authSchema>;
 
 export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSending, setForgotSending] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -26,9 +34,6 @@ export default function AuthPage() {
 
   const isInviteFlow = searchParams.get('invite') === '1';
 
-  // If Supabase redirected back with a session (invited user clicking email link),
-  // the auth-context listener picks up the session automatically.
-  // Once user is set, redirect them to the app.
   useEffect(() => {
     if (user && !loading) {
       navigate('/brand/overview', { replace: true });
@@ -66,6 +71,22 @@ export default function AuthPage() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail.trim()) return;
+    setForgotSending(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+        redirectTo: `${window.location.origin}/auth/reset`,
+      });
+      if (error) throw error;
+      setForgotSent(true);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
+    } finally {
+      setForgotSending(false);
     }
   };
 
@@ -115,9 +136,20 @@ export default function AuthPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">
-                {isInviteFlow ? 'Set your password' : 'Password'}
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  {isInviteFlow ? 'Set your password' : 'Password'}
+                </Label>
+                {!isInviteFlow && (
+                  <button
+                    type="button"
+                    onClick={() => { setForgotSent(false); setForgotOpen(true); }}
+                    className="text-xs text-muted-foreground hover:text-accent transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -154,6 +186,58 @@ export default function AuthPage() {
           </p>
         </motion.div>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotOpen} onOpenChange={(o) => { setForgotOpen(o); if (!o) setForgotSent(false); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reset your password</DialogTitle>
+            <DialogDescription>
+              Enter your email and we'll send you a link to reset your password.
+            </DialogDescription>
+          </DialogHeader>
+          <AnimatePresence mode="wait">
+            {forgotSent ? (
+              <motion.div
+                key="sent"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="py-4 text-center space-y-2"
+              >
+                <p className="text-sm font-medium text-foreground">Check your inbox</p>
+                <p className="text-xs text-muted-foreground">
+                  We sent a password reset link to <span className="font-medium text-foreground">{forgotEmail}</span>.
+                </p>
+              </motion.div>
+            ) : (
+              <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    placeholder="you@venue.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
+                    className="bg-card border-border"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
+                  <Button
+                    onClick={handleForgotPassword}
+                    disabled={forgotSending || !forgotEmail.trim()}
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 border-0"
+                  >
+                    {forgotSending ? 'Sending…' : 'Send reset link'}
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </DialogContent>
+      </Dialog>
 
       {/* Right – Brand panel */}
       <div className="hidden lg:flex lg:flex-1 bg-card border-l border-border relative overflow-hidden">

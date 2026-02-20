@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Brain, Image, Layers, Flag, KeyRound } from 'lucide-react';
+import { Shield, Brain, Image, Layers, Flag } from 'lucide-react';
 import AIProvidersTab from '@/components/admin/AIProvidersTab';
 import AIModelsTab from '@/components/admin/AIModelsTab';
 import BackgroundAssetsTab from '@/components/admin/BackgroundAssetsTab';
 import OverlayTemplatesTab from '@/components/admin/OverlayTemplatesTab';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
-import APIKeysTab from '@/components/admin/APIKeysTab';
 
 export default function PlatformAdmin() {
   const [activeTab, setActiveTab] = useState('providers');
@@ -69,10 +68,6 @@ export default function PlatformAdmin() {
               <Flag className="w-4 h-4" />
               Feature Flags
             </TabsTrigger>
-            <TabsTrigger value="apikeys" className="gap-2">
-              <KeyRound className="w-4 h-4" />
-              API Keys
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="providers" className="mt-6">
@@ -93,10 +88,6 @@ export default function PlatformAdmin() {
 
           <TabsContent value="flags" className="mt-6">
             <FeatureFlagsTab />
-          </TabsContent>
-
-          <TabsContent value="apikeys" className="mt-6">
-            <APIKeysTab />
           </TabsContent>
         </Tabs>
       </motion.div>

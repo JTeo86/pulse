@@ -7,13 +7,14 @@ interface Venue {
   name: string;
   plan: string;
   created_at: string;
+  owner_user_id?: string | null;
 }
 
 interface VenueMember {
   id: string;
   venue_id: string;
   user_id: string;
-  role: 'staff' | 'manager' | 'venue_admin';
+  role: 'staff' | 'manager';
 }
 
 interface VenueContextType {
@@ -23,6 +24,7 @@ interface VenueContextType {
   setCurrentVenue: (venue: Venue | null) => void;
   loading: boolean;
   isAdmin: boolean;
+  isOwner: boolean;
   isDemoMode: boolean;
   refreshVenues: () => Promise<void>;
 }
@@ -53,13 +55,13 @@ export function VenueProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setVenues([venue]);
-      setCurrentVenue(venue);
+      setVenues([venue as Venue]);
+      setCurrentVenue(venue as Venue);
       setCurrentMember({
         id: 'demo-member',
         venue_id: DEMO_VENUE_ID,
         user_id: 'demo-user',
-        role: 'venue_admin',
+        role: 'manager',
       });
       setIsDemoMode(true);
     } catch (error) {
@@ -71,7 +73,6 @@ export function VenueProvider({ children }: { children: ReactNode }) {
 
   const refreshVenues = async () => {
     if (!user) {
-      // Load demo venue for preview purposes
       await loadDemoVenue();
       return;
     }
@@ -90,32 +91,50 @@ export function VenueProvider({ children }: { children: ReactNode }) {
 
       if (memberError) throw memberError;
 
-    if (memberships && memberships.length > 0) {
-        // Get venue details
-        const venueIds = memberships.map(m => m.venue_id);
+      // Also check venues where user is owner (may not be a member if just created)
+      const { data: ownedVenues, error: ownedError } = await supabase
+        .from('venues')
+        .select('*')
+        .eq('owner_user_id', user.id);
+
+      if (ownedError) throw ownedError;
+
+      const memberVenueIds = (memberships || []).map(m => m.venue_id);
+
+      if (memberships && memberships.length > 0) {
         const { data: venueData, error: venueError } = await supabase
           .from('venues')
           .select('*')
-          .in('id', venueIds);
+          .in('id', memberVenueIds);
 
         if (venueError) throw venueError;
 
-        setVenues(venueData || []);
+        // Merge with owned venues
+        const allVenueMap = new Map<string, Venue>();
+        (venueData || []).forEach(v => allVenueMap.set(v.id, v as Venue));
+        (ownedVenues || []).forEach(v => allVenueMap.set(v.id, v as Venue));
+        const allVenues = Array.from(allVenueMap.values());
 
-        // Set current venue if not set or invalid
-        if (venueData && venueData.length > 0) {
+        setVenues(allVenues);
+
+        if (allVenues.length > 0) {
           const storedVenueId = localStorage.getItem('currentVenueId');
-          const stored = venueData.find(v => v.id === storedVenueId);
-          const venue = stored || venueData[0];
+          const stored = allVenues.find(v => v.id === storedVenueId);
+          const venue = stored || allVenues[0];
           setCurrentVenue(venue);
-          
-          // Find the membership for current venue
+
           const member = memberships.find(m => m.venue_id === venue.id);
           setCurrentMember(member as VenueMember || null);
         }
         setLoading(false);
+      } else if (ownedVenues && ownedVenues.length > 0) {
+        // User is owner but not yet a member (rare edge case)
+        setVenues(ownedVenues as Venue[]);
+        const venue = ownedVenues[0] as Venue;
+        setCurrentVenue(venue);
+        setCurrentMember(null);
+        setLoading(false);
       } else {
-        // Load demo venue as fallback for authenticated users with no venues
         await loadDemoVenue();
       }
     } catch (error) {
@@ -125,7 +144,6 @@ export function VenueProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Wait for auth to finish loading before fetching venues
     if (authLoading) return;
     refreshVenues();
   }, [user, authLoading]);
@@ -136,7 +154,10 @@ export function VenueProvider({ children }: { children: ReactNode }) {
     }
   }, [currentVenue]);
 
-  const isAdmin = currentMember?.role === 'venue_admin';
+  // Owner is determined by venues.owner_user_id
+  const isOwner = !!(user && currentVenue?.owner_user_id === user.id);
+  // isAdmin: owner is always admin; also treat as admin if no member record but is owner
+  const isAdmin = isOwner || currentMember?.role === 'manager';
 
   return (
     <VenueContext.Provider value={{
@@ -146,6 +167,7 @@ export function VenueProvider({ children }: { children: ReactNode }) {
       setCurrentVenue,
       loading,
       isAdmin,
+      isOwner,
       isDemoMode,
       refreshVenues,
     }}>
