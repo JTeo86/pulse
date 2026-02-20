@@ -1367,6 +1367,11 @@ export type Database = {
     }
     Functions: {
       accept_venue_invites: { Args: never; Returns: number }
+      can_manage_member: {
+        Args: { p_target_user_id: string; p_venue_id: string }
+        Returns: boolean
+      }
+      get_my_venue_role: { Args: { p_venue_id: string }; Returns: string }
       is_platform_admin: { Args: { check_user_id: string }; Returns: boolean }
       is_venue_admin: {
         Args: { check_user_id: string; check_venue_id: string }
@@ -1376,6 +1381,11 @@ export type Database = {
         Args: { check_user_id: string; check_venue_id: string }
         Returns: boolean
       }
+      remove_member: {
+        Args: { p_target_user_id: string; p_venue_id: string }
+        Returns: undefined
+      }
+      role_rank: { Args: { p_role: string }; Returns: number }
     }
     Enums: {
       ai_provider_type: "image" | "video" | "text"

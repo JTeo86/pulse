@@ -13,7 +13,7 @@ interface VenueMember {
   id: string;
   venue_id: string;
   user_id: string;
-  role: 'admin' | 'staff';
+  role: 'staff' | 'manager' | 'venue_admin';
 }
 
 interface VenueContextType {
@@ -59,7 +59,7 @@ export function VenueProvider({ children }: { children: ReactNode }) {
         id: 'demo-member',
         venue_id: DEMO_VENUE_ID,
         user_id: 'demo-user',
-        role: 'admin',
+        role: 'venue_admin',
       });
       setIsDemoMode(true);
     } catch (error) {
@@ -136,7 +136,7 @@ export function VenueProvider({ children }: { children: ReactNode }) {
     }
   }, [currentVenue]);
 
-  const isAdmin = currentMember?.role === 'admin';
+  const isAdmin = currentMember?.role === 'venue_admin';
 
   return (
     <VenueContext.Provider value={{
