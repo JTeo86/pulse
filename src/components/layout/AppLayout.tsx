@@ -78,13 +78,13 @@ const analyticsNavigation = [
 const settingsNavigation = [
   { name: 'Brand Settings', href: '/settings/brand', icon: Settings },
   { name: 'Team', href: '/settings/team', icon: Users },
-  { name: 'Integrations', href: '/settings/integrations', icon: Plug },
+  { name: 'Publishing', href: '/settings/integrations', icon: Plug },
   { name: 'Billing', href: '/settings/billing', icon: CreditCard },
 ];
 
 const adminNavigation = [
   { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' },
-  { name: 'Integrations', href: '/admin/integrations', icon: Plug, badge: 'Admin' },
+  { name: 'Integrations & API Keys', href: '/admin/integrations', icon: Plug, badge: 'Admin' },
 ];
 
 function AppSidebar() {

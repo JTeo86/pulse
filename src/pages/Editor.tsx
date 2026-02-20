@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Upload, Camera, Wand2, Film, ChevronRight, Download, 
   CheckSquare, Square, AlertTriangle, Loader2, Star,
-  RotateCcw, Image as ImageIcon, Zap
+  RotateCcw, Image as ImageIcon, Zap, Lock
 } from 'lucide-react';
+import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,6 +57,9 @@ export default function EditorPage() {
   const { user } = useAuth();
   const { currentVenue, isAdmin } = useVenue();
   const { toast } = useToast();
+  const phaseFlags = usePhaseFlags();
+  // Phase 1: video is always coming soon for users
+  const videoEnabled = phaseFlags.video_enabled;
 
   // Upload state
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -133,6 +137,11 @@ export default function EditorPage() {
 
   const handleGenerate = async () => {
     if (!currentVenue || !user || !uploadedUrl) return;
+    // Hard gate: never allow reel/video in Phase 1
+    if (outputMode === 'reel' && !videoEnabled) {
+      toast({ title: 'Coming in Phase 2', description: 'Video reels are not available yet.' });
+      return;
+    }
     if (outputMode === 'reel' && !jobResult) return;
 
     const creditType = outputMode === 'reel' ? 'reel_used' : 'pro_photo_used';
@@ -227,7 +236,8 @@ export default function EditorPage() {
     setHookText('');
   };
 
-  const canGenerate = uploadedUrl && !uploading && outputMode && !generating;
+  // canGenerate: never allow reel in Phase 1
+  const canGenerate = uploadedUrl && !uploading && outputMode && !generating && (outputMode !== 'reel' || videoEnabled);
   const hasProPhoto = !!jobResult?.final_image_url;
 
   return (
@@ -263,8 +273,17 @@ export default function EditorPage() {
         {/* Credits */}
         <div className="flex items-center gap-6 px-4 py-2.5 rounded-lg bg-muted/30 border border-border/50 w-fit">
           <CreditBar used={usage.pro_photo_used} total={limits.monthly_pro_photo_credits} label="Pro Photo" />
-          <div className="w-px h-4 bg-border" />
-          <CreditBar used={usage.reel_used} total={limits.monthly_reel_credits} label="Reel" />
+          {videoEnabled && (
+            <>
+              <div className="w-px h-4 bg-border" />
+              <CreditBar used={usage.reel_used} total={limits.monthly_reel_credits} label="Reel" />
+            </>
+          )}
+          {!videoEnabled && (
+            <span className="text-xs text-muted-foreground ml-2 border-l border-border pl-4 flex items-center gap-1">
+              <Film className="w-3 h-3" /> Video: Phase 2
+            </span>
+          )}
         </div>
 
         {/* Main layout */}
@@ -343,21 +362,37 @@ export default function EditorPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">Professional replate</p>
                   </div>
                 </button>
+                {/* Reel card — Phase 1: coming soon; Phase 2: enabled */}
                 <button
-                  onClick={() => hasProPhoto && setOutputMode('reel')}
-                  disabled={!hasProPhoto}
+                  onClick={() => {
+                    if (!videoEnabled) {
+                      toast({ title: 'Coming in Phase 2', description: 'Video reels are a Phase 2 feature. Images and copy are live now!' });
+                      return;
+                    }
+                    if (hasProPhoto) setOutputMode('reel');
+                  }}
                   className={cn(
-                    'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all text-left',
-                    !hasProPhoto && 'opacity-40 cursor-not-allowed',
-                    outputMode === 'reel'
+                    'relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all text-left',
+                    !videoEnabled
+                      ? 'border-border/40 opacity-60 cursor-pointer'
+                      : !hasProPhoto
+                      ? 'opacity-40 cursor-not-allowed border-border'
+                      : outputMode === 'reel'
                       ? 'border-accent bg-accent/10'
                       : 'border-border hover:border-accent/40'
                   )}
                 >
+                  {!videoEnabled && (
+                    <span className="absolute top-1.5 right-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                      Phase 2
+                    </span>
+                  )}
                   <Film className={cn('w-6 h-6', outputMode === 'reel' ? 'text-accent' : 'text-muted-foreground')} />
                   <div>
                     <p className="text-sm font-semibold">Make Reel</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{hasProPhoto ? '5–8s vertical' : 'Needs Pro Photo first'}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {!videoEnabled ? 'Coming soon' : hasProPhoto ? '5–8s vertical' : 'Needs Pro Photo first'}
+                    </p>
                   </div>
                 </button>
               </div>
