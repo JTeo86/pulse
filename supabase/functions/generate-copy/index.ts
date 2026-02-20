@@ -6,83 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface GenerateCopyRequest {
-  venue_id: string;
-  module: 'email' | 'blog' | 'ad_copy' | 'sms_push';
-  goal: string;
-  preset?: string | null;
-  inputs: {
-    key_message: string;
-    call_to_action: string;
-    audience?: string;
-    tone?: string;
-    platform?: string;
-    length?: 'short' | 'medium' | 'long';
-    preset_context?: string;
-    urgency?: string;
-  };
-}
-
-const moduleConfig = {
-  email: {
-    name: 'Email Campaign',
-    format: `Return JSON with this exact structure:
-{
-  "variations": [
-    {
-      "title": "Subject line here",
-      "content": "Full email body with greeting, main message, and sign-off"
-    }
-  ]
-}`,
-    lengthGuide: { short: '50-100 words', medium: '100-200 words', long: '200-400 words' },
-    outputHints: 'Include subject line as title. Body should have greeting, main message, CTA, and sign-off.',
-  },
-  blog: {
-    name: 'Blog Post',
-    format: `Return JSON with this exact structure:
-{
-  "variations": [
-    {
-      "title": "Blog post title here",
-      "content": "Full article with introduction, body paragraphs with subheadings (use ## for H2), and conclusion"
-    }
-  ]
-}`,
-    lengthGuide: { short: '300-500 words', medium: '500-800 words', long: '800-1200 words' },
-    outputHints: 'Include SEO-friendly title. Content should have intro, structured body with H2 headings (##), and conclusion.',
-  },
-  ad_copy: {
-    name: 'Ad Copy',
-    format: `Return JSON with this exact structure:
-{
-  "variations": [
-    {
-      "title": "Headline (max 40 chars for Meta, 30 for Google)",
-      "content": "Primary text / description (keep under 125 chars for Meta)"
-    }
-  ]
-}`,
-    lengthGuide: { short: '25-50 words', medium: '50-100 words', long: '100-150 words' },
-    outputHints: 'Headline in title field. Primary text in content. Keep within platform character limits.',
-  },
-  sms_push: {
-    name: 'SMS/Push Notification',
-    format: `Return JSON with this exact structure:
-{
-  "variations": [
-    {
-      "title": "Push notification title (optional, for push only)",
-      "content": "SMS/Push message body - keep under 160 chars for SMS"
-    }
-  ]
-}`,
-    lengthGuide: { short: '50-80 characters', medium: '80-120 characters', long: '120-160 characters' },
-    outputHints: 'For SMS: no title, message under 160 chars. For Push: short title + body.',
-  },
-};
-
-// Compliance rules - CRITICAL for hospitality
 const complianceRules = `
 COMPLIANCE RULES (STRICTLY FOLLOW):
 1. NEVER invent prices, discounts, percentages, or specific monetary values
@@ -125,168 +48,211 @@ serve(async (req) => {
       });
     }
 
-    const { venue_id, module, goal, preset, inputs } = await req.json() as GenerateCopyRequest;
+    const body = await req.json();
+    const { venue_id, module, goal, opportunity, inputs } = body;
 
-    if (!venue_id || !module || !goal || !inputs?.key_message || !inputs?.call_to_action) {
+    if (!venue_id || !module || !goal || !inputs?.key_message) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch brand brief and identity
-    const { data: brandKit } = await supabase
-      .from("brand_kits")
-      .select("preset, rules_text")
-      .eq("venue_id", venue_id)
-      .maybeSingle();
+    // Fetch brand context
+    const [{ data: brandKit }, { data: venue }] = await Promise.all([
+      supabase.from("brand_kits").select("preset, rules_text").eq("venue_id", venue_id).maybeSingle(),
+      supabase.from("venues").select("name").eq("id", venue_id).maybeSingle(),
+    ]);
 
-    const { data: venue } = await supabase
-      .from("venues")
-      .select("name")
-      .eq("id", venue_id)
-      .maybeSingle();
-
-    const config = moduleConfig[module];
-    const length = inputs.length || 'medium';
-    const lengthGuide = config.lengthGuide[length];
-
-    // Build brand context
-    const brandContext: string[] = [];
-    if (venue?.name) brandContext.push(`Business: ${venue.name}`);
-    
-    // Map preset to tone description
     const toneMap: Record<string, string> = {
-      casual: 'friendly, approachable, conversational',
-      midrange: 'professional yet warm, balanced',
-      luxury: 'sophisticated, exclusive, refined',
+      casual: "friendly, approachable, conversational",
+      midrange: "professional yet warm, balanced",
+      luxury: "sophisticated, exclusive, refined",
     };
-    
+
+    const brandContext: string[] = [];
+    const contextUsed: string[] = [];
+    if (venue?.name) {
+      brandContext.push(`Business: ${venue.name}`);
+      contextUsed.push(`Brand: ${venue.name}`);
+    }
     if (brandKit?.preset && toneMap[brandKit.preset]) {
       brandContext.push(`Brand Tone: ${toneMap[brandKit.preset]}`);
+      contextUsed.push(`Tone: ${toneMap[brandKit.preset]}`);
     }
     if (brandKit?.rules_text) {
       brandContext.push(`Brand Voice Guidelines: ${brandKit.rules_text}`);
+      contextUsed.push("Brand voice rules applied");
     }
-    if (inputs.tone) {
-      brandContext.push(`Requested Tone: ${inputs.tone}`);
+    if (inputs.secondary_focus?.length) {
+      brandContext.push(`Secondary Focus: ${inputs.secondary_focus.join(", ")}`);
+      contextUsed.push(...inputs.secondary_focus.map((f: string) => f.replace(/_/g, " ")));
     }
-    if (inputs.audience) {
-      brandContext.push(`Target Audience: ${inputs.audience}`);
-    }
-    if (inputs.urgency && inputs.urgency !== 'none') {
-      brandContext.push(`Urgency Level: ${inputs.urgency}`);
-    }
-    if (inputs.preset_context) {
-      brandContext.push(`Context: ${inputs.preset_context}`);
+    if (opportunity && opportunity.label && opportunity.label !== "General Campaign") {
+      brandContext.push(`Campaign Opportunity: ${opportunity.label}${opportunity.meta ? ` (${opportunity.meta})` : ""}`);
+      contextUsed.push(`Opportunity: ${opportunity.label}`);
     }
 
-    const systemPrompt = `You are a senior hospitality copywriter specializing in ${config.name} content.
+    // Campaign mode — generate full kit
+    if (module === "campaign") {
+      const systemPrompt = `You are a senior hospitality marketing strategist and copywriter.
 
 BRAND CONTEXT:
-${brandContext.join('\n')}
+${brandContext.join("\n")}
 
 ${complianceRules}
 
-OUTPUT REQUIREMENTS:
-- Generate exactly 3 different variations
-- Each variation should take a distinct angle while staying on-brand
-- Target length: ${lengthGuide}
-- ${config.outputHints}
-- Make copy actionable and engaging
-- No emojis unless tone is casual/playful or module is SMS
-- Focus on experience and benefits, not unverifiable claims
+You will produce a complete, structured Campaign Kit as JSON. Every asset should be immediately usable, on-brand, and compliant.
 
-${config.format}`;
+Return EXACTLY this JSON structure:
+{
+  "kit": {
+    "strategy": {
+      "objective": "One-line campaign objective statement",
+      "offerFraming": "How the offer/experience is framed",
+      "ctaPositioning": "CTA approach and reasoning"
+    },
+    "assets": {
+      "email": {
+        "subject": "Email subject line (under 50 chars)",
+        "preview": "Email preview text (under 90 chars)",
+        "body": "Full email body with greeting, value proposition, CTA and sign-off"
+      },
+      "instagram": "Instagram caption (2-4 sentences, one CTA, no hashtags unless organic)",
+      "sms": "SMS message (under 160 characters)",
+      "websiteBanner": "Website banner headline and subline (2 lines)",
+      "staffBriefing": "Internal staff summary: what the campaign is about, key talking points, and how to upsell or support it",
+      "visualDirection": "Suggested visual direction: mood, shot type, colour palette cues, styling notes"
+    },
+    "contextUsed": ${JSON.stringify(contextUsed)},
+    "performanceInsights": [
+      "Insight about why this campaign approach works",
+      "Another strategic or psychological insight",
+      "Third insight about brand alignment or timing"
+    ]
+  }
+}`;
 
-    const userPrompt = `Create ${config.name} content for:
+      const userPrompt = `Create a full Campaign Kit for:
 
-GOAL: ${goal}
-${preset ? `PRESET: ${preset}` : ''}
+PRIMARY OBJECTIVE: ${goal}
 KEY MESSAGE: ${inputs.key_message}
 CALL TO ACTION: ${inputs.call_to_action}
-${inputs.platform ? `PLATFORM: ${inputs.platform}` : ''}
+OPPORTUNITY: ${inputs.opportunity_label || "General Campaign"}
 
-Generate 3 compelling, compliant variations.`;
+Generate a complete, professional, compliant campaign kit.`;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
-      return new Response(JSON.stringify({ error: "AI service not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (!LOVABLE_API_KEY) {
+        return new Response(JSON.stringify({ error: "AI service not configured" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log(`Generating campaign kit for venue ${venue_id}, goal: ${goal}`);
+
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+        }),
       });
+
+      if (!aiResponse.ok) {
+        const status = aiResponse.status;
+        if (status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const errorText = await aiResponse.text();
+        console.error("AI gateway error:", status, errorText);
+        return new Response(JSON.stringify({ error: "Failed to generate campaign kit" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const aiData = await aiResponse.json();
+      const content = aiData.choices?.[0]?.message?.content;
+      if (!content) return new Response(JSON.stringify({ error: "No content returned" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      let parsed;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        return new Response(JSON.stringify({ error: "Failed to parse campaign kit" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Ensure contextUsed is injected
+      if (parsed.kit) {
+        parsed.kit.contextUsed = contextUsed;
+      }
+
+      console.log("Campaign kit generated successfully");
+      return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    console.log(`Generating ${module} copy for venue ${venue_id}, goal: ${goal}, preset: ${preset || 'none'}`);
+    // Legacy single-module mode (email, blog, ad_copy, sms_push)
+    const moduleConfig: Record<string, any> = {
+      email: {
+        name: "Email Campaign",
+        format: `{"variations":[{"title":"Subject line","content":"Full email body"}]}`,
+        lengthGuide: { short: "50-100 words", medium: "100-200 words", long: "200-400 words" },
+      },
+      blog: {
+        name: "Blog Post",
+        format: `{"variations":[{"title":"Blog title","content":"Full article"}]}`,
+        lengthGuide: { short: "300-500 words", medium: "500-800 words", long: "800-1200 words" },
+      },
+      ad_copy: {
+        name: "Ad Copy",
+        format: `{"variations":[{"title":"Headline","content":"Primary text"}]}`,
+        lengthGuide: { short: "25-50 words", medium: "50-100 words", long: "100-150 words" },
+      },
+      sms_push: {
+        name: "SMS/Push Notification",
+        format: `{"variations":[{"title":"Push title","content":"Message body"}]}`,
+        lengthGuide: { short: "50-80 chars", medium: "80-120 chars", long: "120-160 chars" },
+      },
+    };
+
+    const config = moduleConfig[module];
+    if (!config) return new Response(JSON.stringify({ error: "Unknown module" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    const length = inputs.length || "medium";
+    const systemPrompt = `You are a senior hospitality copywriter.\n\nBRAND CONTEXT:\n${brandContext.join("\n")}\n\n${complianceRules}\n\nGenerate exactly 3 variations. Format: ${config.format}\nTarget length: ${config.lengthGuide[length]}`;
+    const userPrompt = `Create ${config.name} for:\nGOAL: ${goal}\nKEY MESSAGE: ${inputs.key_message}\nCTA: ${inputs.call_to_action}`;
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) return new Response(JSON.stringify({ error: "AI service not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
+        model: "google/gemini-2.5-flash",
+        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
         response_format: { type: "json_object" },
       }),
     });
 
-    if (!aiResponse.ok) {
-      const status = aiResponse.status;
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits in Lovable settings." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errorText = await aiResponse.text();
-      console.error("AI gateway error:", status, errorText);
-      return new Response(JSON.stringify({ error: "Failed to generate copy" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!aiResponse.ok) return new Response(JSON.stringify({ error: "Failed to generate copy" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content;
+    if (!content) return new Response(JSON.stringify({ error: "No content returned" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    if (!content) {
-      console.error("No content in AI response");
-      return new Response(JSON.stringify({ error: "Failed to generate copy" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    let variations;
     try {
       const parsed = JSON.parse(content);
-      variations = parsed.variations;
-    } catch (e) {
-      console.error("Failed to parse AI response:", content);
-      return new Response(JSON.stringify({ error: "Failed to parse generated copy" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch {
+      return new Response(JSON.stringify({ error: "Failed to parse response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    console.log(`Successfully generated ${variations.length} variations`);
-
-    return new Response(JSON.stringify({ variations }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
 
   } catch (error) {
     console.error("generate-copy error:", error);
