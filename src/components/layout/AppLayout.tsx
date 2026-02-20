@@ -63,7 +63,7 @@ const brandNavigation = [
 ];
 
 const studioNavigation = [
-  { name: 'Events Planner', href: '/studio/events', icon: CalendarDays },
+  { name: 'AI Marketing Assistant', href: '/studio/events', icon: CalendarDays },
   { name: 'Copywriter', href: '/studio/content', icon: PenTool },
   { name: 'TheEditor', href: '/studio/editor', icon: Sparkles, badge: 'Hospitality' },
 ];

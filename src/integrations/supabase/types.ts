@@ -963,6 +963,7 @@ export type Database = {
           event_id: string | null
           id: string
           skip_reason: string | null
+          snoozed_until: string | null
           starts_at: string
           status: string
           title: string
@@ -978,6 +979,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           skip_reason?: string | null
+          snoozed_until?: string | null
           starts_at: string
           status?: string
           title: string
@@ -993,6 +995,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           skip_reason?: string | null
+          snoozed_until?: string | null
           starts_at?: string
           status?: string
           title?: string
@@ -1053,6 +1056,7 @@ export type Database = {
           city: string | null
           country_code: string
           created_at: string
+          default_lead_time_days: number
           id: string
           lat: number | null
           lng: number | null
@@ -1064,6 +1068,7 @@ export type Database = {
           city?: string | null
           country_code?: string
           created_at?: string
+          default_lead_time_days?: number
           id?: string
           lat?: number | null
           lng?: number | null
@@ -1075,6 +1080,7 @@ export type Database = {
           city?: string | null
           country_code?: string
           created_at?: string
+          default_lead_time_days?: number
           id?: string
           lat?: number | null
           lng?: number | null

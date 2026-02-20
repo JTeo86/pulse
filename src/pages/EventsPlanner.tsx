@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CalendarDays, LayoutGrid, RefreshCw, Sparkles, X, SkipForward, Plus, Filter } from 'lucide-react';
+import { CalendarDays, LayoutGrid, RefreshCw, Sparkles, SkipForward, Plus, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
@@ -11,10 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { useEventsCatalog, useVenueEventPlans, useSeedEvents, PLAN_STATUSES } from '@/hooks/use-events';
+import { useEventsCatalog, useVenueEventPlans, useSeedEvents, PLAN_STATUSES, EventCatalogItem } from '@/hooks/use-events';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { LilyRecommendations } from '@/components/events/LilyRecommendations';
 
 const STATUS_LABELS: Record<string, string> = {
   not_started: 'Not Started',
@@ -42,7 +43,7 @@ export default function EventsPlannerPage() {
   const { plans, loading: plansLoading, createPlan, updatePlanStatus, skipPlan, fetchPlans } = useVenueEventPlans();
   const { syncing, seedHospitalityMoments, syncNagerHolidays } = useSeedEvents();
 
-  const [skipModal, setSkipModal] = useState<{ eventId: string; title: string } | null>(null);
+  const [skipModal, setSkipModal] = useState<{ eventId: string; title: string; event?: EventCatalogItem } | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showSkipped, setShowSkipped] = useState(false);
@@ -60,28 +61,30 @@ export default function EventsPlannerPage() {
     return true;
   });
 
+  const leadTimeDays = (currentVenue as any)?.default_lead_time_days ?? 21;
+
   const handleSync = async () => {
     await seedHospitalityMoments();
     await syncNagerHolidays();
     await refetchEvents();
   };
 
-  const handlePlan = async (event: any) => {
+  const handlePlan = async (event: EventCatalogItem) => {
     const plan = await createPlan(event);
     if (plan) {
       navigate(`/studio/events/${plan.id}`);
     }
   };
 
+  const handleSkipOpen = (event: EventCatalogItem) => {
+    setSkipModal({ eventId: event.id, title: event.title, event });
+  };
+
   const handleSkip = async () => {
     if (!skipModal) return;
-    // Find the plan for this event, or create one first
     let existingPlan = plans.find(p => p.event_id === skipModal.eventId);
-    if (!existingPlan) {
-      const event = events.find(e => e.id === skipModal.eventId);
-      if (event) {
-        existingPlan = await createPlan(event) as any;
-      }
+    if (!existingPlan && skipModal.event) {
+      existingPlan = await createPlan(skipModal.event) as any;
     }
     if (existingPlan) {
       await skipPlan(existingPlan.id, skipReason || 'No reason given');
@@ -92,7 +95,6 @@ export default function EventsPlannerPage() {
 
   const handleAiSuggest = async (event: any) => {
     if (!currentVenue) return;
-    // Find or create plan
     let plan = plans.find(p => p.event_id === event.id);
     if (!plan) {
       plan = await createPlan(event) as any;
@@ -136,8 +138,8 @@ export default function EventsPlannerPage() {
     <AppLayout>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
         <PageHeader
-          title="Events Planner"
-          description="Plan campaigns around upcoming moments and holidays"
+          title="AI Marketing Assistant"
+          description="Stay ahead of key dates. Plan smarter. Never scramble last minute."
           action={
             <Button onClick={handleSync} disabled={syncing} variant="outline" size="sm">
               <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
@@ -145,6 +147,19 @@ export default function EventsPlannerPage() {
             </Button>
           }
         />
+
+        {/* Lily Recommendations Panel */}
+        {!eventsLoading && !plansLoading && currentVenue && (
+          <LilyRecommendations
+            events={events}
+            plans={plans}
+            leadTimeDays={leadTimeDays}
+            venueId={currentVenue.id}
+            onPlanNow={handlePlan}
+            onSkip={handleSkipOpen}
+            onRefresh={fetchPlans}
+          />
+        )}
 
         <Tabs defaultValue="calendar" className="space-y-6">
           <div className="flex items-center gap-4 flex-wrap">
@@ -244,7 +259,7 @@ export default function EventsPlannerPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setSkipModal({ eventId: event.id, title: event.title })}
+                            onClick={() => handleSkipOpen(event)}
                           >
                             <SkipForward className="w-3 h-3 mr-1" /> Skip
                           </Button>
