@@ -1157,7 +1157,9 @@ export type Database = {
           email: string
           id: string
           invited_by: string | null
+          last_sent_at: string | null
           role: string
+          send_count: number
           venue_id: string
         }
         Insert: {
@@ -1167,7 +1169,9 @@ export type Database = {
           email: string
           id?: string
           invited_by?: string | null
+          last_sent_at?: string | null
           role?: string
+          send_count?: number
           venue_id: string
         }
         Update: {
@@ -1177,7 +1181,9 @@ export type Database = {
           email?: string
           id?: string
           invited_by?: string | null
+          last_sent_at?: string | null
           role?: string
+          send_count?: number
           venue_id?: string
         }
         Relationships: [
