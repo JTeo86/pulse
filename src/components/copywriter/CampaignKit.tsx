@@ -37,7 +37,7 @@ interface CampaignKitProps {
 const assetSections = [
   { key: 'email', label: 'Email Campaign', icon: Mail, description: 'Subject · Preview · Body' },
   { key: 'instagram', label: 'Instagram Caption', icon: Instagram, description: 'Social post copy' },
-  { key: 'sms', label: 'SMS Version', icon: MessageSquare, description: 'Under 160 characters' },
+  { key: 'sms', label: 'Push Notification/SMS Copy', icon: MessageSquare, description: 'Under 160 characters' },
   { key: 'websiteBanner', label: 'Website Banner Copy', icon: Monitor, description: 'Hero or promotional banner' },
   { key: 'staffBriefing', label: 'Staff Briefing', icon: Users, description: 'Internal team summary' },
   { key: 'visualDirection', label: 'Visual Direction', icon: Camera, description: 'Suggested image direction' },
@@ -171,7 +171,7 @@ export function CampaignKit({ kit, onOptimise, isOptimising }: CampaignKitProps)
       `# Campaign Strategy\n\nObjective: ${kit.strategy.objective}\nOffer Framing: ${kit.strategy.offerFraming}\nCTA Positioning: ${kit.strategy.ctaPositioning}`,
       `\n---\n\n# Email Campaign\n\nSubject: ${a.email.subject}\nPreview: ${a.email.preview}\n\n${a.email.body}`,
       `\n---\n\n# Instagram Caption\n\n${a.instagram}`,
-      `\n---\n\n# SMS Version\n\n${a.sms}`,
+      `\n---\n\n# Push Notification/SMS Copy\n\n${a.sms}`,
       `\n---\n\n# Website Banner Copy\n\n${a.websiteBanner}`,
       `\n---\n\n# Staff Briefing\n\n${a.staffBriefing}`,
       `\n---\n\n# Visual Direction\n\n${a.visualDirection}`,
