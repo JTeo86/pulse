@@ -163,9 +163,9 @@ function AppSidebar() {
         <div className={`flex items-center h-14 ${isCollapsed ? 'justify-center px-2' : 'px-4'}`}>
           <Link to="/brand/overview" className="font-serif text-lg font-medium text-sidebar-foreground">
             {isCollapsed ? (
-              <span className="text-accent text-xl">S</span>
+              <span className="text-accent text-xl font-bold">P</span>
             ) : (
-              <span>Brand<span className="text-accent">Studio</span></span>
+              <span>Pulse<span className="text-accent">.</span></span>
             )}
           </Link>
         </div>
@@ -271,7 +271,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
           <div className="flex items-center justify-between px-4 h-14">
             <Link to="/brand/overview" className="font-serif text-lg font-medium">
-              Brand<span className="text-accent">Studio</span>
+              Pulse<span className="text-accent">.</span>
             </Link>
             <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

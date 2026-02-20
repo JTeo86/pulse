@@ -8,6 +8,7 @@ import { VenueProvider, useVenue } from "@/lib/venue-context";
 import { BrandProvider } from "@/lib/brand-context";
 
 import Auth from "./pages/Auth";
+import Landing from "./pages/Landing";
 import CreateVenue from "./pages/CreateVenue";
 import BrandOverview from "./pages/BrandOverview";
 import BrandKit from "./pages/BrandKit";
@@ -59,10 +60,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public routes */}
+      <Route path="/" element={<Landing />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/create-brand" element={<CreateVenue />} />
-      <Route path="/" element={<Navigate to="/studio/editor" replace />} />
-      
+
+      {/* Redirect any signup attempts to landing */}
+      <Route path="/signup" element={<Navigate to="/" replace />} />
+
       {/* Brand Section */}
       <Route path="/brand/overview" element={<ProtectedRoute><BrandOverview /></ProtectedRoute>} />
       <Route path="/brand/identity" element={<ProtectedRoute><BrandKit /></ProtectedRoute>} />
