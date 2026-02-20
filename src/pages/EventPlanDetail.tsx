@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -33,19 +32,15 @@ export default function EventPlanDetailPage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   if (!plan) {
     return (
-      <AppLayout>
-        <div className="text-center py-20 text-muted-foreground">Plan not found.</div>
-      </AppLayout>
+      <div className="text-center py-20 text-muted-foreground">Plan not found.</div>
     );
   }
 
@@ -108,9 +103,8 @@ export default function EventPlanDetailPage() {
   const rec = plan.ai_recommendation as any;
 
   return (
-    <AppLayout>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-        {/* Header */}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+      {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <Link to="/studio/events">
@@ -302,7 +296,6 @@ export default function EventPlanDetailPage() {
             </div>
           </div>
         </div>
-      </motion.div>
-    </AppLayout>
+    </motion.div>
   );
 }

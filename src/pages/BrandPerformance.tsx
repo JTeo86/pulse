@@ -1,4 +1,3 @@
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAnalyticsData } from '@/hooks/use-analytics-data';
@@ -38,7 +37,7 @@ export default function BrandPerformancePage() {
     : [];
 
   return (
-    <AppLayout>
+    <>
       <PageHeader
         title="Brand Performance"
         description="Track your brand's content activity and output"
@@ -194,6 +193,6 @@ export default function BrandPerformancePage() {
           </div>
         </div>
       )}
-    </AppLayout>
+    </>
   );
 }

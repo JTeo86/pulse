@@ -105,14 +105,34 @@ export default function TeamPage() {
   }, [currentVenue, toast]);
 
   const onInvite = async (data: InviteFormData) => {
-    // In a real implementation, this would send an invite email
-    // For now, we just show a message
-    toast({
-      title: 'Invite functionality',
-      description: `Would send invite to ${data.email} as ${data.role}. This requires email integration.`,
-    });
-    setInviteOpen(false);
-    reset();
+    if (!currentVenue) return;
+    setProcessing(true);
+    try {
+      const { error } = await supabase.functions.invoke('invite-user', {
+        body: {
+          venueId: currentVenue.id,
+          email: data.email,
+          role: data.role,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Invite sent',
+        description: `An invitation has been sent to ${data.email}.`,
+      });
+      setInviteOpen(false);
+      reset();
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to send invite',
+        description: error.message || 'Something went wrong. Please try again.',
+      });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleRoleChange = async (member: Member, newRole: 'admin' | 'staff') => {

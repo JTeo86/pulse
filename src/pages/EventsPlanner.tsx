@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CalendarDays, LayoutGrid, RefreshCw, Sparkles, SkipForward, Plus, Filter } from 'lucide-react';
 import { format } from 'date-fns';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -135,7 +134,7 @@ export default function EventsPlannerPage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
         <PageHeader
           title="AI Marketing Assistant"
@@ -362,6 +361,6 @@ export default function EventsPlannerPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AppLayout>
+    </>
   );
 }

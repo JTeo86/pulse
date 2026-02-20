@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 
 interface BrandStats {
@@ -77,16 +76,13 @@ export default function BrandOverviewPage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-16">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   return (
-    <AppLayout>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -174,6 +170,5 @@ export default function BrandOverviewPage() {
           </div>
         </div>
       </motion.div>
-    </AppLayout>
   );
 }

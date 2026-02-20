@@ -79,6 +79,9 @@ export function VenueProvider({ children }: { children: ReactNode }) {
     setIsDemoMode(false);
 
     try {
+      // Auto-accept any pending venue invites for this user's email
+      await supabase.rpc('accept_venue_invites');
+
       // Get all venue memberships for this user
       const { data: memberships, error: memberError } = await supabase
         .from('venue_members')

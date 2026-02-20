@@ -5,7 +5,6 @@ import {
   XCircle, ChevronDown, ChevronUp, BookOpen, Film, 
   Wand2, Scissors, Clapperboard
 } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -138,16 +137,14 @@ export default function AdminIntegrations() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-24">
-          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-24">
+        <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -320,6 +317,6 @@ export default function AdminIntegrations() {
           })}
         </div>
       </motion.div>
-    </AppLayout>
+    </>
   );
 }

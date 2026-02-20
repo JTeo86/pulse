@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Image, Trash2, Loader2, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -87,17 +86,14 @@ export default function BrandLibraryPage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-16">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
         <PageHeader
           title="Content Library"
           description="Store and access your uploaded and generated brand content."
@@ -196,6 +192,5 @@ export default function BrandLibraryPage() {
           </TabsContent>
         </Tabs>
       </motion.div>
-    </AppLayout>
   );
 }

@@ -1149,6 +1149,47 @@ export type Database = {
           },
         ]
       }
+      venue_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          id: string
+          invited_by: string | null
+          role: string
+          venue_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          invited_by?: string | null
+          role?: string
+          venue_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          invited_by?: string | null
+          role?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_invites_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_limits: {
         Row: {
           monthly_pro_photo_credits: number
@@ -1319,6 +1360,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_venue_invites: { Args: never; Returns: number }
       is_platform_admin: { Args: { check_user_id: string }; Returns: boolean }
       is_venue_admin: {
         Args: { check_user_id: string; check_venue_id: string }

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Star, RefreshCw, FileText, MessageSquare, Settings2, Search, Calendar } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -403,14 +402,12 @@ export default function ReviewsAnalytics() {
 
   if (!currentVenue) {
     return (
-      <AppLayout>
-        <div className="text-center py-12 text-muted-foreground">Select a brand to view reviews.</div>
-      </AppLayout>
+      <div className="text-center py-12 text-muted-foreground">Select a brand to view reviews.</div>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
         <PageHeader
           title="Reviews & Feedback"
@@ -446,6 +443,6 @@ export default function ReviewsAnalytics() {
           </TabsContent>
         </Tabs>
       </motion.div>
-    </AppLayout>
+    </>
   );
 }
