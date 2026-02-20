@@ -30,3 +30,9 @@ verify_jwt = false
 [functions.editor-generate-reel]
 verify_jwt = false
 
+[functions.analyze-style-asset]
+verify_jwt = false
+
+[functions.rebuild-style-profile]
+verify_jwt = false
+
