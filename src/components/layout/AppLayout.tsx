@@ -59,7 +59,7 @@ interface AppLayoutProps {
 const brandNavigation = [
   { name: 'Brand Overview', href: '/brand/overview', icon: LayoutDashboard },
   { name: 'Brand Identity', href: '/brand/identity', icon: Palette },
-  { name: 'Brand Library', href: '/brand/library', icon: FolderOpen },
+  { name: 'Content Library', href: '/brand/library', icon: FolderOpen },
 ];
 
 const studioNavigation = [
