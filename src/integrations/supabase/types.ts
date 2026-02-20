@@ -1267,6 +1267,7 @@ export type Database = {
           lat: number | null
           lng: number | null
           name: string
+          owner_user_id: string | null
           plan: string | null
           timezone: string
         }
@@ -1279,6 +1280,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name: string
+          owner_user_id?: string | null
           plan?: string | null
           timezone?: string
         }
@@ -1291,6 +1293,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           name?: string
+          owner_user_id?: string | null
           plan?: string | null
           timezone?: string
         }
@@ -1381,11 +1384,19 @@ export type Database = {
         Args: { check_user_id: string; check_venue_id: string }
         Returns: boolean
       }
+      is_venue_owner: {
+        Args: { p_user_id: string; p_venue_id: string }
+        Returns: boolean
+      }
       remove_member: {
         Args: { p_target_user_id: string; p_venue_id: string }
         Returns: undefined
       }
       role_rank: { Args: { p_role: string }; Returns: number }
+      transfer_venue_ownership: {
+        Args: { p_new_owner_id: string; p_venue_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       ai_provider_type: "image" | "video" | "text"
