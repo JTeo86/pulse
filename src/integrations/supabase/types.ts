@@ -1090,6 +1090,27 @@ export type Database = {
         }
         Relationships: []
       }
+      waitlist_signups: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          venue_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          venue_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          venue_name?: string | null
+        }
+        Relationships: []
+      }
       weekly_review_reports: {
         Row: {
           action_items: Json | null
