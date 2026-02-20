@@ -93,23 +93,67 @@ Deno.serve(async (req: Request) => {
 
   const normalizedEmail = email.toLowerCase().trim();
 
-  // Check if user already exists in auth
-  const { data: existingUsersData, error: listError } = await adminClient.auth.admin.listUsers();
-  let existingUser = null;
-  if (!listError && existingUsersData?.users) {
-    existingUser = existingUsersData.users.find(
-      (u) => u.email?.toLowerCase() === normalizedEmail
-    );
-  }
+  const appUrl =
+    Deno.env.get('APP_URL') ||
+    req.headers.get('origin') ||
+    req.headers.get('referer')?.replace(/\/$/, '') ||
+    'https://pulseai-app.lovable.app';
+
+  const redirectTo = `${appUrl}/auth?invite=1`;
 
   let resultUserId: string | undefined;
+  let isExistingUser = false;
 
-  if (existingUser) {
-    // User already exists — add them directly to the venue without sending another invite email
+  // Attempt to invite — if user already exists, fall back to direct membership add
+  const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+    normalizedEmail,
+    { redirectTo }
+  );
+
+  if (inviteError) {
+    const isDuplicate =
+      inviteError.message?.toLowerCase().includes('database error saving new user') ||
+      inviteError.message?.toLowerCase().includes('user already registered') ||
+      inviteError.status === 422;
+
+    if (!isDuplicate) {
+      console.error('Invite error:', inviteError);
+      return new Response(JSON.stringify({ error: inviteError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // User already exists in auth — find them by scanning listUsers with pagination
+    console.log('User already exists, looking up by email:', normalizedEmail);
+    let foundUser = null;
+    let page = 1;
+    const perPage = 1000;
+
+    while (!foundUser) {
+      const { data: pageData, error: pageError } = await adminClient.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+      if (pageError || !pageData?.users?.length) break;
+      foundUser = pageData.users.find((u) => u.email?.toLowerCase() === normalizedEmail) ?? null;
+      if (pageData.users.length < perPage) break; // last page
+      page++;
+    }
+
+    if (!foundUser) {
+      console.error('Could not find existing user after duplicate error:', normalizedEmail);
+      return new Response(JSON.stringify({ error: 'Failed to locate existing user' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Add directly to venue_members
     const { error: memberInsertError } = await adminClient
       .from('venue_members')
       .upsert(
-        { venue_id: venueId, user_id: existingUser.id, role },
+        { venue_id: venueId, user_id: foundUser.id, role },
         { onConflict: 'venue_id,user_id' }
       );
 
@@ -121,32 +165,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    resultUserId = existingUser.id;
+    resultUserId = foundUser.id;
+    isExistingUser = true;
     console.log('Existing user added directly to venue:', normalizedEmail);
   } else {
-    // New user — send Supabase invite email
-    const appUrl =
-      Deno.env.get('APP_URL') ||
-      req.headers.get('origin') ||
-      req.headers.get('referer')?.replace(/\/$/, '') ||
-      'https://pulseai-app.lovable.app';
-
-    const redirectTo = `${appUrl}/auth?invite=1`;
-
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      normalizedEmail,
-      { redirectTo }
-    );
-
-    if (inviteError) {
-      console.error('Invite error:', inviteError);
-      return new Response(JSON.stringify({ error: inviteError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     resultUserId = inviteData?.user?.id;
+    console.log('Invite email sent to new user:', normalizedEmail);
   }
 
   // Upsert into venue_invites to track the invite/addition
@@ -158,8 +182,8 @@ Deno.serve(async (req: Request) => {
         email: normalizedEmail,
         role,
         invited_by: callerId,
-        accepted_at: existingUser ? new Date().toISOString() : null,
-        accepted_by: existingUser ? existingUser.id : null,
+        accepted_at: isExistingUser ? new Date().toISOString() : null,
+        accepted_by: isExistingUser ? resultUserId : null,
       },
       { onConflict: 'venue_id,email' }
     );
@@ -169,7 +193,7 @@ Deno.serve(async (req: Request) => {
     // Non-fatal — continue
   }
 
-  const message = existingUser
+  const message = isExistingUser
     ? 'User already exists and has been added to the venue'
     : 'Invite email sent successfully';
 
