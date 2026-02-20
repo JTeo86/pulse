@@ -1045,6 +1045,107 @@ export type Database = {
           },
         ]
       }
+      style_analysis: {
+        Row: {
+          analysis_json: Json
+          asset_id: string
+          channel: Database["public"]["Enums"]["style_channel"]
+          confidence_score: number
+          created_at: string
+          embedding: Json | null
+          id: string
+          summary_text: string | null
+          venue_id: string
+        }
+        Insert: {
+          analysis_json?: Json
+          asset_id: string
+          channel: Database["public"]["Enums"]["style_channel"]
+          confidence_score?: number
+          created_at?: string
+          embedding?: Json | null
+          id?: string
+          summary_text?: string | null
+          venue_id: string
+        }
+        Update: {
+          analysis_json?: Json
+          asset_id?: string
+          channel?: Database["public"]["Enums"]["style_channel"]
+          confidence_score?: number
+          created_at?: string
+          embedding?: Json | null
+          id?: string
+          summary_text?: string | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "style_analysis_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "style_reference_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "style_analysis_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      style_reference_assets: {
+        Row: {
+          channel: Database["public"]["Enums"]["style_channel"]
+          created_at: string
+          created_by: string
+          id: string
+          pinned: boolean
+          status: Database["public"]["Enums"]["style_asset_status"]
+          storage_path: string
+          thumbnail_path: string | null
+          type: Database["public"]["Enums"]["style_asset_type"]
+          user_notes: string | null
+          venue_id: string
+        }
+        Insert: {
+          channel: Database["public"]["Enums"]["style_channel"]
+          created_at?: string
+          created_by: string
+          id?: string
+          pinned?: boolean
+          status?: Database["public"]["Enums"]["style_asset_status"]
+          storage_path: string
+          thumbnail_path?: string | null
+          type?: Database["public"]["Enums"]["style_asset_type"]
+          user_notes?: string | null
+          venue_id: string
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["style_channel"]
+          created_at?: string
+          created_by?: string
+          id?: string
+          pinned?: boolean
+          status?: Database["public"]["Enums"]["style_asset_status"]
+          storage_path?: string
+          thumbnail_path?: string | null
+          type?: Database["public"]["Enums"]["style_asset_type"]
+          user_notes?: string | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "style_reference_assets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uploads: {
         Row: {
           created_at: string
@@ -1284,6 +1385,41 @@ export type Database = {
           },
         ]
       }
+      venue_style_profile: {
+        Row: {
+          atmosphere_profile: Json
+          brand_profile: Json
+          merged_profile: Json
+          plating_profile: Json
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          atmosphere_profile?: Json
+          brand_profile?: Json
+          merged_profile?: Json
+          plating_profile?: Json
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          atmosphere_profile?: Json
+          brand_profile?: Json
+          merged_profile?: Json
+          plating_profile?: Json
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_style_profile_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venues: {
         Row: {
           city: string | null
@@ -1435,6 +1571,9 @@ export type Database = {
         | "cc0"
         | "user_uploaded"
         | "other"
+      style_asset_status: "pending_analysis" | "analyzed" | "failed"
+      style_asset_type: "image" | "video"
+      style_channel: "brand" | "atmosphere" | "plating"
       venue_vibe: "casual" | "premium" | "luxury" | "nightlife" | "family"
     }
     CompositeTypes: {
@@ -1573,6 +1712,9 @@ export const Constants = {
         "user_uploaded",
         "other",
       ],
+      style_asset_status: ["pending_analysis", "analyzed", "failed"],
+      style_asset_type: ["image", "video"],
+      style_channel: ["brand", "atmosphere", "plating"],
       venue_vibe: ["casual", "premium", "luxury", "nightlife", "family"],
     },
   },
