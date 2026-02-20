@@ -84,7 +84,6 @@ const settingsNavigation = [
 
 const adminNavigation = [
   { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' },
-  { name: 'Integrations & API Keys', href: '/admin/integrations', icon: Plug, badge: 'Admin' },
 ];
 
 function AppSidebar() {
