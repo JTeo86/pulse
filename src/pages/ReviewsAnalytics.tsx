@@ -322,7 +322,9 @@ function WeeklyReport({ venueId }: { venueId: string }) {
                 <CardDescription>Week of {report.week_start} to {report.week_end}</CardDescription>
               </CardHeader>
               <CardContent className="prose prose-sm prose-invert max-w-none">
-                <div dangerouslySetInnerHTML={{ __html: report.summary_md?.replace(/\n/g, '<br/>') || '' }} />
+                <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {report.summary_md || ''}
+                </div>
               </CardContent>
             </Card>
           )}
