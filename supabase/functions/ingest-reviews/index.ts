@@ -21,10 +21,50 @@ serve(async (req) => {
       });
     }
 
+    // Parse and validate venue_id from request body
+    const body = await req.json();
+    const venue_id = body?.venue_id;
+    if (!venue_id || typeof venue_id !== "string") {
+      return new Response(JSON.stringify({ error: "venue_id required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    // Verify the authenticated user is a member of the requested venue
+    const supabaseUser = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check venue membership — prevents quota abuse across venues
+    const { data: membership, error: membershipError } = await supabaseAdmin
+      .from("venue_members")
+      .select("role")
+      .eq("venue_id", venue_id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (membershipError || !membership) {
+      return new Response(JSON.stringify({ error: "Access denied: not a member of this venue" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Fetch API keys from platform_api_keys table
     const { data: apiKeys, error: keysError } = await supabaseAdmin
