@@ -37,15 +37,39 @@ export default function Landing() {
   const [submitted, setSubmitted] = useState(false);
   const { toast } = useToast();
 
+  const emailRegex = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+
   const handleWaitlist = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) return;
+
+    if (!emailRegex.test(trimmedEmail)) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid email',
+        description: 'Please enter a valid email address.',
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { error } = await supabase
         .from('waitlist_signups')
-        .insert({ email: email.trim(), venue_name: venueName.trim() || null });
-      if (error) throw error;
+        .insert({ email: trimmedEmail, venue_name: venueName.trim() || null });
+      if (error) {
+        // Handle duplicate email gracefully
+        if (error.code === '23505') {
+          toast({
+            title: 'Already registered',
+            description: 'This email is already on the waitlist.',
+          });
+          setSubmitted(true);
+          return;
+        }
+        throw error;
+      }
       setSubmitted(true);
     } catch (err: any) {
       toast({
