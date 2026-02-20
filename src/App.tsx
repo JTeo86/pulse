@@ -11,6 +11,7 @@ import { CookieBanner } from "@/components/CookieBanner";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 import Auth from "./pages/Auth";
+import AuthReset from "./pages/AuthReset";
 import InviteAccept from "./pages/InviteAccept";
 import Landing from "./pages/Landing";
 import CreateVenue from "./pages/CreateVenue";
@@ -84,6 +85,7 @@ function AppRoutes() {
       {/* Public routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/auth" element={<Auth />} />
+      <Route path="/auth/reset" element={<AuthReset />} />
       <Route path="/auth/invite" element={<InviteAccept />} />
       <Route path="/create-brand" element={<CreateVenue />} />
 

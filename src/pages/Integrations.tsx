@@ -12,8 +12,8 @@ export default function IntegrationsPage() {
       transition={{ duration: 0.3 }}
     >
         <PageHeader
-          title="Integrations"
-          description="Connect external services to automate publishing"
+          title="Publishing Integrations"
+          description="Connect Buffer and Make.com to automate content publishing to your social channels"
         />
 
         <div className="max-w-2xl space-y-6">
