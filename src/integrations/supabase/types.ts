@@ -1537,6 +1537,13 @@ export type Database = {
         Args: { p_target_user_id: string; p_venue_id: string }
         Returns: boolean
       }
+      compute_channel_profile: {
+        Args: { p_channel: string; p_venue_id: string }
+        Returns: Json
+      }
+      freq_consistency: { Args: { freq: Json }; Returns: number }
+      freq_dist: { Args: { freq: Json }; Returns: Json }
+      freq_primary: { Args: { freq: Json }; Returns: string }
       get_my_venue_role: { Args: { p_venue_id: string }; Returns: string }
       is_platform_admin: { Args: { check_user_id: string }; Returns: boolean }
       is_venue_admin: {
@@ -1551,11 +1558,17 @@ export type Database = {
         Args: { p_user_id: string; p_venue_id: string }
         Returns: boolean
       }
+      ordinal_label: { Args: { score: number }; Returns: string }
+      rebuild_venue_style_profile: {
+        Args: { p_venue_id: string }
+        Returns: undefined
+      }
       remove_member: {
         Args: { p_target_user_id: string; p_venue_id: string }
         Returns: undefined
       }
       role_rank: { Args: { p_role: string }; Returns: number }
+      top_tags: { Args: { freq: Json; max_tags?: number }; Returns: Json }
       transfer_venue_ownership: {
         Args: { p_new_owner_id: string; p_venue_id: string }
         Returns: undefined
