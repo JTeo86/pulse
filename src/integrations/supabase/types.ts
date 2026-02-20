@@ -917,30 +917,48 @@ export type Database = {
       }
       platform_api_keys: {
         Row: {
+          category: string
           created_at: string
           description: string | null
+          health_status: string
           id: string
           is_configured: boolean
+          is_required: boolean
+          is_secret: boolean
           key_name: string
           key_value: string
+          last_checked_at: string | null
+          last_error: string | null
           updated_at: string
         }
         Insert: {
+          category?: string
           created_at?: string
           description?: string | null
+          health_status?: string
           id?: string
           is_configured?: boolean
+          is_required?: boolean
+          is_secret?: boolean
           key_name: string
           key_value?: string
+          last_checked_at?: string | null
+          last_error?: string | null
           updated_at?: string
         }
         Update: {
+          category?: string
           created_at?: string
           description?: string | null
+          health_status?: string
           id?: string
           is_configured?: boolean
+          is_required?: boolean
+          is_secret?: boolean
           key_name?: string
           key_value?: string
+          last_checked_at?: string | null
+          last_error?: string | null
           updated_at?: string
         }
         Relationships: []

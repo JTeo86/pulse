@@ -7,6 +7,7 @@ import AIModelsTab from '@/components/admin/AIModelsTab';
 import BackgroundAssetsTab from '@/components/admin/BackgroundAssetsTab';
 import OverlayTemplatesTab from '@/components/admin/OverlayTemplatesTab';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
+// APIKeysTab removed — all keys managed at /admin/integrations
 
 export default function PlatformAdmin() {
   const [activeTab, setActiveTab] = useState('providers');
