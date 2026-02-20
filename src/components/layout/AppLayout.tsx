@@ -329,13 +329,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 pt-14 lg:pt-0 min-h-screen">
+        <main className="flex-1 pt-14 lg:pt-0 min-h-screen flex flex-col">
           <div className="hidden lg:flex items-center h-12 px-4 border-b border-border">
             <Button variant="ghost" size="icon" asChild>
               <span><PanelLeft className="w-4 h-4" /></span>
             </Button>
           </div>
-          <div className="p-6 lg:p-8">{children}</div>
+          <div className="flex-1 p-6 lg:p-8">{children}</div>
         </main>
       </div>
     </SidebarProvider>

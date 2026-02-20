@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { VenueProvider, useVenue } from "@/lib/venue-context";
 import { BrandProvider } from "@/lib/brand-context";
+import { CookieProvider } from "@/lib/cookie-context";
+import { CookieBanner } from "@/components/CookieBanner";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 import Auth from "./pages/Auth";
@@ -31,6 +33,9 @@ import EditorPage from "./pages/Editor";
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import NotFound from "./pages/NotFound";
+import TermsPage from "./pages/legal/Terms";
+import PrivacyPage from "./pages/legal/Privacy";
+import CookiePolicyPage from "./pages/legal/Cookies";
 
 const queryClient = new QueryClient();
 
@@ -132,6 +137,11 @@ function AppRoutes() {
         <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
       </Route>
 
+      {/* Legal pages */}
+      <Route path="/legal/terms" element={<TermsPage />} />
+      <Route path="/legal/privacy" element={<PrivacyPage />} />
+      <Route path="/legal/cookies" element={<CookiePolicyPage />} />
+
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -143,16 +153,20 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AuthProvider>
-          <VenueProvider>
-            <BrandProvider>
-              <AppRoutes />
-            </BrandProvider>
-          </VenueProvider>
-        </AuthProvider>
+        <CookieProvider>
+          <AuthProvider>
+            <VenueProvider>
+              <BrandProvider>
+                <AppRoutes />
+                <CookieBanner />
+              </BrandProvider>
+            </VenueProvider>
+          </AuthProvider>
+        </CookieProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
+
 
 export default App;

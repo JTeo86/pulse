@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Users, UserPlus, Shield, User, Trash2, RefreshCw,
-  Copy, Clock, Mail, CheckCircle2, XCircle,
+  Copy, Clock, Mail, CheckCircle2, XCircle, Crown,
 } from 'lucide-react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -31,10 +31,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 
+type VenueRole = 'staff' | 'manager' | 'venue_admin';
+
 interface Member {
   id: string;
   user_id: string;
-  role: 'admin' | 'staff';
+  role: VenueRole;
   created_at: string;
   email?: string;
 }
@@ -49,13 +51,49 @@ interface VenueInvite {
   accepted_at: string | null;
 }
 
+const ROLE_RANK: Record<VenueRole, number> = { staff: 1, manager: 2, venue_admin: 3 };
+
+function roleRank(role: string): number {
+  return ROLE_RANK[role as VenueRole] ?? 0;
+}
+
+const ROLE_LABELS: Record<VenueRole, string> = {
+  staff: 'Staff',
+  manager: 'Manager',
+  venue_admin: 'Venue Admin',
+};
+
+function RoleBadge({ role }: { role: string }) {
+  if (role === 'venue_admin') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/15 text-accent border border-accent/25">
+        <Crown className="w-3 h-3" />
+        Venue Admin
+      </span>
+    );
+  }
+  if (role === 'manager') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-info/10 text-info border border-info/20">
+        <Shield className="w-3 h-3" />
+        Manager
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border">
+      <User className="w-3 h-3" />
+      Staff
+    </span>
+  );
+}
+
 const inviteSchema = z.object({
   email: z.string().email('Please enter a valid email'),
-  role: z.enum(['admin', 'staff']),
+  role: z.enum(['staff', 'manager', 'venue_admin']),
 });
 type InviteFormData = z.infer<typeof inviteSchema>;
 
-/** Returns true if the invite can be resent (not sent in last 60s) */
 function canResend(invite: VenueInvite): boolean {
   const lastSent = invite.last_sent_at ?? invite.created_at;
   return Date.now() - new Date(lastSent).getTime() > 60_000;
@@ -67,9 +105,14 @@ function lastSentLabel(invite: VenueInvite): string {
 }
 
 export default function TeamPage() {
-  const { currentVenue, isAdmin } = useVenue();
+  const { currentVenue, currentMember } = useVenue();
   const { user } = useAuth();
   const { toast } = useToast();
+
+  const myRole = (currentMember?.role ?? 'staff') as VenueRole;
+  const myRank = roleRank(myRole);
+  const isVenueAdmin = myRole === 'venue_admin';
+  const isManagerOrAbove = myRank >= 2;
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<VenueInvite[]>([]);
@@ -90,11 +133,7 @@ export default function TeamPage() {
     if (!currentVenue) return;
     try {
       const [membersRes, invitesRes] = await Promise.all([
-        supabase
-          .from('venue_members')
-          .select('*')
-          .eq('venue_id', currentVenue.id)
-          .order('created_at'),
+        supabase.from('venue_members').select('*').eq('venue_id', currentVenue.id).order('created_at'),
         supabase
           .from('venue_invites')
           .select('id, email, role, created_at, last_sent_at, send_count, accepted_at')
@@ -102,10 +141,8 @@ export default function TeamPage() {
           .order('accepted_at', { ascending: true, nullsFirst: true })
           .order('created_at', { ascending: false }),
       ]);
-
       if (membersRes.error) throw membersRes.error;
       if (invitesRes.error) throw invitesRes.error;
-
       setMembers((membersRes.data || []) as Member[]);
       setInvites((invitesRes.data || []) as unknown as VenueInvite[]);
     } catch (error: any) {
@@ -128,17 +165,12 @@ export default function TeamPage() {
         body: { venueId: currentVenue.id, email: data.email, role: data.role },
       });
       if (error) throw error;
-
       toast({ title: 'Invite sent', description: `Invitation sent to ${data.email}.` });
       setInviteOpen(false);
       reset();
       fetchData();
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Failed to send invite',
-        description: error.message || 'Something went wrong.',
-      });
+      toast({ variant: 'destructive', title: 'Failed to send invite', description: error.message || 'Something went wrong.' });
     } finally {
       setProcessing(false);
     }
@@ -181,31 +213,30 @@ export default function TeamPage() {
     }
   };
 
-  const handleRoleChange = async (member: Member, newRole: 'admin' | 'staff') => {
-    if (!isAdmin || member.user_id === user?.id) return;
-    setProcessing(true);
-    try {
-      const { error } = await supabase.from('venue_members').update({ role: newRole }).eq('id', member.id);
-      if (error) throw error;
-      setMembers((prev) => prev.map((m) => (m.id === member.id ? { ...m, role: newRole } : m)));
-      toast({ title: 'Role updated' });
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error updating role', description: error.message });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const handleRemoveMember = async () => {
-    if (!deleteConfirm || !isAdmin) return;
+    if (!deleteConfirm || !currentVenue) return;
     setProcessing(true);
     try {
-      const { error } = await supabase.from('venue_members').delete().eq('id', deleteConfirm.id);
+      const { error } = await supabase.rpc('remove_member', {
+        p_venue_id: currentVenue.id,
+        p_target_user_id: deleteConfirm.user_id,
+      });
       if (error) throw error;
       setMembers((prev) => prev.filter((m) => m.id !== deleteConfirm.id));
       toast({ title: 'Member removed' });
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error removing member', description: error.message });
+      const msg = error.message || '';
+      if (msg.includes('last Venue Admin')) {
+        toast({
+          variant: 'destructive',
+          title: "Can't remove the last Venue Admin",
+          description: 'Promote another member first.',
+        });
+      } else if (msg.includes('permission')) {
+        toast({ variant: 'destructive', title: 'Permission denied', description: 'You cannot remove this member.' });
+      } else {
+        toast({ variant: 'destructive', title: 'Error removing member', description: msg });
+      }
     } finally {
       setProcessing(false);
       setDeleteConfirm(null);
@@ -216,6 +247,19 @@ export default function TeamPage() {
     navigator.clipboard.writeText(email);
     toast({ title: 'Copied', description: email });
   };
+
+  /** Can the current user remove this member? */
+  function canRemove(member: Member): boolean {
+    if (member.user_id === user?.id) return false; // can't remove self
+    return myRank > roleRank(member.role);
+  }
+
+  /** Can the current user cancel this invite? */
+  function canCancelInvite(invite: VenueInvite): boolean {
+    if (isVenueAdmin) return true;
+    if (isManagerOrAbove && invite.role === 'staff') return true;
+    return false;
+  }
 
   if (loading) {
     return (
@@ -240,7 +284,7 @@ export default function TeamPage() {
             : `Manage venue team members and their roles`
         }
         action={
-          isAdmin && (
+          isManagerOrAbove && (
             <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
               <DialogTrigger asChild>
                 <Button className="btn-primary-editorial">
@@ -267,15 +311,20 @@ export default function TeamPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Role</Label>
-                    <Select value={selectedRole} onValueChange={(v) => setValue('role', v as 'admin' | 'staff')}>
+                    <Select value={selectedRole} onValueChange={(v) => setValue('role', v as VenueRole)}>
                       <SelectTrigger className="input-editorial"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="staff">
-                          <div className="flex items-center gap-2"><User className="w-4 h-4" />Staff — Can upload photos</div>
+                          <div className="flex items-center gap-2"><User className="w-4 h-4" />Staff — Can upload photos &amp; view content</div>
                         </SelectItem>
-                        <SelectItem value="admin">
-                          <div className="flex items-center gap-2"><Shield className="w-4 h-4" />Admin — Full access</div>
+                        <SelectItem value="manager">
+                          <div className="flex items-center gap-2"><Shield className="w-4 h-4" />Manager — Can manage staff</div>
                         </SelectItem>
+                        {isVenueAdmin && (
+                          <SelectItem value="venue_admin">
+                            <div className="flex items-center gap-2"><Crown className="w-4 h-4" />Venue Admin — Full access</div>
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -301,50 +350,84 @@ export default function TeamPage() {
           <EmptyState icon={Users} title="No team members" description="You're the first member of this venue" />
         ) : (
           <div className="card-elevated divide-y divide-border">
-            {members.map((member) => (
-              <div key={member.id} className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-                    {member.role === 'admin' ? (
-                      <Shield className="w-5 h-5 text-accent" />
-                    ) : (
-                      <User className="w-5 h-5 text-muted-foreground" />
+            {members.map((member) => {
+              const isMe = member.user_id === user?.id;
+              const removable = canRemove(member);
+              return (
+                <div key={member.id} className="flex items-center justify-between p-4 gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
+                      {member.role === 'venue_admin' ? (
+                        <Crown className="w-5 h-5 text-accent" />
+                      ) : member.role === 'manager' ? (
+                        <Shield className="w-5 h-5 text-info" />
+                      ) : (
+                        <User className="w-5 h-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm">
+                        {isMe ? 'You' : `User ${member.user_id.slice(0, 8)}…`}
+                        {isMe && <span className="ml-2 text-xs text-muted-foreground">(you)</span>}
+                      </p>
+                      <div className="mt-1">
+                        <RoleBadge role={member.role} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Role change — only venue_admin can change roles for others below them */}
+                    {isVenueAdmin && !isMe && (
+                      <Select
+                        value={member.role}
+                        onValueChange={async (v) => {
+                          setProcessing(true);
+                          try {
+                            const { error } = await supabase
+                              .from('venue_members')
+                              .update({ role: v })
+                              .eq('id', member.id);
+                            if (error) throw error;
+                            setMembers((prev) => prev.map((m) => m.id === member.id ? { ...m, role: v as VenueRole } : m));
+                            toast({ title: 'Role updated' });
+                          } catch (err: any) {
+                            toast({ variant: 'destructive', title: 'Error updating role', description: err.message });
+                          } finally {
+                            setProcessing(false);
+                          }
+                        }}
+                        disabled={processing}
+                      >
+                        <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="staff">Staff</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="venue_admin">Venue Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {removable && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setDeleteConfirm(member)}
+                        disabled={processing}
+                        title="Remove member"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
                     )}
                   </div>
-                  <div>
-                    <p className="font-medium text-sm">
-                      {member.user_id === user?.id ? 'You' : `User ${member.user_id.slice(0, 8)}…`}
-                    </p>
-                    <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
-                  </div>
                 </div>
-
-                {isAdmin && member.user_id !== user?.id && (
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={member.role}
-                      onValueChange={(v) => handleRoleChange(member, v as 'admin' | 'staff')}
-                      disabled={processing}
-                    >
-                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button size="icon" variant="ghost" onClick={() => setDeleteConfirm(member)} disabled={processing}>
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* ── Invitations ── */}
-      {(isAdmin || invites.length > 0) && (
+      {(isManagerOrAbove || invites.length > 0) && (
         <section className="space-y-3">
           <div className="flex items-center gap-3">
             <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
@@ -375,6 +458,7 @@ export default function TeamPage() {
                   {pendingInvites.map((invite) => {
                     const resendable = canResend(invite);
                     const sending = resendingId === invite.id;
+                    const cancelable = canCancelInvite(invite);
                     return (
                       <div key={invite.id} className="flex items-center justify-between p-4 gap-4">
                         <div className="flex items-center gap-3 min-w-0">
@@ -384,7 +468,7 @@ export default function TeamPage() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{invite.email}</p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">{invite.role}</Badge>
+                              <RoleBadge role={invite.role} />
                               <span className="text-xs text-muted-foreground">
                                 Sent {lastSentLabel(invite)}
                                 {(invite.send_count ?? 0) > 1 && ` · ${invite.send_count}×`}
@@ -392,19 +476,17 @@ export default function TeamPage() {
                             </div>
                           </div>
                         </div>
-                        {isAdmin && (
-                          <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="icon" variant="ghost"
+                            onClick={() => copyEmail(invite.email)}
+                            title="Copy email"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                          {isManagerOrAbove && (
                             <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => copyEmail(invite.email)}
-                              title="Copy email"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
+                              size="sm" variant="outline"
                               className="text-xs h-8 px-3"
                               onClick={() => handleResend(invite)}
                               disabled={!resendable || sending || processing}
@@ -413,17 +495,18 @@ export default function TeamPage() {
                               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${sending ? 'animate-spin' : ''}`} />
                               {sending ? 'Sending…' : 'Resend'}
                             </Button>
+                          )}
+                          {cancelable && (
                             <Button
-                              size="icon"
-                              variant="ghost"
+                              size="icon" variant="ghost"
                               onClick={() => setCancelConfirm(invite)}
                               disabled={processing}
                               title="Cancel invite"
                             >
                               <XCircle className="w-4 h-4 text-destructive" />
                             </Button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -445,7 +528,7 @@ export default function TeamPage() {
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{invite.email}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">{invite.role}</Badge>
+                            <RoleBadge role={invite.role} />
                             <span className="text-xs text-muted-foreground">
                               Accepted {formatDistanceToNow(new Date(invite.accepted_at!), { addSuffix: true })}
                             </span>

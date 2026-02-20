@@ -280,11 +280,12 @@ export default function Landing() {
             <span className="font-serif text-lg font-medium">Pulse<span className="text-accent">.</span></span>
             <p className="text-xs text-muted-foreground mt-1">AI Marketing Intelligence for Hospitality</p>
           </div>
-          <div className="flex items-center gap-6 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-5 text-sm text-muted-foreground">
             <Link to="/auth" className="hover:text-foreground transition-colors">Sign In</Link>
-            <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-foreground transition-colors">Terms</a>
-            <a href="mailto:hello@pulsehq.ai" className="hover:text-foreground transition-colors">Contact</a>
+            <Link to="/legal/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+            <Link to="/legal/terms" className="hover:text-foreground transition-colors">Terms</Link>
+            <Link to="/legal/cookies" className="hover:text-foreground transition-colors">Cookie Policy</Link>
+            <a href="mailto:support@pulsehq.ai" className="hover:text-foreground transition-colors">Contact</a>
           </div>
         </div>
       </footer>
