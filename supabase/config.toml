@@ -3,6 +3,9 @@ project_id = "ofyhknmqewvhmoyozftv"
 [functions.invite-user]
 verify_jwt = false
 
+[functions.resend-invite]
+verify_jwt = false
+
 [functions.generate-copy]
 verify_jwt = false
 

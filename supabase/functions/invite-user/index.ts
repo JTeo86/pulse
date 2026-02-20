@@ -99,7 +99,20 @@ Deno.serve(async (req: Request) => {
     req.headers.get('referer')?.replace(/\/$/, '') ||
     'https://pulseai-app.lovable.app';
 
-  const redirectTo = `${appUrl}/auth?invite=1`;
+  // Fetch venue name to surface on the invite acceptance page
+  const adminClientForVenue = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+  const { data: venueData } = await adminClientForVenue
+    .from('venues')
+    .select('name')
+    .eq('id', venueId)
+    .maybeSingle();
+
+  const venueName = venueData?.name ? encodeURIComponent(venueData.name) : '';
+  const redirectTo = `${appUrl}/auth/invite?venueId=${venueId}${venueName ? `&venueName=${venueName}` : ''}`;
 
   let resultUserId: string | undefined;
   let isExistingUser = false;
@@ -173,7 +186,7 @@ Deno.serve(async (req: Request) => {
     console.log('Invite email sent to new user:', normalizedEmail);
   }
 
-  // Upsert into venue_invites to track the invite/addition
+  // Upsert into venue_invites to track the invite/addition (with send tracking)
   const { error: upsertError } = await adminClient
     .from('venue_invites')
     .upsert(
@@ -184,6 +197,8 @@ Deno.serve(async (req: Request) => {
         invited_by: callerId,
         accepted_at: isExistingUser ? new Date().toISOString() : null,
         accepted_by: isExistingUser ? resultUserId : null,
+        last_sent_at: isExistingUser ? null : new Date().toISOString(),
+        send_count: isExistingUser ? 0 : 1,
       },
       { onConflict: 'venue_id,email' }
     );

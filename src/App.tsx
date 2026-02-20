@@ -9,6 +9,7 @@ import { BrandProvider } from "@/lib/brand-context";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 import Auth from "./pages/Auth";
+import InviteAccept from "./pages/InviteAccept";
 import Landing from "./pages/Landing";
 import CreateVenue from "./pages/CreateVenue";
 import BrandOverview from "./pages/BrandOverview";
@@ -78,6 +79,7 @@ function AppRoutes() {
       {/* Public routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/auth" element={<Auth />} />
+      <Route path="/auth/invite" element={<InviteAccept />} />
       <Route path="/create-brand" element={<CreateVenue />} />
 
       {/* Redirect any signup attempts to landing */}
