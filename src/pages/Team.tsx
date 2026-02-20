@@ -107,7 +107,7 @@ export default function TeamPage() {
       if (invitesRes.error) throw invitesRes.error;
 
       setMembers((membersRes.data || []) as Member[]);
-      setInvites((invitesRes.data || []) as VenueInvite[]);
+      setInvites((invitesRes.data || []) as unknown as VenueInvite[]);
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error loading team', description: error.message });
     } finally {
