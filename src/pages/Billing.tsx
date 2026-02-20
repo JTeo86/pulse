@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { CreditCard, Check } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
-import { AppLayout } from '@/components/layout/AppLayout';
+
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 
@@ -48,12 +48,11 @@ export default function BillingPage() {
   const { currentVenue } = useVenue();
 
   return (
-    <AppLayout>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-      >
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
         <PageHeader
           title="Billing"
           description="Manage your subscription and billing"
@@ -116,6 +115,5 @@ export default function BillingPage() {
           ))}
         </div>
       </motion.div>
-    </AppLayout>
   );
 }

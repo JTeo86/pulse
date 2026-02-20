@@ -32,7 +32,7 @@ export default function CopywriterPage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <PageHeader
         title="Campaign Engine"
         description="AI-powered marketing execution aligned with your brand and business goals."
@@ -95,6 +95,6 @@ export default function CopywriterPage() {
           </div>
         </motion.div>
       )}
-    </AppLayout>
+    </>
   );
 }

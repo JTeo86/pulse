@@ -1,17 +1,16 @@
 import { motion } from 'framer-motion';
 import { Plug, Check, ExternalLink } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
+
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 
 export default function IntegrationsPage() {
   return (
-    <AppLayout>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-      >
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
         <PageHeader
           title="Integrations"
           description="Connect external services to automate publishing"
@@ -90,6 +89,5 @@ export default function IntegrationsPage() {
           </div>
         </div>
       </motion.div>
-    </AppLayout>
   );
 }
