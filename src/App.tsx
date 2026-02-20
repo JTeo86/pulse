@@ -28,7 +28,6 @@ import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
-import AdminIntegrations from "./pages/admin/AdminIntegrations";
 import EventsPlanner from "./pages/EventsPlanner";
 import EditorPage from "./pages/Editor";
 import EventPlanDetail from "./pages/EventPlanDetail";
@@ -119,7 +118,7 @@ function AppRoutes() {
 
         {/* Admin Section */}
         <Route path="/admin/platform" element={<PlatformAdmin />} />
-        <Route path="/admin/integrations" element={<AdminIntegrations />} />
+        <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
         {/* Editor */}
         <Route path="/editor" element={<EditorPage />} />

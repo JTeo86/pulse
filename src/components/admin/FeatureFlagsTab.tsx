@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Flag, Video, Image, Layers, Zap, PenTool, Package } from 'lucide-react';
+import { Flag, Video, Image, Zap, Package, FlaskConical } from 'lucide-react';
 
 interface FeatureFlag {
   id: string;
@@ -14,55 +14,62 @@ interface FeatureFlag {
   flag_key: string;
   is_enabled: boolean;
   config_json: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
 }
 
-const FLAG_INFO: Record<string, { name: string; description: string; icon: typeof Flag; isPhaseControl?: boolean }> = {
+// Only operational flags — no duplication of product_phase logic or unused keys
+const FLAG_INFO: Record<string, {
+  name: string;
+  description: string;
+  safeDefault: string;
+  impact: string;
+  icon: typeof Flag;
+  isPhaseControl?: boolean;
+}> = {
   product_phase: {
     name: 'Product Phase',
-    description: 'Controls which features are available platform-wide. phase_1 = copy+images only. phase_2 = video unlocked.',
+    description: 'Controls which features are available platform-wide. Phase 1 = copy + images only. Phase 2 = video unlocked.',
+    safeDefault: 'phase_1',
+    impact: 'Flipping to phase_2 enables video/reel output for all users.',
     icon: Package,
     isPhaseControl: true,
   },
-  'feature.copywriter_enabled': {
-    name: 'Copywriter',
-    description: 'Enable the AI copywriting module (email campaigns, social captions, blog posts)',
-    icon: PenTool,
-  },
-  'feature.image_editor_enabled': {
-    name: 'Image Editor / Pro Photo',
-    description: 'Enable the Pro Photo image generation and visual editing tools',
-    icon: Image,
-  },
   'feature.video_enabled': {
-    name: 'Video / Reels (Phase 2)',
+    name: 'Video / Reels',
     description: 'Enable video reel output mode. Only active when product_phase = phase_2.',
+    safeDefault: 'off',
+    impact: 'Unlocks Reel tab in Editor for all users (requires phase_2).',
     icon: Video,
   },
   'feature.kling_enabled': {
     name: 'Kling Cinematic AI Reels',
     description: 'Enable Kling-powered AI video generation. Requires video_enabled + phase_2.',
+    safeDefault: 'off',
+    impact: 'Unlocks Cinematic AI Reel option in Editor (requires KLING_API_KEY configured).',
     icon: Zap,
   },
-  visual_editor_v2: {
-    name: 'V2 Video Engine (Kling)',
-    description: 'Enable Kling-powered video generation (image-to-video, motion templates)',
-    icon: Video,
+  'experimental_features': {
+    name: 'Experimental Features',
+    description: 'Enable experimental UI features for internal testing. Not shown to regular users.',
+    safeDefault: 'off',
+    impact: 'May expose unstable features. Internal admin testing only.',
+    icon: FlaskConical,
   },
-  visual_editor_v1: {
-    name: 'V1 Image Engine (PhotoRoom)',
-    description: 'Enable PhotoRoom-powered image editing (background removal, enhancement)',
+  'style_auto_improve_enabled': {
+    name: 'Style Auto-Improve',
+    description: 'Automatically re-analyse style assets when new uploads are added.',
+    safeDefault: 'on',
+    impact: 'Disabling stops automatic style profile updates.',
     icon: Image,
   },
 };
 
-const PHASE_FLAGS_ORDER = [
+// Flags to show, in order
+const FLAG_ORDER = [
   'product_phase',
-  'feature.copywriter_enabled',
-  'feature.image_editor_enabled',
   'feature.video_enabled',
   'feature.kling_enabled',
+  'style_auto_improve_enabled',
+  'experimental_features',
 ];
 
 export default function FeatureFlagsTab() {
@@ -83,10 +90,7 @@ export default function FeatureFlagsTab() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, isEnabled }: { id: string; isEnabled: boolean }) => {
-      const { error } = await supabase
-        .from('feature_flags')
-        .update({ is_enabled: isEnabled })
-        .eq('id', id);
+      const { error } = await supabase.from('feature_flags').update({ is_enabled: isEnabled }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -94,12 +98,10 @@ export default function FeatureFlagsTab() {
       queryClient.invalidateQueries({ queryKey: ['phase-flags'] });
       toast.success('Feature flag updated');
     },
-    onError: (error) => {
-      toast.error('Failed to update flag: ' + error.message);
-    },
+    onError: (err) => toast.error('Failed to update flag: ' + err.message),
   });
 
-  const updatePhaseValueMutation = useMutation({
+  const updatePhaseMutation = useMutation({
     mutationFn: async ({ id, phase }: { id: string; phase: string }) => {
       const { error } = await supabase
         .from('feature_flags')
@@ -112,24 +114,25 @@ export default function FeatureFlagsTab() {
       queryClient.invalidateQueries({ queryKey: ['phase-flags'] });
       toast.success('Product phase updated — refresh any open tabs');
     },
-    onError: (error) => {
-      toast.error('Failed to update phase: ' + error.message);
-    },
+    onError: (err) => toast.error('Failed to update phase: ' + err.message),
   });
 
-  // Sort flags: phase flags first in defined order, then others
-  const phaseFlags = PHASE_FLAGS_ORDER
+  // Order flags: known ones first, unknowns appended
+  const knownFlags = FLAG_ORDER
     .map(key => flags?.find(f => f.flag_key === key))
     .filter(Boolean) as FeatureFlag[];
-  const otherFlags = (flags ?? []).filter(f => !PHASE_FLAGS_ORDER.includes(f.flag_key));
+  const unknownFlags = (flags ?? []).filter(f => !FLAG_ORDER.includes(f.flag_key));
+  const orderedFlags = [...knownFlags, ...unknownFlags];
 
-  const renderFlagRow = (flag: FeatureFlag) => {
-    const info = FLAG_INFO[flag.flag_key] || {
+  const renderRow = (flag: FeatureFlag) => {
+    const info = FLAG_INFO[flag.flag_key] ?? {
       name: flag.flag_key,
-      description: (flag.config_json as { description?: string })?.description || 'No description',
+      description: (flag.config_json as { description?: string })?.description ?? 'No description',
+      safeDefault: '—',
+      impact: 'Unknown impact.',
       icon: Flag,
     };
-    const IconComponent = info.icon;
+    const Icon = info.icon;
     const isPhaseControl = (info as { isPhaseControl?: boolean }).isPhaseControl;
     const currentPhase = (flag.config_json as { value?: string })?.value ?? 'phase_1';
 
@@ -137,35 +140,31 @@ export default function FeatureFlagsTab() {
       <TableRow key={flag.id}>
         <TableCell>
           <div className="flex items-center gap-2">
-            <IconComponent className="w-4 h-4 text-muted-foreground" />
+            <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
             <div>
-              <span className="font-medium block">{info.name}</span>
-              <span className="text-xs text-muted-foreground font-mono">{flag.flag_key}</span>
+              <span className="font-medium block text-sm">{info.name}</span>
+              <span className="text-[10px] text-muted-foreground font-mono">{flag.flag_key}</span>
             </div>
           </div>
         </TableCell>
-        <TableCell className="text-muted-foreground text-sm max-w-xs">
-          {info.description}
+        <TableCell className="text-muted-foreground text-xs max-w-xs">{info.description}</TableCell>
+        <TableCell>
+          <span className="text-[10px] font-mono text-muted-foreground">{(info as any).safeDefault}</span>
         </TableCell>
         <TableCell>
-          {flag.is_enabled ? (
-          <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-              Active
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="bg-muted text-muted-foreground">
-              Disabled
-            </Badge>
-          )}
+          {flag.is_enabled
+            ? <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-[10px]">Active</Badge>
+            : <Badge variant="outline" className="bg-muted text-muted-foreground text-[10px]">Off</Badge>
+          }
         </TableCell>
         <TableCell className="text-right">
           {isPhaseControl ? (
             <Select
               value={currentPhase}
-              onValueChange={(v) => updatePhaseValueMutation.mutate({ id: flag.id, phase: v })}
-              disabled={updatePhaseValueMutation.isPending}
+              onValueChange={v => updatePhaseMutation.mutate({ id: flag.id, phase: v })}
+              disabled={updatePhaseMutation.isPending}
             >
-              <SelectTrigger className="w-32 h-8 text-xs">
+              <SelectTrigger className="w-28 h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -176,7 +175,7 @@ export default function FeatureFlagsTab() {
           ) : (
             <Switch
               checked={flag.is_enabled}
-              onCheckedChange={(checked) => toggleMutation.mutate({ id: flag.id, isEnabled: checked })}
+              onCheckedChange={checked => toggleMutation.mutate({ id: flag.id, isEnabled: checked })}
               disabled={toggleMutation.isPending}
             />
           )}
@@ -186,31 +185,30 @@ export default function FeatureFlagsTab() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Phase Control */}
+    <div className="space-y-6 max-w-4xl">
       <Card>
         <CardHeader>
-          <CardTitle>Product Phase & Feature Flags</CardTitle>
+          <CardTitle>Feature Flags</CardTitle>
           <CardDescription>
-            Set the current product phase and enable/disable features. Phase 1 hard-gates all video features regardless of individual flags.
+            Operational toggles that gate product capabilities. Phase 1 hard-gates all video features regardless of individual flags.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading flags...</div>
+            <div className="text-center py-8 text-muted-foreground text-sm">Loading flags…</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Feature</TableHead>
+                  <TableHead>Flag</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead>Safe Default</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Control</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {phaseFlags.map(renderFlagRow)}
-                {otherFlags.length > 0 && otherFlags.map(renderFlagRow)}
+                {orderedFlags.map(renderRow)}
               </TableBody>
             </Table>
           )}
@@ -237,8 +235,8 @@ export default function FeatureFlagsTab() {
             <div>
               <h4 className="font-medium text-sm text-muted-foreground">Phase 2 — Video & Reels</h4>
               <p className="text-sm text-muted-foreground mt-1">
-                Template Reel (Ken Burns) + Cinematic AI Reel (Kling). Flip product_phase to phase_2 to unlock.
-                Requires KLING_API_KEY configured in Integrations.
+                Template Reel (Ken Burns) + Cinematic AI Reel (Kling). Flip <code className="text-xs bg-muted px-1 rounded">product_phase</code> to phase_2 to unlock.
+                Requires <code className="text-xs bg-muted px-1 rounded">KLING_API_KEY</code> configured in Integrations & API Keys.
               </p>
             </div>
           </div>
