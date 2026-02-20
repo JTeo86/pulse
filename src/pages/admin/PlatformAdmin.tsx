@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Shield, Brain, Image, Layers, Flag, KeyRound } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
 import AIProvidersTab from '@/components/admin/AIProvidersTab';
 import AIModelsTab from '@/components/admin/AIModelsTab';
 import BackgroundAssetsTab from '@/components/admin/BackgroundAssetsTab';
@@ -14,7 +13,7 @@ export default function PlatformAdmin() {
   const [activeTab, setActiveTab] = useState('providers');
 
   return (
-    <AppLayout>
+    <>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -101,6 +100,6 @@ export default function PlatformAdmin() {
           </TabsContent>
         </Tabs>
       </motion.div>
-    </AppLayout>
+    </>
   );
 }

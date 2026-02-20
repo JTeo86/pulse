@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Navigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -21,7 +21,19 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn, user, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  const isInviteFlow = searchParams.get('invite') === '1';
+
+  // If Supabase redirected back with a session (invited user clicking email link),
+  // the auth-context listener picks up the session automatically.
+  // Once user is set, redirect them to the app.
+  useEffect(() => {
+    if (user && !loading) {
+      navigate('/brand/overview', { replace: true });
+    }
+  }, [user, loading, navigate]);
 
   const { register, handleSubmit, formState: { errors } } = useForm<AuthFormData>({
     resolver: zodResolver(authSchema),
@@ -74,8 +86,17 @@ export default function AuthPage() {
           </Link>
 
           <div className="mb-8">
-            <h1 className="font-serif text-3xl font-medium text-foreground mb-2">Sign in</h1>
-            <p className="text-muted-foreground text-sm">Access your Pulse dashboard.</p>
+            {isInviteFlow ? (
+              <>
+                <h1 className="font-serif text-3xl font-medium text-foreground mb-2">You're invited!</h1>
+                <p className="text-muted-foreground text-sm">Set your password to activate your account and join your team.</p>
+              </>
+            ) : (
+              <>
+                <h1 className="font-serif text-3xl font-medium text-foreground mb-2">Sign in</h1>
+                <p className="text-muted-foreground text-sm">Access your Pulse dashboard.</p>
+              </>
+            )}
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -94,7 +115,9 @@ export default function AuthPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
+              <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">
+                {isInviteFlow ? 'Set your password' : 'Password'}
+              </Label>
               <Input
                 id="password"
                 type="password"
@@ -115,10 +138,10 @@ export default function AuthPage() {
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-accent-foreground/40 border-t-accent-foreground rounded-full animate-spin" />
-                  Signing in...
+                  {isInviteFlow ? 'Activating...' : 'Signing in...'}
                 </span>
               ) : (
-                'Sign In'
+                isInviteFlow ? 'Activate account' : 'Sign In'
               )}
             </Button>
           </form>

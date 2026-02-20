@@ -4,7 +4,6 @@ import { Building2, Trash2, AlertTriangle, MapPin } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,7 +91,7 @@ export default function BrandSettingsPage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -281,6 +280,6 @@ export default function BrandSettingsPage() {
           )}
         </div>
       </motion.div>
-    </AppLayout>
+    </>
   );
 }

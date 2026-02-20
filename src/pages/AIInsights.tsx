@@ -1,4 +1,3 @@
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAnalyticsData } from '@/hooks/use-analytics-data';
@@ -165,7 +164,7 @@ export default function AIInsightsPage() {
   const mediumCount = insights.filter(i => i.priority === 'medium').length;
 
   return (
-    <AppLayout>
+    <>
       <PageHeader
         title="AI Insights"
         description="Smart recommendations based on your brand activity"
@@ -245,6 +244,6 @@ export default function AIInsightsPage() {
           </div>
         </div>
       )}
-    </AppLayout>
+    </>
   );
 }

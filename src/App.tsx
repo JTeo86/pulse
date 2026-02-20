@@ -2,10 +2,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { VenueProvider, useVenue } from "@/lib/venue-context";
 import { BrandProvider } from "@/lib/brand-context";
+import { AppLayout } from "@/components/layout/AppLayout";
 
 import Auth from "./pages/Auth";
 import Landing from "./pages/Landing";
@@ -32,7 +33,11 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+/**
+ * Persistent authenticated layout — renders AppLayout once and uses <Outlet>
+ * so the sidebar never remounts when navigating between protected pages.
+ */
+function ProtectedLayout() {
   const { user, loading } = useAuth();
   const { venues, loading: venueLoading, isDemoMode } = useVenue();
 
@@ -45,7 +50,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (isDemoMode && venues.length > 0) {
-    return <>{children}</>;
+    return (
+      <AppLayout>
+        <Outlet />
+      </AppLayout>
+    );
   }
 
   if (!user) {
@@ -56,7 +65,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/create-brand" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <AppLayout>
+      <Outlet />
+    </AppLayout>
+  );
 }
 
 function AppRoutes() {
@@ -70,46 +83,53 @@ function AppRoutes() {
       {/* Redirect any signup attempts to landing */}
       <Route path="/signup" element={<Navigate to="/" replace />} />
 
-      {/* Brand Section */}
-      <Route path="/brand/overview" element={<ProtectedRoute><BrandOverview /></ProtectedRoute>} />
-      <Route path="/brand/identity" element={<ProtectedRoute><BrandKit /></ProtectedRoute>} />
-      <Route path="/brand/library" element={<ProtectedRoute><BrandLibrary /></ProtectedRoute>} />
-      
-      {/* Studio Section */}
-      <Route path="/studio/editor" element={<ProtectedRoute><TheEditor /></ProtectedRoute>} />
-      <Route path="/studio/content" element={<ProtectedRoute><Copywriter /></ProtectedRoute>} />
-      <Route path="/studio/events" element={<ProtectedRoute><EventsPlanner /></ProtectedRoute>} />
-      <Route path="/studio/events/:planId" element={<ProtectedRoute><EventPlanDetail /></ProtectedRoute>} />
-      
-      {/* Analytics Section */}
-      <Route path="/analytics/performance" element={<ProtectedRoute><BrandPerformance /></ProtectedRoute>} />
-      <Route path="/analytics/competitors" element={<ProtectedRoute><CompetitorIntel /></ProtectedRoute>} />
-      <Route path="/analytics/insights" element={<ProtectedRoute><AIInsights /></ProtectedRoute>} />
-      <Route path="/analytics/reviews" element={<ProtectedRoute><ReviewsAnalytics /></ProtectedRoute>} />
-      
-      {/* Settings Section */}
-      <Route path="/settings/brand" element={<ProtectedRoute><BrandSettings /></ProtectedRoute>} />
-      <Route path="/settings/team" element={<ProtectedRoute><Team /></ProtectedRoute>} />
-      <Route path="/settings/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
-      <Route path="/admin/platform" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
-      <Route path="/admin/integrations" element={<ProtectedRoute><AdminIntegrations /></ProtectedRoute>} />
-      <Route path="/editor" element={<ProtectedRoute><EditorPage /></ProtectedRoute>} />
-      <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
-      
-      {/* Legacy redirects */}
-      <Route path="/dashboard" element={<Navigate to="/brand/overview" replace />} />
-      <Route path="/brand-kit" element={<Navigate to="/brand/identity" replace />} />
-      <Route path="/modules/editor" element={<Navigate to="/studio/editor" replace />} />
-      <Route path="/upload" element={<Navigate to="/studio/editor" replace />} />
-      <Route path="/drafts" element={<Navigate to="/studio/editor" replace />} />
-      <Route path="/publishing" element={<Navigate to="/studio/editor" replace />} />
-      <Route path="/studio/planner" element={<Navigate to="/settings/integrations" replace />} />
-      <Route path="/studio/email" element={<Navigate to="/studio/content" replace />} />
-      <Route path="/studio/competitors" element={<Navigate to="/analytics/competitors" replace />} />
-      <Route path="/team" element={<Navigate to="/settings/team" replace />} />
-      <Route path="/integrations" element={<Navigate to="/settings/integrations" replace />} />
-      <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
-      
+      {/* All authenticated routes share a single persistent AppLayout */}
+      <Route element={<ProtectedLayout />}>
+        {/* Brand Section */}
+        <Route path="/brand/overview" element={<BrandOverview />} />
+        <Route path="/brand/identity" element={<BrandKit />} />
+        <Route path="/brand/library" element={<BrandLibrary />} />
+
+        {/* Studio Section */}
+        <Route path="/studio/editor" element={<TheEditor />} />
+        <Route path="/studio/content" element={<Copywriter />} />
+        <Route path="/studio/events" element={<EventsPlanner />} />
+        <Route path="/studio/events/:planId" element={<EventPlanDetail />} />
+
+        {/* Analytics Section */}
+        <Route path="/analytics/performance" element={<BrandPerformance />} />
+        <Route path="/analytics/competitors" element={<CompetitorIntel />} />
+        <Route path="/analytics/insights" element={<AIInsights />} />
+        <Route path="/analytics/reviews" element={<ReviewsAnalytics />} />
+
+        {/* Settings Section */}
+        <Route path="/settings/brand" element={<BrandSettings />} />
+        <Route path="/settings/team" element={<Team />} />
+        <Route path="/settings/integrations" element={<Integrations />} />
+        <Route path="/settings/billing" element={<Billing />} />
+
+        {/* Admin Section */}
+        <Route path="/admin/platform" element={<PlatformAdmin />} />
+        <Route path="/admin/integrations" element={<AdminIntegrations />} />
+
+        {/* Editor */}
+        <Route path="/editor" element={<EditorPage />} />
+
+        {/* Legacy redirects */}
+        <Route path="/dashboard" element={<Navigate to="/brand/overview" replace />} />
+        <Route path="/brand-kit" element={<Navigate to="/brand/identity" replace />} />
+        <Route path="/modules/editor" element={<Navigate to="/studio/editor" replace />} />
+        <Route path="/upload" element={<Navigate to="/studio/editor" replace />} />
+        <Route path="/drafts" element={<Navigate to="/studio/editor" replace />} />
+        <Route path="/publishing" element={<Navigate to="/studio/editor" replace />} />
+        <Route path="/studio/planner" element={<Navigate to="/settings/integrations" replace />} />
+        <Route path="/studio/email" element={<Navigate to="/studio/content" replace />} />
+        <Route path="/studio/competitors" element={<Navigate to="/analytics/competitors" replace />} />
+        <Route path="/team" element={<Navigate to="/settings/team" replace />} />
+        <Route path="/integrations" element={<Navigate to="/settings/integrations" replace />} />
+        <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
+      </Route>
+
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

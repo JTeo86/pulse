@@ -1,4 +1,3 @@
-import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAnalyticsData } from '@/hooks/use-analytics-data';
@@ -71,7 +70,7 @@ export default function CompetitorIntelPage() {
     : [];
 
   return (
-    <AppLayout>
+    <>
       <PageHeader
         title="Competitor Intel"
         description="See how your brand activity compares to industry benchmarks"
@@ -231,6 +230,6 @@ export default function CompetitorIntelPage() {
           </Card>
         </div>
       )}
-    </AppLayout>
+    </>
   );
 }
