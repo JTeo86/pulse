@@ -4,7 +4,7 @@ import { Palette, Image, UtensilsCrossed, Plus, Star, Trash2, AlertTriangle, Fil
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
-import { AppLayout } from '@/components/layout/AppLayout';
+
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -327,19 +327,16 @@ export default function BrandKitPage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-16">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-        <PageHeader
-          title="Brand Identity"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+      <PageHeader
+        title="Brand Identity"
           description="Configure how your brand looks, sounds, and presents itself to the AI."
         />
 
@@ -579,6 +576,5 @@ export default function BrandKitPage() {
           </TabsContent>
         </Tabs>
       </motion.div>
-    </AppLayout>
   );
 }

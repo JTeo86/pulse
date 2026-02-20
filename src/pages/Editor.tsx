@@ -5,7 +5,7 @@ import {
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Zap
 } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -231,13 +231,12 @@ export default function EditorPage() {
   const hasProPhoto = !!jobResult?.final_image_url;
 
   return (
-    <AppLayout>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-        className="max-w-6xl mx-auto space-y-6"
-      >
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="max-w-6xl mx-auto space-y-6"
+    >
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
@@ -622,6 +621,5 @@ export default function EditorPage() {
           </div>
         </div>
       </motion.div>
-    </AppLayout>
   );
 }
