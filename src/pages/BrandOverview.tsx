@@ -70,9 +70,9 @@ export default function BrandOverviewPage() {
   ];
 
   const quickActions = [
-    { label: 'Brand Library & Brief', description: 'Set up your AI briefing and browse assets', href: '/brand/library', icon: FileEdit },
-    { label: 'Brand Assets & Identity', description: 'Upload visual assets that control how content looks', href: '/brand/identity', icon: Sparkles },
-    { label: 'TheEditor Module', description: 'Create hospitality-grade social content', href: '/modules/editor', icon: Image },
+    { label: 'Brand Identity', description: 'Configure how your brand looks, sounds, and presents itself', href: '/brand/identity', icon: Sparkles },
+    { label: 'Content Library', description: 'Access your uploaded and generated brand content', href: '/brand/library', icon: FileEdit },
+    { label: 'TheEditor', description: 'Create hospitality-grade social content', href: '/studio/editor', icon: Image },
   ];
 
   if (loading) {

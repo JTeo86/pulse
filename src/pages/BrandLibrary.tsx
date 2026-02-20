@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Image, FileText, Info, Trash2, Loader2, Pencil } from 'lucide-react';
+import { Image, Trash2, Loader2, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -10,8 +10,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { BrandKitUploader } from '@/components/brand/BrandKitUploader';
-import { BrandKitFileList } from '@/components/brand/BrandKitFileList';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,48 +30,27 @@ interface UploadItem {
   notes: string | null;
 }
 
-interface BrandKitFile {
-  id: string;
-  file_name: string;
-  file_type: string;
-  category: string | null;
-  storage_path: string;
-  size_bytes: number | null;
-  created_at: string;
-}
-
 export default function BrandLibraryPage() {
   const { currentVenue: currentBrand, isAdmin, isDemoMode } = useVenue();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [uploads, setUploads] = useState<UploadItem[]>([]);
-  const [brandKitFiles, setBrandKitFiles] = useState<BrandKitFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const canEdit = isAdmin && !isDemoMode;
 
-  const fetchLibrary = async () => {
+  const fetchUploads = async () => {
     if (!currentBrand) return;
-
     try {
-      const [uploadsResult, brandKitResult] = await Promise.all([
-        supabase
-          .from('uploads')
-          .select('*')
-          .eq('venue_id', currentBrand.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('brand_kit_files')
-          .select('*')
-          .eq('venue_id', currentBrand.id)
-          .order('created_at', { ascending: false }),
-      ]);
-
-      if (uploadsResult.data) setUploads(uploadsResult.data as UploadItem[]);
-      if (brandKitResult.data) setBrandKitFiles(brandKitResult.data as BrandKitFile[]);
+      const { data } = await supabase
+        .from('uploads')
+        .select('*')
+        .eq('venue_id', currentBrand.id)
+        .order('created_at', { ascending: false });
+      if (data) setUploads(data as UploadItem[]);
     } catch (error) {
-      console.error('Error fetching library:', error);
+      console.error('Error fetching uploads:', error);
     } finally {
       setLoading(false);
     }
@@ -81,7 +58,7 @@ export default function BrandLibraryPage() {
 
   useEffect(() => {
     if (!currentBrand) return;
-    fetchLibrary();
+    fetchUploads();
   }, [currentBrand]);
 
   const getPublicUrl = (path: string) => {
@@ -91,40 +68,18 @@ export default function BrandLibraryPage() {
 
   const handleDeleteUpload = async (upload: UploadItem) => {
     setDeletingId(upload.id);
-
     try {
-      // Delete from storage
-      const { error: storageError } = await supabase.storage
-        .from('venue-assets')
-        .remove([upload.storage_path]);
+      const { error: storageError } = await supabase.storage.from('venue-assets').remove([upload.storage_path]);
+      if (storageError) console.error('Storage delete error:', storageError);
 
-      if (storageError) {
-        console.error('Storage delete error:', storageError);
-      }
+      const { error: dbError } = await supabase.from('uploads').delete().eq('id', upload.id);
+      if (dbError) throw dbError;
 
-      // Delete DB record
-      const { error: dbError } = await supabase
-        .from('uploads')
-        .delete()
-        .eq('id', upload.id);
-
-      if (dbError) {
-        throw dbError;
-      }
-
-      toast({
-        title: 'Photo deleted',
-        description: 'The photo has been removed from your gallery.',
-      });
-
+      toast({ title: 'Photo deleted', description: 'The photo has been removed from your library.' });
       setUploads((prev) => prev.filter((u) => u.id !== upload.id));
     } catch (error) {
       console.error('Delete error:', error);
-      toast({
-        title: 'Delete failed',
-        description: 'Could not delete photo. You may not have permission.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Delete failed', description: 'Could not delete photo.', variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
@@ -142,78 +97,22 @@ export default function BrandLibraryPage() {
 
   return (
     <AppLayout>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-      >
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
         <PageHeader
-          title="Brand Library & Brief"
-          description="Your brand materials, assets, and AI briefing in one place"
+          title="Content Library"
+          description="Store and access your uploaded and generated brand content."
         />
 
-        <Tabs defaultValue="brief" className="space-y-6">
+        <Tabs defaultValue="uploads" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="brief" className="gap-2">
-              <FileText className="w-4 h-4" />
-              Brand Brief
-            </TabsTrigger>
-            <TabsTrigger value="gallery" className="gap-2">
+            <TabsTrigger value="uploads" className="gap-2">
               <Image className="w-4 h-4" />
-              Gallery ({uploads.length})
-            </TabsTrigger>
-            <TabsTrigger value="brand-kit" className="gap-2">
-              <FolderOpen className="w-4 h-4" />
-              Brand Kit ({brandKitFiles.length})
+              Uploads ({uploads.length})
             </TabsTrigger>
           </TabsList>
 
-          {/* Brand Brief Tab */}
-          <TabsContent value="brief" className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <h2 className="font-serif text-xl font-medium">Brand Brief (for AI)</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  This information guides how the AI thinks, writes, and represents your brand.
-                </p>
-              </div>
-
-              <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-start gap-3">
-                <Info className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm text-foreground">
-                    Think of this as the briefing document you would give a copywriter or marketer.
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    The AI uses this to decide <em>what to say</em>, not how things look.
-                  </p>
-                </div>
-              </div>
-
-              <div className="card-elevated p-6 space-y-4">
-                <div className="space-y-2">
-                  <h3 className="font-medium text-sm">What to include in your brief:</h3>
-                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                    <li>Brand positioning and unique value proposition</li>
-                    <li>Target audience and customer personas</li>
-                    <li>Tone of voice (e.g., casual, professional, playful)</li>
-                    <li>Key messaging and taglines</li>
-                    <li>Website copy, menu descriptions, or brand notes</li>
-                  </ul>
-                </div>
-                <p className="text-sm text-muted-foreground italic">
-                  The more context you provide, the better the AI can write in your voice.
-                </p>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                If this section is left empty, the AI will use generic hospitality assumptions.
-              </p>
-            </div>
-          </TabsContent>
-
-          {/* Gallery Tab - Content photos from Editor */}
-          <TabsContent value="gallery" className="space-y-4">
+          {/* Uploads Tab */}
+          <TabsContent value="uploads" className="space-y-4">
             <div className="flex items-start justify-between gap-4">
               <p className="text-sm text-muted-foreground">
                 Photos uploaded via the Editor for content creation. Manage and delete them here.
@@ -230,7 +129,7 @@ export default function BrandLibraryPage() {
             {uploads.length === 0 ? (
               <EmptyState
                 icon={Image}
-                title="No photos in gallery"
+                title="No photos yet"
                 description="Photos will appear here once you upload them in the Editor"
               />
             ) : (
@@ -269,7 +168,7 @@ export default function BrandLibraryPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete photo?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This will permanently delete this photo from your gallery. Any content using this photo may be affected.
+                                This will permanently delete this photo from your library. Any content using this photo may be affected.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -293,40 +192,6 @@ export default function BrandLibraryPage() {
                   </motion.div>
                 ))}
               </div>
-            )}
-          </TabsContent>
-
-          {/* Brand Kit Tab - Brand identity files */}
-          <TabsContent value="brand-kit" className="space-y-6">
-            <p className="text-sm text-muted-foreground">
-              Upload brand guidelines, logos, fonts, and tone-of-voice docs. These keep your content consistent.
-            </p>
-
-            {canEdit && currentBrand && (
-              <BrandKitUploader
-                venueId={currentBrand.id}
-                onUploadComplete={fetchLibrary}
-              />
-            )}
-
-            {isDemoMode && (
-              <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm text-muted-foreground">
-                You're viewing demo data. Sign in and select your brand to upload files.
-              </div>
-            )}
-
-            {brandKitFiles.length === 0 && !canEdit ? (
-              <EmptyState
-                icon={FolderOpen}
-                title="No brand kit files"
-                description="Brand guidelines, logos, and fonts will appear here"
-              />
-            ) : (
-              <BrandKitFileList
-                files={brandKitFiles}
-                canEdit={canEdit}
-                onDeleteComplete={fetchLibrary}
-              />
             )}
           </TabsContent>
         </Tabs>
