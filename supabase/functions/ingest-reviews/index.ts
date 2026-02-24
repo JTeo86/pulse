@@ -6,26 +6,160 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function detectGoogleIdKind(id: string): "place_id" | "data_id" | "unknown" {
+  if (id.startsWith("ChIJ")) return "place_id";
+  if (id.startsWith("0x") && id.includes(":")) return "data_id";
+  return "unknown";
+}
+
+interface IngestionResult {
+  success: boolean;
+  fetched_count: number;
+  warnings: string[];
+  errors: string[];
+  provider_meta: Record<string, unknown>;
+}
+
+// ── Google Maps Reviews via SerpAPI ──────────────────────────────────────
+
+async function ingestGoogle(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  venueId: string,
+  source: { id: string; external_id: string; external_id_kind: string | null },
+  apiKey: string
+): Promise<{ count: number; errors: string[] }> {
+  const errors: string[] = [];
+  let count = 0;
+
+  const kind = source.external_id_kind || detectGoogleIdKind(source.external_id);
+  let url: string;
+
+  if (kind === "place_id") {
+    url = `https://serpapi.com/search.json?engine=google_maps_reviews&place_id=${encodeURIComponent(source.external_id)}&api_key=${apiKey}&sort_by=newestFirst&hl=en`;
+  } else if (kind === "data_id") {
+    url = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${encodeURIComponent(source.external_id)}&api_key=${apiKey}&sort_by=newestFirst&hl=en`;
+  } else {
+    // Try place_id first, then data_id
+    const detected = detectGoogleIdKind(source.external_id);
+    if (detected === "place_id") {
+      url = `https://serpapi.com/search.json?engine=google_maps_reviews&place_id=${encodeURIComponent(source.external_id)}&api_key=${apiKey}&sort_by=newestFirst&hl=en`;
+    } else if (detected === "data_id") {
+      url = `https://serpapi.com/search.json?engine=google_maps_reviews&data_id=${encodeURIComponent(source.external_id)}&api_key=${apiKey}&sort_by=newestFirst&hl=en`;
+    } else {
+      errors.push(`Google source ${source.external_id}: cannot determine ID type. Expected ChIJ… (place_id) or 0x…:0x… (data_id).`);
+      return { count, errors };
+    }
+  }
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const body = await resp.text();
+      errors.push(`SerpAPI error ${resp.status} for Google source ${source.external_id}: ${body.slice(0, 200)}`);
+      return { count, errors };
+    }
+    const data = await resp.json();
+
+    if (data.error) {
+      errors.push(`SerpAPI error for Google: ${data.error}`);
+      return { count, errors };
+    }
+
+    const reviews = data.reviews || [];
+    for (const r of reviews) {
+      const externalId = `google_${source.external_id}_${r.review_id || r.user?.name || ""}`;
+      await supabaseAdmin.from("reviews").upsert({
+        venue_id: venueId,
+        source: "google",
+        external_review_id: externalId,
+        author_name: r.user?.name || "Anonymous",
+        rating: r.rating || null,
+        review_text: r.snippet || r.text || null,
+        review_date: r.date ? new Date(r.date).toISOString() : null,
+        raw_payload: r,
+      }, { onConflict: "external_review_id" });
+      count++;
+    }
+  } catch (e) {
+    errors.push(`Google ingestion error: ${e instanceof Error ? e.message : "unknown"}`);
+  }
+
+  return { count, errors };
+}
+
+// ── OpenTable Reviews via SerpAPI ────────────────────────────────────────
+
+async function ingestOpenTable(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  venueId: string,
+  source: { id: string; external_id: string },
+  apiKey: string
+): Promise<{ count: number; errors: string[] }> {
+  const errors: string[] = [];
+  let count = 0;
+
+  // external_id should be the restaurant slug/rid
+  const rid = source.external_id.replace(/^\/?(r\/)?/, "");
+  const url = `https://serpapi.com/search.json?engine=open_table_reviews&restaurant_id=${encodeURIComponent(rid)}&api_key=${apiKey}`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const body = await resp.text();
+      errors.push(`SerpAPI error ${resp.status} for OpenTable source: ${body.slice(0, 200)}`);
+      return { count, errors };
+    }
+    const data = await resp.json();
+
+    if (data.error) {
+      errors.push(`SerpAPI error for OpenTable: ${data.error}`);
+      return { count, errors };
+    }
+
+    const reviews = data.reviews || [];
+    for (const r of reviews) {
+      const externalId = `opentable_${rid}_${r.id || r.author || Math.random().toString(36).slice(2)}`;
+      await supabaseAdmin.from("reviews").upsert({
+        venue_id: venueId,
+        source: "opentable",
+        external_review_id: externalId,
+        author_name: r.author || "Anonymous",
+        rating: r.rating || r.overall_rating || null,
+        review_text: r.text || r.comment || null,
+        review_date: r.date ? new Date(r.date).toISOString() : null,
+        raw_payload: r,
+      }, { onConflict: "external_review_id" });
+      count++;
+    }
+  } catch (e) {
+    errors.push(`OpenTable ingestion error: ${e instanceof Error ? e.message : "unknown"}`);
+  }
+
+  return { count, errors };
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify caller is authenticated
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ success: false, errors: ["Unauthorized"] }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Parse and validate venue_id from request body
     const body = await req.json();
     const venue_id = body?.venue_id;
     if (!venue_id || typeof venue_id !== "string") {
-      return new Response(JSON.stringify({ error: "venue_id required" }), {
+      return new Response(JSON.stringify({ success: false, errors: ["venue_id required"] }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -36,7 +170,6 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Verify the authenticated user is a member of the requested venue
     const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -45,47 +178,57 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ success: false, errors: ["Unauthorized"] }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check venue membership — prevents quota abuse across venues
-    const { data: membership, error: membershipError } = await supabaseAdmin
+    const { data: membership } = await supabaseAdmin
       .from("venue_members")
       .select("role")
       .eq("venue_id", venue_id)
       .eq("user_id", user.id)
       .single();
 
-    if (membershipError || !membership) {
-      return new Response(JSON.stringify({ error: "Access denied: not a member of this venue" }), {
+    if (!membership) {
+      return new Response(JSON.stringify({ success: false, errors: ["Access denied: not a member of this venue"] }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch API keys from platform_api_keys table
-    const { data: apiKeys, error: keysError } = await supabaseAdmin
+    // Get SerpAPI key
+    const { data: apiKeys } = await supabaseAdmin
       .from("platform_api_keys")
       .select("key_name, key_value, is_configured")
-      .in("key_name", ["SERPAPI_API_KEY", "APIFY_API_TOKEN"]);
+      .eq("key_name", "SERPAPI_API_KEY")
+      .single();
 
-    if (keysError) {
-      console.error("Failed to fetch API keys:", keysError);
-      return new Response(JSON.stringify({ error: "Failed to fetch API keys" }), {
-        status: 500,
+    const serpApiKey = apiKeys?.is_configured ? apiKeys?.key_value?.trim() : null;
+
+    if (!serpApiKey) {
+      const result: IngestionResult = {
+        success: false,
+        fetched_count: 0,
+        warnings: [],
+        errors: ["SERPAPI_API_KEY not configured in Platform Admin → Integrations & API Keys. Sign up at serpapi.com to get a key."],
+        provider_meta: {},
+      };
+      // Log the run
+      await supabaseAdmin.from("review_ingestion_runs").insert({
+        venue_id,
+        status: "error",
+        fetched_count: 0,
+        error_message: result.errors[0],
+      });
+      return new Response(JSON.stringify(result), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const keyMap: Record<string, string> = {};
-    for (const k of apiKeys || []) {
-      if (k.is_configured && k.key_value) keyMap[k.key_name] = k.key_value;
-    }
-
-    // Fetch enabled review sources for this venue
+    // Fetch enabled sources
     const { data: sources, error: srcErr } = await supabaseAdmin
       .from("review_sources")
       .select("*")
@@ -93,128 +236,97 @@ serve(async (req) => {
       .eq("is_enabled", true);
 
     if (srcErr) {
-      console.error("Failed to fetch review sources:", srcErr);
-      return new Response(JSON.stringify({ error: "Failed to fetch review sources" }), {
+      return new Response(JSON.stringify({ success: false, errors: [`Failed to fetch sources: ${srcErr.message}`] }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    let totalIngested = 0;
-    const errors: string[] = [];
-
-    // Process Google reviews via SerpAPI
-    const googleSources = (sources || []).filter(s => s.source === "google");
-    if (googleSources.length > 0 && keyMap["SERPAPI_API_KEY"]) {
-      for (const src of googleSources) {
-        try {
-          const url = `https://serpapi.com/search.json?engine=google_maps_reviews&place_id=${encodeURIComponent(src.external_id)}&api_key=${keyMap["SERPAPI_API_KEY"]}&sort_by=newestFirst&hl=en`;
-          const resp = await fetch(url);
-          if (!resp.ok) {
-            errors.push(`SerpAPI error for ${src.external_id}: ${resp.status}`);
-            continue;
-          }
-          const data = await resp.json();
-          const reviews = data.reviews || [];
-
-          for (const r of reviews) {
-            const externalId = `google_${src.external_id}_${r.review_id || r.user?.name || ''}`;
-            await supabaseAdmin.from("reviews").upsert({
-              venue_id,
-              source: "google",
-              external_review_id: externalId,
-              author_name: r.user?.name || "Anonymous",
-              rating: r.rating || null,
-              review_text: r.snippet || r.text || null,
-              review_date: r.date ? new Date(r.date).toISOString() : null,
-              raw_payload: r,
-            }, { onConflict: "external_review_id" });
-            totalIngested++;
-          }
-        } catch (e) {
-          errors.push(`Google ingestion error: ${e instanceof Error ? e.message : "unknown"}`);
-        }
-      }
-    } else if (googleSources.length > 0 && !keyMap["SERPAPI_API_KEY"]) {
-      errors.push("SERPAPI_API_KEY not configured in Platform Admin → API Keys");
+    if (!sources?.length) {
+      const result: IngestionResult = {
+        success: true,
+        fetched_count: 0,
+        warnings: ["No enabled review sources configured. Go to Sources Setup to add Google or OpenTable."],
+        errors: [],
+        provider_meta: {},
+      };
+      await supabaseAdmin.from("review_ingestion_runs").insert({
+        venue_id,
+        status: "warning",
+        fetched_count: 0,
+        error_message: result.warnings[0],
+      });
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Process OpenTable reviews via Apify
-    const otSources = (sources || []).filter(s => s.source === "opentable");
-    if (otSources.length > 0 && keyMap["APIFY_API_TOKEN"]) {
-      for (const src of otSources) {
-        try {
-          // Start Apify actor run
-          const runResp = await fetch(
-            `https://api.apify.com/v2/acts/tripadvisor~scraper/runs?token=${keyMap["APIFY_API_TOKEN"]}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                startUrls: [{ url: src.external_id }],
-                maxItems: 50,
-              }),
-            }
-          );
+    let totalFetched = 0;
+    const allWarnings: string[] = [];
+    const allErrors: string[] = [];
 
-          if (!runResp.ok) {
-            errors.push(`Apify run error for OpenTable: ${runResp.status}`);
-            continue;
-          }
+    // Process Google sources
+    const googleSources = sources.filter((s: any) => s.source === "google" || s.source === "google_maps");
+    for (const src of googleSources) {
+      const r = await ingestGoogle(supabaseAdmin, venue_id, src, serpApiKey);
+      totalFetched += r.count;
+      allErrors.push(...r.errors);
 
-          const runData = await runResp.json();
-          const datasetId = runData.data?.defaultDatasetId;
-
-          if (!datasetId) {
-            errors.push("No dataset ID from Apify run");
-            continue;
-          }
-
-          // Wait a bit for the run to finish (simplified — production should poll)
-          await new Promise(r => setTimeout(r, 10000));
-
-          const itemsResp = await fetch(
-            `https://api.apify.com/v2/datasets/${datasetId}/items?token=${keyMap["APIFY_API_TOKEN"]}`
-          );
-
-          if (!itemsResp.ok) {
-            errors.push(`Apify dataset fetch error: ${itemsResp.status}`);
-            continue;
-          }
-
-          const items = await itemsResp.json();
-          for (const item of items) {
-            const externalId = `opentable_${item.id || item.title || Math.random().toString(36)}`;
-            await supabaseAdmin.from("reviews").upsert({
-              venue_id,
-              source: "opentable",
-              external_review_id: externalId,
-              author_name: item.user?.name || item.author || "Anonymous",
-              rating: item.rating || item.stars || null,
-              review_text: item.text || item.review || null,
-              review_date: item.date ? new Date(item.date).toISOString() : null,
-              raw_payload: item,
-            }, { onConflict: "external_review_id" });
-            totalIngested++;
-          }
-        } catch (e) {
-          errors.push(`OpenTable ingestion error: ${e instanceof Error ? e.message : "unknown"}`);
-        }
-      }
-    } else if (otSources.length > 0 && !keyMap["APIFY_API_TOKEN"]) {
-      errors.push("APIFY_API_TOKEN not configured in Platform Admin → API Keys");
+      await supabaseAdmin.from("review_ingestion_runs").insert({
+        venue_id,
+        source_id: src.id,
+        status: r.errors.length ? "error" : "success",
+        fetched_count: r.count,
+        error_message: r.errors.length ? r.errors.join("; ") : null,
+        raw_meta: { engine: "google_maps_reviews", external_id: src.external_id },
+      });
     }
 
-    console.log(`Ingested ${totalIngested} reviews for venue ${venue_id}. Errors: ${errors.length}`);
+    // Process OpenTable sources
+    const otSources = sources.filter((s: any) => s.source === "opentable");
+    for (const src of otSources) {
+      const r = await ingestOpenTable(supabaseAdmin, venue_id, src, serpApiKey);
+      totalFetched += r.count;
+      allErrors.push(...r.errors);
 
-    return new Response(JSON.stringify({ ingested: totalIngested, errors }), {
+      await supabaseAdmin.from("review_ingestion_runs").insert({
+        venue_id,
+        source_id: src.id,
+        status: r.errors.length ? "error" : "success",
+        fetched_count: r.count,
+        error_message: r.errors.length ? r.errors.join("; ") : null,
+        raw_meta: { engine: "open_table_reviews", external_id: src.external_id },
+      });
+    }
+
+    const result: IngestionResult = {
+      success: allErrors.length === 0,
+      fetched_count: totalFetched,
+      warnings: allWarnings,
+      errors: allErrors,
+      provider_meta: {
+        google_sources: googleSources.length,
+        opentable_sources: otSources.length,
+      },
+    };
+
+    console.log(`Ingested ${totalFetched} reviews for venue ${venue_id}. Errors: ${allErrors.length}`);
+
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error) {
     console.error("ingest-reviews error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    return new Response(JSON.stringify({
+      success: false,
+      fetched_count: 0,
+      warnings: [],
+      errors: [error instanceof Error ? error.message : "Unknown error"],
+      provider_meta: {},
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
