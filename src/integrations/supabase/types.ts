@@ -981,29 +981,86 @@ export type Database = {
         }
         Relationships: []
       }
-      review_sources: {
+      review_ingestion_runs: {
         Row: {
           created_at: string
-          external_id: string
+          error_message: string | null
+          fetched_count: number
           id: string
-          is_enabled: boolean
-          source: string
+          raw_meta: Json | null
+          source_id: string | null
+          status: string
           venue_id: string
         }
         Insert: {
           created_at?: string
-          external_id: string
+          error_message?: string | null
+          fetched_count?: number
           id?: string
-          is_enabled?: boolean
-          source: string
+          raw_meta?: Json | null
+          source_id?: string | null
+          status?: string
           venue_id: string
         }
         Update: {
           created_at?: string
+          error_message?: string | null
+          fetched_count?: number
+          id?: string
+          raw_meta?: Json | null
+          source_id?: string | null
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_ingestion_runs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "review_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_ingestion_runs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      review_sources: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          external_id: string
+          external_id_kind: string | null
+          id: string
+          is_enabled: boolean
+          source: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          external_id: string
+          external_id_kind?: string | null
+          id?: string
+          is_enabled?: boolean
+          source: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
           external_id?: string
+          external_id_kind?: string | null
           id?: string
           is_enabled?: boolean
           source?: string
+          updated_at?: string
           venue_id?: string
         }
         Relationships: [
