@@ -72,9 +72,16 @@ function extractGoogleId(url: string): { id: string; kind: string } | null {
   return null;
 }
 
-function extractOpenTableRid(url: string): string | null {
-  const match = url.match(/opentable\.com\/r\/([a-z0-9-]+)/i);
-  return match ? match[1] : null;
+function extractOpenTableInfo(url: string): { rid: string; domain: string } | null {
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    if (!u.hostname.includes('opentable')) return null;
+    const pathMatch = u.pathname.match(/^\/(r\/[a-z0-9-]+)/i);
+    if (!pathMatch) return null;
+    return { rid: pathMatch[1], domain: u.hostname };
+  } catch {
+    return null;
+  }
 }
 
 function validateGoogleId(v: string): boolean {
@@ -132,17 +139,20 @@ function SourceCard({
     let finalExternalId = val;
     let idKind = val.startsWith('ChIJ') ? 'place_id' : val.startsWith('0x') ? 'data_id' : null;
 
+    let externalDomain: string | null = null;
+
     if (sourceType === 'opentable') {
-      if (val.includes('opentable.com')) {
-        const rid = extractOpenTableRid(val);
-        if (!rid) {
+      if (val.includes('opentable')) {
+        const info = extractOpenTableInfo(val);
+        if (!info) {
           toast({ title: 'Invalid OpenTable URL', description: 'URL must contain /r/your-restaurant-slug', variant: 'destructive' });
           return;
         }
-        finalExternalId = rid;
+        finalExternalId = info.rid;
+        externalDomain = info.domain;
         idKind = 'rid';
       } else {
-        finalExternalId = val.replace(/^\/?(r\/)?/, '');
+        finalExternalId = val.startsWith('r/') ? val : `r/${val}`;
         idKind = 'rid';
       }
     }
@@ -150,19 +160,23 @@ function SourceCard({
     setSaving(true);
     try {
       if (existingSource) {
-        const { error } = await supabase.from('review_sources').update({
+        const updatePayload: Record<string, unknown> = {
           external_id: finalExternalId,
           external_id_kind: idKind,
-        }).eq('id', existingSource.id);
+        };
+        if (externalDomain) updatePayload.external_domain = externalDomain;
+        const { error } = await supabase.from('review_sources').update(updatePayload as any).eq('id', existingSource.id);
         if (error) throw error;
         toast({ title: 'Source updated', description: `${sourceType === 'opentable' ? 'rid' : idKind}: ${finalExternalId}` });
       } else {
-        const { error } = await supabase.from('review_sources').insert({
+        const insertPayload: Record<string, unknown> = {
           venue_id: venueId,
           source,
           external_id: finalExternalId,
           external_id_kind: idKind,
-        });
+        };
+        if (externalDomain) insertPayload.external_domain = externalDomain;
+        const { error } = await supabase.from('review_sources').insert(insertPayload as any);
         if (error) throw error;
         toast({ title: 'Source connected', description: `Saved ${sourceType}: ${finalExternalId}` });
       }
@@ -449,11 +463,16 @@ function IngestionPanel({ venueId }: { venueId: string }) {
                         💡 This usually means the runtime is not using the same key you saved in Platform Admin. Go to Platform Admin → Integrations and use "Test SerpAPI Key" to confirm the key the runtime actually reads.
                       </p>
                     )}
-                    {e.toLowerCase().includes('missing rid') && (
+                     {e.toLowerCase().includes('missing rid') && (
                       <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
-                        💡 Go to Sources Setup → OpenTable, paste your OpenTable restaurant URL (e.g. opentable.com/r/your-restaurant), and save to extract the rid.
-                      </p>
-                    )}
+                         💡 Go to Sources Setup → OpenTable, paste your OpenTable restaurant URL (e.g. opentable.co.uk/r/your-restaurant), and save to extract the rid.
+                       </p>
+                     )}
+                     {(e.toLowerCase().includes("hasn't returned any results") || e.toLowerCase().includes('no results')) && (
+                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
+                         💡 Check you're using the correct OpenTable domain (e.g., .co.uk vs .com). Re-paste your full OpenTable URL in Sources Setup.
+                       </p>
+                     )}
                   </div>
                 ))}
               </div>

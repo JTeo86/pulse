@@ -110,19 +110,24 @@ async function ingestGoogle(
 async function ingestOpenTable(
   supabaseAdmin: ReturnType<typeof createClient>,
   venueId: string,
-  source: { id: string; external_id: string },
+  source: { id: string; external_id: string; external_domain?: string | null },
   apiKey: string
 ): Promise<{ count: number; errors: string[] }> {
   const errors: string[] = [];
   let count = 0;
 
-  // external_id should be the rid (restaurant slug)
+  // external_id should be the rid (e.g. r/the-restaurant-name)
   const rid = source.external_id?.trim();
   if (!rid) {
     errors.push("OpenTable source missing rid. Please paste your OpenTable restaurant URL in Sources Setup to extract the rid.");
     return { count, errors };
   }
-  const url = `https://serpapi.com/search.json?engine=open_table_reviews&rid=${encodeURIComponent(rid)}&api_key=${apiKey}`;
+  let url = `https://serpapi.com/search.json?engine=open_table_reviews&rid=${encodeURIComponent(rid)}&api_key=${apiKey}`;
+  // Pass domain for regional OpenTable sites (e.g. www.opentable.co.uk)
+  const domain = source.external_domain?.trim();
+  if (domain) {
+    url += `&open_table_domain=${encodeURIComponent(domain)}`;
+  }
 
   try {
     const resp = await fetch(url);
@@ -134,7 +139,11 @@ async function ingestOpenTable(
     const data = await resp.json();
 
     if (data.error) {
-      errors.push(`SerpAPI error for OpenTable: ${data.error}`);
+      let errMsg = `SerpAPI error for OpenTable: ${data.error}`;
+      if (String(data.error).includes("hasn't returned any results")) {
+        errMsg += ` — Check you're using the correct OpenTable domain (e.g., .co.uk vs .com).`;
+      }
+      errors.push(errMsg);
       return { count, errors };
     }
 
