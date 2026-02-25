@@ -39,3 +39,6 @@ verify_jwt = false
 [functions.check-key-health]
 verify_jwt = false
 
+[functions.test-serpapi-key]
+verify_jwt = false
+
