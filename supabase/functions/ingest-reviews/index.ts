@@ -89,6 +89,7 @@ async function ingestGoogle(
           author_name: r.user?.name || "Anonymous",
           rating: r.rating || null,
           review_text: r.snippet || r.text || null,
+          review_date: safeDateToISO(r.iso_date) || safeDateToISO(r.iso_date_of_last_edit) || safeDateToISO(r.date),
           review_date: safeDateToISO(r.date),
           raw_payload: r,
         }, { onConflict: "external_review_id" });

@@ -33,14 +33,24 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch reviews for the date range
-    const { data: reviews, error: revErr } = await supabaseAdmin
+    // Fetch reviews for the date range — try review_date first, fall back to created_at for nulls
+    const { data: reviewsByDate, error: revErr } = await supabaseAdmin
       .from("reviews")
       .select("*")
       .eq("venue_id", venue_id)
       .gte("review_date", week_start)
       .lte("review_date", week_end)
       .order("review_date", { ascending: false });
+
+    // Also fetch reviews where review_date is null but created_at falls in range
+    const { data: reviewsByCreated } = await supabaseAdmin
+      .from("reviews")
+      .select("*")
+      .eq("venue_id", venue_id)
+      .is("review_date", null)
+      .gte("created_at", week_start)
+      .lte("created_at", week_end + "T23:59:59Z")
+      .order("created_at", { ascending: false });
 
     if (revErr) {
       console.error("Failed to fetch reviews:", revErr);
@@ -50,9 +60,19 @@ serve(async (req) => {
       });
     }
 
-    if (!reviews || reviews.length === 0) {
-      return new Response(JSON.stringify({ error: "No reviews found for this period" }), {
-        status: 404,
+    // Merge and deduplicate
+    const seenIds = new Set<string>();
+    const reviews: typeof reviewsByDate = [];
+    for (const r of [...(reviewsByDate || []), ...(reviewsByCreated || [])]) {
+      if (!seenIds.has(r.id)) {
+        seenIds.add(r.id);
+        reviews.push(r);
+      }
+    }
+
+    if (reviews.length === 0) {
+      return new Response(JSON.stringify({ error: "No reviews found for this period. Try fetching reviews first from the Sources Setup tab." }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
