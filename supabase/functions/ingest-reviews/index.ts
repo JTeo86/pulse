@@ -8,6 +8,17 @@ const corsHeaders = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
+function safeDateToISO(raw: unknown): string | null {
+  if (!raw) return null;
+  try {
+    const d = new Date(String(raw));
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 function detectGoogleIdKind(id: string): "place_id" | "data_id" | "unknown" {
   if (id.startsWith("ChIJ")) return "place_id";
   if (id.startsWith("0x") && id.includes(":")) return "data_id";
@@ -69,18 +80,22 @@ async function ingestGoogle(
 
     const reviews = data.reviews || [];
     for (const r of reviews) {
-      const externalId = `google_${source.external_id}_${r.review_id || r.user?.name || ""}`;
-      await supabaseAdmin.from("reviews").upsert({
-        venue_id: venueId,
-        source: "google",
-        external_review_id: externalId,
-        author_name: r.user?.name || "Anonymous",
-        rating: r.rating || null,
-        review_text: r.snippet || r.text || null,
-        review_date: r.date ? new Date(r.date).toISOString() : null,
-        raw_payload: r,
-      }, { onConflict: "external_review_id" });
-      count++;
+      try {
+        const externalId = `google_${source.external_id}_${r.review_id || r.user?.name || ""}`;
+        await supabaseAdmin.from("reviews").upsert({
+          venue_id: venueId,
+          source: "google",
+          external_review_id: externalId,
+          author_name: r.user?.name || "Anonymous",
+          rating: r.rating || null,
+          review_text: r.snippet || r.text || null,
+          review_date: safeDateToISO(r.date),
+          raw_payload: r,
+        }, { onConflict: "external_review_id" });
+        count++;
+      } catch (rowErr) {
+        errors.push(`Google review parse error: ${rowErr instanceof Error ? rowErr.message : "unknown"}`);
+      }
     }
   } catch (e) {
     errors.push(`Google ingestion error: ${e instanceof Error ? e.message : "unknown"}`);
@@ -100,9 +115,13 @@ async function ingestOpenTable(
   const errors: string[] = [];
   let count = 0;
 
-  // external_id should be the restaurant slug/rid
-  const rid = source.external_id.replace(/^\/?(r\/)?/, "");
-  const url = `https://serpapi.com/search.json?engine=open_table_reviews&restaurant_id=${encodeURIComponent(rid)}&api_key=${apiKey}`;
+  // external_id should be the rid (restaurant slug)
+  const rid = source.external_id?.trim();
+  if (!rid) {
+    errors.push("OpenTable source missing rid. Please paste your OpenTable restaurant URL in Sources Setup to extract the rid.");
+    return { count, errors };
+  }
+  const url = `https://serpapi.com/search.json?engine=open_table_reviews&rid=${encodeURIComponent(rid)}&api_key=${apiKey}`;
 
   try {
     const resp = await fetch(url);
@@ -120,18 +139,22 @@ async function ingestOpenTable(
 
     const reviews = data.reviews || [];
     for (const r of reviews) {
-      const externalId = `opentable_${rid}_${r.id || r.author || Math.random().toString(36).slice(2)}`;
-      await supabaseAdmin.from("reviews").upsert({
-        venue_id: venueId,
-        source: "opentable",
-        external_review_id: externalId,
-        author_name: r.author || "Anonymous",
-        rating: r.rating || r.overall_rating || null,
-        review_text: r.text || r.comment || null,
-        review_date: r.date ? new Date(r.date).toISOString() : null,
-        raw_payload: r,
-      }, { onConflict: "external_review_id" });
-      count++;
+      try {
+        const externalId = `opentable_${rid}_${r.id || r.author || Math.random().toString(36).slice(2)}`;
+        await supabaseAdmin.from("reviews").upsert({
+          venue_id: venueId,
+          source: "opentable",
+          external_review_id: externalId,
+          author_name: r.author || "Anonymous",
+          rating: r.rating || r.overall_rating || null,
+          review_text: r.text || r.comment || null,
+          review_date: safeDateToISO(r.date),
+          raw_payload: r,
+        }, { onConflict: "external_review_id" });
+        count++;
+      } catch (rowErr) {
+        errors.push(`OpenTable review parse error: ${rowErr instanceof Error ? rowErr.message : "unknown"}`);
+      }
     }
   } catch (e) {
     errors.push(`OpenTable ingestion error: ${e instanceof Error ? e.message : "unknown"}`);
