@@ -4,7 +4,8 @@ import {
   Star, RefreshCw, FileText, MessageSquare, Settings2,
   Search, Edit2, Power, PowerOff, Trash2, HelpCircle,
   CheckCircle2, XCircle, AlertCircle, Clock, ChevronDown, ChevronRight,
-  ExternalLink, Link2,
+  ExternalLink, Link2, ShieldAlert, Copy, ThumbsUp, ThumbsDown,
+  Archive, Send, Bot, Zap,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,7 +16,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -31,6 +37,7 @@ interface ReviewSource {
   is_enabled: boolean;
   display_name: string | null;
   external_id_kind: string | null;
+  external_domain: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -54,19 +61,35 @@ interface IngestionResult {
   provider_meta: Record<string, unknown>;
 }
 
+interface ResponseTask {
+  id: string;
+  venue_id: string;
+  review_id: string;
+  source: string;
+  review_date: string | null;
+  rating: number | null;
+  author_name: string | null;
+  review_text: string | null;
+  status: string;
+  ai_reason: string | null;
+  ai_priority: string | null;
+  draft_response: string | null;
+  final_response: string | null;
+  approved_by_user_id: string | null;
+  approved_at: string | null;
+  post_status: string | null;
+  created_at: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────
 
 function extractGoogleId(url: string): { id: string; kind: string } | null {
-  // Try place_id from URL param
   const placeMatch = url.match(/[?&]place_id=([^&]+)/);
   if (placeMatch) return { id: placeMatch[1], kind: 'place_id' };
-  // Try data= param (hex:hex)
   const dataMatch = url.match(/data=.*?(0x[0-9a-f]+:0x[0-9a-f]+)/i);
   if (dataMatch) return { id: dataMatch[1], kind: 'data_id' };
-  // Try CID from URLs
   const cidMatch = url.match(/cid=(\d+)/);
   if (cidMatch) return { id: cidMatch[1], kind: 'data_id' };
-  // Try !1s prefix (data_id in encoded URL)
   const hexMatch = url.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i);
   if (hexMatch) return { id: hexMatch[1], kind: 'data_id' };
   return null;
@@ -88,9 +111,49 @@ function validateGoogleId(v: string): boolean {
   return v.startsWith('ChIJ') || (v.startsWith('0x') && v.includes(':'));
 }
 
-function validateOpenTableUrl(v: string): boolean {
-  return v.includes('opentable') && v.includes('/r/');
+function sourceLabel(source: string): string {
+  if (source === 'google' || source === 'google_maps') return 'Google';
+  if (source === 'opentable') return 'OpenTable';
+  return source;
 }
+
+function SourceBadge({ source }: { source: string }) {
+  const isGoogle = source === 'google' || source === 'google_maps';
+  return (
+    <Badge variant="outline" className={`text-[10px] gap-1 ${isGoogle ? 'border-blue-500/30 text-blue-600 dark:text-blue-400' : 'border-orange-500/30 text-orange-600 dark:text-orange-400'}`}>
+      {isGoogle ? '🔍' : '🍽️'} {sourceLabel(source)}
+    </Badge>
+  );
+}
+
+function renderStars(rating: number | null) {
+  if (!rating) return null;
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star
+          key={i}
+          className={`w-3.5 h-3.5 ${i <= rating ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function formatReviewDate(reviewDate: string | null, createdAt: string): string {
+  const dateStr = reviewDate || createdAt;
+  try {
+    return format(new Date(dateStr), 'MMM d, yyyy');
+  } catch {
+    return 'Unknown date';
+  }
+}
+
+const priorityColor: Record<string, string> = {
+  P1: 'bg-destructive/10 text-destructive border-destructive/20',
+  P2: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
+  P3: 'bg-muted text-muted-foreground border-border',
+};
 
 // ── Source Setup ────────────────────────────────────────────────────────
 
@@ -130,7 +193,6 @@ function SourceCard({
     const val = inputVal.trim();
     if (!val) return;
 
-    // Validate
     if (sourceType === 'google' && !validateGoogleId(val)) {
       toast({ title: 'Invalid Google ID', description: 'Must start with ChIJ… (place_id) or 0x…:0x… (data_id)', variant: 'destructive' });
       return;
@@ -138,7 +200,6 @@ function SourceCard({
 
     let finalExternalId = val;
     let idKind = val.startsWith('ChIJ') ? 'place_id' : val.startsWith('0x') ? 'data_id' : null;
-
     let externalDomain: string | null = null;
 
     if (sourceType === 'opentable') {
@@ -246,6 +307,12 @@ function SourceCard({
                 <Badge variant="outline" className="text-[9px]">{existingSource.external_id_kind}</Badge>
               )}
             </div>
+            {existingSource.external_domain && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Domain:</span>
+                <code className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{existingSource.external_domain}</code>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Switch checked={existingSource.is_enabled} onCheckedChange={handleToggleEnabled} id={`toggle-${existingSource.id}`} />
               <Label htmlFor={`toggle-${existingSource.id}`} className="text-xs">
@@ -343,7 +410,7 @@ function ReviewSourcesSetup({ venueId }: { venueId: string }) {
         .select('*')
         .eq('venue_id', venueId);
       if (error) throw error;
-      return data as ReviewSource[];
+      return data as unknown as ReviewSource[];
     },
   });
 
@@ -436,7 +503,6 @@ function IngestionPanel({ venueId }: { venueId: string }) {
         </Button>
       </div>
 
-      {/* Result panel */}
       {result && (
         <Card className={result.success ? 'border-accent/30' : 'border-destructive/30'}>
           <CardContent className="p-4 space-y-2">
@@ -481,7 +547,6 @@ function IngestionPanel({ venueId }: { venueId: string }) {
         </Card>
       )}
 
-      {/* Last run */}
       {latestRun && (
         <Card>
           <CardHeader className="pb-2">
@@ -503,7 +568,6 @@ function IngestionPanel({ venueId }: { venueId: string }) {
         </Card>
       )}
 
-      {/* History */}
       {lastRuns && lastRuns.length > 1 && (
         <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
           <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
@@ -527,7 +591,7 @@ function IngestionPanel({ venueId }: { venueId: string }) {
   );
 }
 
-// ── Review Feed ─────────────────────────────────────────────────────────
+// ── Review Feed (improved with source labels + dates) ───────────────────
 
 function ReviewFeed({ venueId }: { venueId: string }) {
   const [search, setSearch] = useState('');
@@ -539,7 +603,8 @@ function ReviewFeed({ venueId }: { venueId: string }) {
         .from('reviews')
         .select('*')
         .eq('venue_id', venueId)
-        .order('review_date', { ascending: false })
+        .order('review_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
         .limit(100);
       if (error) throw error;
       return data;
@@ -550,20 +615,6 @@ function ReviewFeed({ venueId }: { venueId: string }) {
     !search || r.review_text?.toLowerCase().includes(search.toLowerCase()) ||
     r.author_name?.toLowerCase().includes(search.toLowerCase())
   );
-
-  const renderStars = (rating: number | null) => {
-    if (!rating) return null;
-    return (
-      <div className="flex gap-0.5">
-        {[1, 2, 3, 4, 5].map(i => (
-          <Star
-            key={i}
-            className={`w-3.5 h-3.5 ${i <= rating ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'}`}
-          />
-        ))}
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-4">
@@ -581,19 +632,17 @@ function ReviewFeed({ venueId }: { venueId: string }) {
             <Card key={r.id}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1 flex-1 min-w-0">
+                  <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{r.author_name || 'Anonymous'}</span>
                       {renderStars(r.rating)}
-                      <Badge variant="outline" className="text-[10px]">{r.source}</Badge>
+                      <SourceBadge source={r.source} />
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-3">{r.review_text || 'No text'}</p>
                   </div>
-                  {r.review_date && (
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {format(new Date(r.review_date), 'MMM d, yyyy')}
-                    </span>
-                  )}
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatReviewDate(r.review_date, r.created_at)}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -601,6 +650,423 @@ function ReviewFeed({ venueId }: { venueId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Needs Response Tab ─────────────────────────────────────────────────
+
+function ResponseWriterModal({
+  task,
+  open,
+  onClose,
+  onDraftSaved,
+}: {
+  task: ResponseTask;
+  open: boolean;
+  onClose: () => void;
+  onDraftSaved: () => void;
+}) {
+  const [notes, setNotes] = useState('');
+  const [strategy, setStrategy] = useState('neutral');
+  const [generating, setGenerating] = useState(false);
+  const [draft, setDraft] = useState(task.draft_response || '');
+
+  const strategies = [
+    { key: 'apologise', label: 'Apologise + explain', icon: '🙏' },
+    { key: 'resolution', label: 'Offer resolution (offline)', icon: '📞' },
+    { key: 'defend', label: 'Correct misinformation', icon: '📋' },
+    { key: 'thank', label: 'Thank + invite back', icon: '💚' },
+    { key: 'neutral', label: 'Neutral / compliance-safe', icon: '🛡️' },
+  ];
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-review-response-draft', {
+        body: { task_id: task.id, investigation_notes: notes, strategy },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setDraft(data.draft);
+      toast({ title: 'Draft generated' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    try {
+      const { error } = await supabase
+        .from('review_response_tasks' as any)
+        .update({
+          draft_response: draft,
+          final_response: draft,
+          status: 'responded',
+          approved_at: new Date().toISOString(),
+        } as any)
+        .eq('id', task.id);
+      if (error) throw error;
+      toast({ title: 'Response approved' });
+      onDraftSaved();
+      onClose();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(draft);
+    toast({ title: 'Copied to clipboard' });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Bot className="w-5 h-5" /> AI Response Writer
+          </DialogTitle>
+          <DialogDescription>
+            Generate a brand-safe response for {task.author_name || 'this reviewer'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Review context */}
+          <Card className="bg-muted/50">
+            <CardContent className="p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <SourceBadge source={task.source} />
+                {renderStars(task.rating)}
+                <span className="text-xs text-muted-foreground">{task.author_name}</span>
+              </div>
+              <p className="text-sm text-muted-foreground line-clamp-4">{task.review_text}</p>
+              {task.ai_reason && (
+                <p className="text-xs text-yellow-600 mt-1">AI reason: {task.ai_reason}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Investigation notes */}
+          <div>
+            <Label className="text-sm font-medium">Investigation / Background</Label>
+            <Textarea
+              placeholder="What happened / what we found internally (this stays private, never shared publicly)..."
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              className="mt-1"
+              rows={3}
+            />
+          </div>
+
+          {/* Strategy selection */}
+          <div>
+            <Label className="text-sm font-medium">Response strategy</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {strategies.map(s => (
+                <Button
+                  key={s.key}
+                  size="sm"
+                  variant={strategy === s.key ? 'default' : 'outline'}
+                  onClick={() => setStrategy(s.key)}
+                  className="text-xs"
+                >
+                  {s.icon} {s.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Generate button */}
+          <Button onClick={handleGenerate} disabled={generating} className="w-full">
+            <Bot className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
+            {generating ? 'Generating...' : 'Generate draft response'}
+          </Button>
+
+          {/* Draft output */}
+          {draft && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Draft response</Label>
+              <Textarea
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                rows={5}
+                className="bg-muted/30"
+              />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <ShieldAlert className="w-3 h-3" />
+                Review carefully before approving. Edit as needed.
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" size="sm" onClick={handleCopy} disabled={!draft}>
+            <Copy className="w-3 h-3 mr-1" /> Copy response
+          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button size="sm" variant="outline" disabled className="opacity-50">
+                    <Send className="w-3 h-3 mr-1" /> Post reply
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs max-w-[200px]">Auto-posting requires connecting Google Business Profile / OpenTable partner access. Coming soon.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <Button size="sm" onClick={handleApprove} disabled={!draft}>
+            <ThumbsUp className="w-3 h-3 mr-1" /> Approve response
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NeedsResponseTab({ venueId }: { venueId: string }) {
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState<'pending' | 'responded' | 'ignored'>('pending');
+  const [writerTask, setWriterTask] = useState<ResponseTask | null>(null);
+
+  const { data: tasks, isLoading } = useQuery({
+    queryKey: ['response-tasks', venueId, filter],
+    queryFn: async () => {
+      let query = supabase
+        .from('review_response_tasks' as any)
+        .select('*')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false });
+
+      if (filter === 'pending') {
+        query = query.eq('status', 'pending');
+      } else if (filter === 'responded') {
+        query = query.eq('status', 'responded');
+      } else {
+        query = query.in('status', ['ignored', 'archived']);
+      }
+
+      const { data, error } = await query.limit(50);
+      if (error) throw error;
+      return data as unknown as ResponseTask[];
+    },
+  });
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['response-tasks', venueId] });
+
+  const updateStatus = async (taskId: string, status: string) => {
+    const { error } = await supabase
+      .from('review_response_tasks' as any)
+      .update({ status } as any)
+      .eq('id', taskId);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: `Marked as ${status}` });
+      refresh();
+    }
+  };
+
+  const generateTriage = useMutation({
+    mutationFn: async () => {
+      const now = new Date();
+      const weekStart = format(startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const weekEnd = format(endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const { data, error } = await supabase.functions.invoke('generate-review-response-tasks', {
+        body: { venue_id: venueId, week_start: weekStart, week_end: weekEnd },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      refresh();
+      toast({ title: `AI triage complete`, description: `${data.tasks_created || 0} tasks created` });
+    },
+    onError: (e) => toast({ title: 'Triage failed', description: e.message, variant: 'destructive' }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex gap-1">
+          {(['pending', 'responded', 'ignored'] as const).map(f => (
+            <Button
+              key={f}
+              size="sm"
+              variant={filter === f ? 'default' : 'outline'}
+              onClick={() => setFilter(f)}
+              className="text-xs capitalize"
+            >
+              {f}
+            </Button>
+          ))}
+        </div>
+        <Button size="sm" variant="outline" onClick={() => generateTriage.mutate()} disabled={generateTriage.isPending}>
+          <Bot className={`w-4 h-4 mr-1 ${generateTriage.isPending ? 'animate-spin' : ''}`} />
+          Run AI triage
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="text-center py-8 text-muted-foreground">Loading...</div>
+      ) : !tasks?.length ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            {filter === 'pending'
+              ? 'No reviews need a response right now. Click "Run AI triage" to analyse recent reviews.'
+              : `No ${filter} tasks.`}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {tasks.map(task => (
+            <Card key={task.id}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <SourceBadge source={task.source} />
+                      {renderStars(task.rating)}
+                      <span className="font-medium text-sm">{task.author_name || 'Anonymous'}</span>
+                      {task.ai_priority && (
+                        <Badge variant="outline" className={`text-[10px] ${priorityColor[task.ai_priority] || ''}`}>
+                          {task.ai_priority}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-3">{task.review_text || 'No text'}</p>
+                    {task.ai_reason && (
+                      <p className="text-xs text-yellow-600 bg-yellow-500/5 rounded px-2 py-1">
+                        <Bot className="w-3 h-3 inline mr-1" />
+                        {task.ai_reason}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatReviewDate(task.review_date, task.created_at)}
+                  </span>
+                </div>
+
+                {task.final_response && (
+                  <div className="bg-accent/5 border border-accent/20 rounded-lg p-3">
+                    <p className="text-xs font-medium text-accent mb-1">Approved response:</p>
+                    <p className="text-sm">{task.final_response}</p>
+                  </div>
+                )}
+
+                {filter === 'pending' && (
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" onClick={() => setWriterTask(task)}>
+                      <Edit2 className="w-3 h-3 mr-1" /> Write response
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => updateStatus(task.id, 'ignored')}>
+                      <ThumbsDown className="w-3 h-3 mr-1" /> Ignore
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'archived')}>
+                      <Archive className="w-3 h-3 mr-1" /> Archive
+                    </Button>
+                  </div>
+                )}
+
+                {filter === 'responded' && task.final_response && (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => {
+                      navigator.clipboard.writeText(task.final_response!);
+                      toast({ title: 'Copied' });
+                    }}>
+                      <Copy className="w-3 h-3 mr-1" /> Copy
+                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button size="sm" variant="outline" disabled className="opacity-50">
+                              <Send className="w-3 h-3 mr-1" /> Post
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Auto-posting coming soon.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+
+                {filter === 'ignored' && (
+                  <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'archived')}>
+                    <Archive className="w-3 h-3 mr-1" /> Archive
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {writerTask && (
+        <ResponseWriterModal
+          task={writerTask}
+          open={!!writerTask}
+          onClose={() => setWriterTask(null)}
+          onDraftSaved={refresh}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Automation Status Card ──────────────────────────────────────────────
+
+function AutomationStatusCard({ venueId }: { venueId: string }) {
+  const { data: lastRun } = useQuery({
+    queryKey: ['automation-runs', venueId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('review_automation_runs' as any)
+        .select('*')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  return (
+    <Card className="bg-muted/30 border-dashed">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Zap className="w-4 h-4 text-accent" />
+          <span className="text-sm font-medium">Weekly Automation</span>
+        </div>
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <p>⏰ Runs every Monday at 08:00 (venue local time)</p>
+          <p>📋 Auto-fetches reviews → generates report → triages responses</p>
+          {lastRun ? (
+            <p className="flex items-center gap-1">
+              {lastRun.status === 'success' ? (
+                <CheckCircle2 className="w-3 h-3 text-accent" />
+              ) : (
+                <AlertCircle className="w-3 h-3 text-yellow-500" />
+              )}
+              Last automated run: {format(new Date(lastRun.created_at), 'MMM d, yyyy HH:mm')}
+              {lastRun.steps_completed && ` (${(lastRun.steps_completed as string[]).join(', ')})`}
+            </p>
+          ) : (
+            <p>No automated runs yet. First run will happen next Monday.</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -647,14 +1113,10 @@ function WeeklyReport({ venueId }: { venueId: string }) {
   const stats = (report?.stats as any) || {};
   const replyTemplates = (report?.reply_templates as any[]) || [];
 
-  const priorityColor: Record<string, string> = {
-    P1: 'bg-destructive/10 text-destructive border-destructive/20',
-    P2: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
-    P3: 'bg-muted text-muted-foreground border-border',
-  };
-
   return (
     <div className="space-y-6">
+      <AutomationStatusCard venueId={venueId} />
+
       <div className="flex gap-2 flex-wrap">
         <IngestionPanel venueId={venueId} />
         <Separator />
@@ -759,18 +1221,20 @@ export default function ReviewsAnalytics() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <PageHeader
         title="Reviews & Feedback"
-        description="Aggregate reviews from Google and OpenTable via SerpAPI. Generate AI-powered weekly reports."
+        description="Aggregate reviews from Google and OpenTable via SerpAPI. Generate AI-powered weekly reports and manage responses."
       />
 
       <Tabs defaultValue="report" className="space-y-6">
         <TabsList>
           <TabsTrigger value="report" className="gap-2"><FileText className="w-4 h-4" />Weekly Report</TabsTrigger>
           <TabsTrigger value="feed" className="gap-2"><MessageSquare className="w-4 h-4" />Review Feed</TabsTrigger>
+          <TabsTrigger value="respond" className="gap-2"><ShieldAlert className="w-4 h-4" />Needs Response</TabsTrigger>
           <TabsTrigger value="setup" className="gap-2"><Settings2 className="w-4 h-4" />Sources Setup</TabsTrigger>
         </TabsList>
 
         <TabsContent value="report"><WeeklyReport venueId={currentVenue.id} /></TabsContent>
         <TabsContent value="feed"><ReviewFeed venueId={currentVenue.id} /></TabsContent>
+        <TabsContent value="respond"><NeedsResponseTab venueId={currentVenue.id} /></TabsContent>
         <TabsContent value="setup"><ReviewSourcesSetup venueId={currentVenue.id} /></TabsContent>
       </Tabs>
     </motion.div>

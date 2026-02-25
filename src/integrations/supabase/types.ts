@@ -981,6 +981,50 @@ export type Database = {
         }
         Relationships: []
       }
+      review_automation_runs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          status: string
+          steps_completed: string[]
+          updated_at: string
+          venue_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          status?: string
+          steps_completed?: string[]
+          updated_at?: string
+          venue_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          status?: string
+          steps_completed?: string[]
+          updated_at?: string
+          venue_id?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_automation_runs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       review_ingestion_runs: {
         Row: {
           created_at: string
@@ -1022,6 +1066,87 @@ export type Database = {
           },
           {
             foreignKeyName: "review_ingestion_runs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      review_response_tasks: {
+        Row: {
+          ai_priority: string | null
+          ai_reason: string | null
+          approved_at: string | null
+          approved_by_user_id: string | null
+          author_name: string | null
+          created_at: string
+          draft_response: string | null
+          final_response: string | null
+          id: string
+          post_status: string | null
+          posted_at: string | null
+          rating: number | null
+          review_date: string | null
+          review_id: string
+          review_text: string | null
+          source: string
+          status: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          ai_priority?: string | null
+          ai_reason?: string | null
+          approved_at?: string | null
+          approved_by_user_id?: string | null
+          author_name?: string | null
+          created_at?: string
+          draft_response?: string | null
+          final_response?: string | null
+          id?: string
+          post_status?: string | null
+          posted_at?: string | null
+          rating?: number | null
+          review_date?: string | null
+          review_id: string
+          review_text?: string | null
+          source: string
+          status?: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          ai_priority?: string | null
+          ai_reason?: string | null
+          approved_at?: string | null
+          approved_by_user_id?: string | null
+          author_name?: string | null
+          created_at?: string
+          draft_response?: string | null
+          final_response?: string | null
+          id?: string
+          post_status?: string | null
+          posted_at?: string | null
+          rating?: number | null
+          review_date?: string | null
+          review_id?: string
+          review_text?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_response_tasks_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_response_tasks_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"

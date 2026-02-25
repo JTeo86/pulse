@@ -90,7 +90,6 @@ async function ingestGoogle(
           rating: r.rating || null,
           review_text: r.snippet || r.text || null,
           review_date: safeDateToISO(r.iso_date) || safeDateToISO(r.iso_date_of_last_edit) || safeDateToISO(r.date),
-          review_date: safeDateToISO(r.date),
           raw_payload: r,
         }, { onConflict: "external_review_id" });
         count++;
@@ -333,10 +332,17 @@ serve(async (req) => {
       });
     }
 
+    // Partial success: if some sources succeeded and some failed, it's a warning not full error
+    const totalSources = googleSources.length + otSources.length;
+    const hasAnySuccess = totalFetched > 0;
+    const hasAnyError = allErrors.length > 0;
+
     const result: IngestionResult = {
-      success: allErrors.length === 0,
+      success: !hasAnyError || (hasAnySuccess && hasAnyError),
       fetched_count: totalFetched,
-      warnings: allWarnings,
+      warnings: hasAnySuccess && hasAnyError 
+        ? [...allWarnings, "Some sources succeeded but others had errors. Check details below."]
+        : allWarnings,
       errors: allErrors,
       provider_meta: {
         google_sources: googleSources.length,
