@@ -82,18 +82,15 @@ Deno.serve(async (req) => {
     try {
       if (key_name === 'SERPAPI_API_KEY') {
         const r = await fetch(
-          `https://serpapi.com/search.json?engine=google_maps&q=test+restaurant&api_key=${value}&num=1`
+          `https://serpapi.com/account.json?api_key=${encodeURIComponent(value)}`
         );
         if (r.status === 401 || r.status === 403) {
           status = 'invalid'; message = `${r.status} Unauthorized — check SerpAPI key`;
-        } else if (!r.ok && r.status !== 400) {
-          // 400 means params bad but key accepted
+        } else if (!r.ok) {
           status = 'invalid'; message = `HTTP ${r.status}`;
         } else {
           const j = await r.json().catch(() => ({}));
-          if (j.error && j.error.toLowerCase().includes('invalid')) {
-            status = 'invalid'; message = j.error;
-          }
+          message = `Account OK — plan: ${j.plan_id || j.plan || 'unknown'}, searches left: ${j.total_searches_left ?? 'unknown'}`;
         }
       } else if (key_name === 'APIFY_API_TOKEN') {
         const r = await fetch(`https://api.apify.com/v2/users/me?token=${value}`);

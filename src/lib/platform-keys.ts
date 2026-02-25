@@ -46,7 +46,7 @@ export async function updatePlatformKey(keyName: string, value: string): Promise
   const { error } = await supabase
     .from('platform_api_keys')
     .update({
-      key_value: value,
+      key_value: value.trim(),
       is_configured: value.trim().length > 0,
       health_status: 'untested',
       last_error: null,

@@ -441,7 +441,16 @@ function IngestionPanel({ venueId }: { venueId: string }) {
             {result.errors.length > 0 && (
               <div className="space-y-1">
                 <p className="text-xs font-medium text-destructive">Errors:</p>
-                {result.errors.map((e, i) => <p key={i} className="text-xs text-muted-foreground">• {e}</p>)}
+                {result.errors.map((e, i) => (
+                  <div key={i}>
+                    <p className="text-xs text-muted-foreground">• {e}</p>
+                    {e.toLowerCase().includes('401') && (
+                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
+                        💡 This usually means the runtime is not using the same key you saved in Platform Admin. Go to Platform Admin → Integrations and use "Test SerpAPI Key" to confirm the key the runtime actually reads.
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>

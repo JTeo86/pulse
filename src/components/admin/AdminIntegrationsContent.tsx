@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   KeyRound, Eye, EyeOff, Save, CheckCircle2,
   XCircle, AlertCircle, Clock, RefreshCw, ShieldAlert,
-  Activity,
+  Activity, FlaskConical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,6 +76,53 @@ function CategorySummary({ keys }: { keys: PlatformApiKey[] }) {
   return <Badge variant="outline" className="bg-muted text-muted-foreground border-border gap-1 text-[10px]"><Clock className="w-2.5 h-2.5" />Not set</Badge>;
 }
 
+// ─── SerpAPI Test Result ──────────────────────────────────────────────────────
+function SerpApiTestButton() {
+  const { toast } = useToast();
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+
+  const handleTest = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await supabase.functions.invoke('test-serpapi-key', {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (resp.error) throw new Error(resp.error.message);
+      setResult(resp.data as Record<string, unknown>);
+    } catch (err) {
+      toast({ title: 'Test failed', description: (err as Error).message, variant: 'destructive' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Button size="sm" variant="outline" onClick={handleTest} disabled={testing} className="gap-1.5">
+        <FlaskConical className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
+        {testing ? 'Testing…' : 'Test SerpAPI Key'}
+      </Button>
+      {result && (
+        <div className="text-xs bg-muted rounded-lg p-3 space-y-1 font-mono">
+          {result.key_found ? (
+            <>
+              <p>Key detected (length {String(result.key_length)}): <strong>{String(result.key_preview)}</strong></p>
+              {result.had_whitespace && <p className="text-warning">⚠ Whitespace was trimmed from stored key.</p>}
+              <p>SerpAPI status: <strong>{String(result.serpapi_status)}</strong></p>
+              <p className={result.serpapi_status === 200 ? 'text-accent' : 'text-destructive'}>{String(result.serpapi_message)}</p>
+            </>
+          ) : (
+            <p className="text-destructive">{String(result.message || 'Key missing in runtime')}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Single key row ───────────────────────────────────────────────────────────
 function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => void }) {
   const { toast } = useToast();
@@ -118,6 +165,7 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
 
   const isDirty   = value !== (apiKey.key_value ?? '');
   const inputType = apiKey.is_secret && !visible ? 'password' : 'text';
+  const isSerpApi = apiKey.key_name === 'SERPAPI_API_KEY';
 
   return (
     <div className="flex flex-col gap-2 py-4 border-b border-border last:border-0">
@@ -175,6 +223,7 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
           {checking ? 'Checking…' : 'Check'}
         </Button>
       </div>
+      {isSerpApi && <SerpApiTestButton />}
     </div>
   );
 }
