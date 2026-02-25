@@ -1,0 +1,1 @@
+ALTER TABLE public.review_sources ADD COLUMN IF NOT EXISTS external_domain text;

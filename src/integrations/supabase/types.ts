@@ -1033,6 +1033,7 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string | null
+          external_domain: string | null
           external_id: string
           external_id_kind: string | null
           id: string
@@ -1044,6 +1045,7 @@ export type Database = {
         Insert: {
           created_at?: string
           display_name?: string | null
+          external_domain?: string | null
           external_id: string
           external_id_kind?: string | null
           id?: string
@@ -1055,6 +1057,7 @@ export type Database = {
         Update: {
           created_at?: string
           display_name?: string | null
+          external_domain?: string | null
           external_id?: string
           external_id_kind?: string | null
           id?: string
