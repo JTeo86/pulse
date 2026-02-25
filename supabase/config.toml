@@ -42,3 +42,12 @@ verify_jwt = false
 [functions.test-serpapi-key]
 verify_jwt = false
 
+[functions.run-weekly-reviews-schedule]
+verify_jwt = false
+
+[functions.generate-review-response-tasks]
+verify_jwt = false
+
+[functions.generate-review-response-draft]
+verify_jwt = false
+
