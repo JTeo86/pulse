@@ -70,17 +70,26 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Check caller is an admin of this venue
+  // Check caller is owner or manager of this venue
+  const { data: venue } = await callerClient
+    .from('venues')
+    .select('owner_user_id')
+    .eq('id', venueId)
+    .maybeSingle();
+
+  const isOwner = venue?.owner_user_id === callerId;
+
   const { data: membership, error: memberError } = await callerClient
     .from('venue_members')
     .select('id, role')
     .eq('venue_id', venueId)
     .eq('user_id', callerId)
-    .eq('role', 'admin')
     .maybeSingle();
 
-  if (memberError || !membership) {
-    return new Response(JSON.stringify({ error: 'Forbidden: you are not an admin of this venue' }), {
+  const isManager = membership?.role === 'manager';
+
+  if (!isOwner && !isManager) {
+    return new Response(JSON.stringify({ error: 'Forbidden: you must be the venue owner or a manager' }), {
       status: 403,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
