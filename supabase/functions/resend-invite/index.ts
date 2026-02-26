@@ -1,5 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+function getAppUrl(req: Request): string {
+  const envAppUrl = Deno.env.get('APP_URL');
+  if (envAppUrl) return envAppUrl;
+  const origin = req.headers.get('origin');
+  if (origin) return origin;
+  const referer = req.headers.get('referer');
+  if (referer) {
+    try {
+      const url = new URL(referer);
+      return `${url.protocol}//${url.host}`;
+    } catch (_e) { /* fall through */ }
+  }
+  return 'https://pulseai-app.lovable.app';
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -113,14 +128,12 @@ Deno.serve(async (req: Request) => {
     .eq('id', venueId)
     .maybeSingle();
 
-  const appUrl =
-    Deno.env.get('APP_URL') ||
-    req.headers.get('origin') ||
-    req.headers.get('referer')?.replace(/\/$/, '') ||
-    'https://pulseai-app.lovable.app';
+  const appUrl = getAppUrl(req);
+  console.log('Resolved appUrl:', appUrl);
 
   const venueName = venueData?.name ? encodeURIComponent(venueData.name) : '';
   const redirectTo = `${appUrl}/auth/invite?venueId=${venueId}${venueName ? `&venueName=${venueName}` : ''}`;
+  console.log('Final redirectTo:', redirectTo);
 
   // Resend invite email via Supabase admin
   const { error: resendError } = await adminClient.auth.admin.inviteUserByEmail(
