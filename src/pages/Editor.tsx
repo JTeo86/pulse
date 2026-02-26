@@ -105,7 +105,7 @@ export default function EditorPage() {
 
     try {
       const ext = file.name.split('.').pop() || 'jpg';
-      const path = `editor/uploads/${currentVenue.id}/${crypto.randomUUID()}.${ext}`;
+      const path = `venues/${currentVenue.id}/editor/${crypto.randomUUID()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('venue-assets')
         .upload(path, file, { upsert: false });
