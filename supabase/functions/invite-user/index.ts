@@ -134,6 +134,7 @@ Deno.serve(async (req: Request) => {
 
   const venueName = venueData?.name ? encodeURIComponent(venueData.name) : '';
   const redirectTo = `${appUrl}/auth/invite?venueId=${venueId}${venueName ? `&venueName=${venueName}` : ''}`;
+  console.log('Final redirectTo:', redirectTo);
 
   let resultUserId: string | undefined;
   let isExistingUser = false;
