@@ -33,7 +33,7 @@ export default function StyleInputsPanel({
         {platingCount} plating ref{platingCount !== 1 ? 's' : ''}
       </Badge>
       {hasProfile && (
-        <Badge variant="outline" className="text-xs py-0 text-green-600 border-green-600/30">
+        <Badge variant="outline" className="text-xs py-0 text-accent border-accent/30">
           Profile active
         </Badge>
       )}
