@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
 
   const callerId = callerUser.id;
 
-  let body: { venueId: string; email: string; role: 'admin' | 'staff' };
+  let body: { venueId: string; email: string; role: 'manager' | 'staff' };
   try {
     body = await req.json();
   } catch {
