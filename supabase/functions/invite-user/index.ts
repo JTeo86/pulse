@@ -63,8 +63,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  if (!['admin', 'staff'].includes(role)) {
-    return new Response(JSON.stringify({ error: 'role must be admin or staff' }), {
+  if (!['manager', 'staff'].includes(role)) {
+    return new Response(JSON.stringify({ error: 'role must be manager or staff' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
