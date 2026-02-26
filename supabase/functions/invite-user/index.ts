@@ -102,11 +102,8 @@ Deno.serve(async (req: Request) => {
 
   const normalizedEmail = email.toLowerCase().trim();
 
-  const appUrl =
-    Deno.env.get('APP_URL') ||
-    req.headers.get('origin') ||
-    req.headers.get('referer')?.replace(/\/$/, '') ||
-    'https://pulseai-app.lovable.app';
+  const appUrl = getAppUrl(req);
+  console.log('Resolved appUrl:', appUrl);
 
   // Fetch venue name to surface on the invite acceptance page
   const adminClientForVenue = createClient(
