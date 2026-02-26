@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -17,6 +17,7 @@ import {
   Plug, 
   CreditCard,
   ChevronDown,
+  ChevronRight,
   LogOut,
   Menu,
   X,
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -51,16 +53,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 interface AppLayoutProps {
   children: ReactNode;
 }
-
-const brandNavigation = [
-  { name: 'Brand Overview', href: '/brand/overview', icon: LayoutDashboard },
-  { name: 'Brand Identity', href: '/brand/identity', icon: Palette },
-  { name: 'Content Library', href: '/brand/library', icon: FolderOpen },
-];
 
 const studioNavigation = [
   { name: 'AI Marketing Assistant', href: '/studio/events', icon: CalendarDays },
@@ -69,38 +70,80 @@ const studioNavigation = [
 ];
 
 const analyticsNavigation = [
+  { name: 'Reviews', href: '/analytics/reviews', icon: MessageSquareText },
   { name: 'Brand Performance', href: '/analytics/performance', icon: BarChart3 },
   { name: 'Competitors', href: '/analytics/competitors', icon: Target },
   { name: 'AI Insights', href: '/analytics/insights', icon: Brain },
-  { name: 'Reviews', href: '/analytics/reviews', icon: MessageSquareText },
 ];
 
-const settingsNavigation = [
+const brandNavigation = [
+  { name: 'Brand Overview', href: '/brand/overview', icon: LayoutDashboard },
+  { name: 'Brand Identity', href: '/brand/identity', icon: Palette },
+  { name: 'Content Library', href: '/brand/library', icon: FolderOpen },
+];
+
+// Settings items split by access level
+const settingsTeamItem = { name: 'Team', href: '/settings/team', icon: Users };
+const settingsAdminItems = [
   { name: 'Brand Settings', href: '/settings/brand', icon: Settings },
-  { name: 'Team', href: '/settings/team', icon: Users },
-  { name: 'Publishing', href: '/settings/integrations', icon: Plug },
+  { name: 'Integrations', href: '/settings/integrations', icon: Plug },
   { name: 'Billing', href: '/settings/billing', icon: CreditCard },
 ];
 
-const adminNavigation = [
-  { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' },
-];
+const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
+
+// localStorage key for collapsible section state
+const SECTION_STATE_KEY = 'sidebar-sections-state';
+
+function getSectionState(): Record<string, boolean> {
+  try {
+    const stored = localStorage.getItem(SECTION_STATE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch { return {}; }
+}
+
+function setSectionState(key: string, open: boolean) {
+  try {
+    const current = getSectionState();
+    current[key] = open;
+    localStorage.setItem(SECTION_STATE_KEY, JSON.stringify(current));
+  } catch { /* ignore */ }
+}
+
+function usePlatformAdmin() {
+  const { user } = useAuth();
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) { setIsPlatformAdmin(false); return; }
+    supabase.rpc('is_platform_admin', { check_user_id: user.id })
+      .then(({ data }) => setIsPlatformAdmin(!!data));
+  }, [user?.id]);
+
+  return isPlatformAdmin;
+}
+
+type NavItem = { name: string; href: string; icon: any; badge?: string };
 
 function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  // Use venue context directly, treat as "brand" in UI
-  const { venues: brands, currentVenue: currentBrand, setCurrentVenue: setCurrentBrand, isAdmin, isDemoMode } = useVenue();
+  const { venues: brands, currentVenue: currentBrand, setCurrentVenue: setCurrentBrand, isAdmin } = useVenue();
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
+  const isPlatformAdmin = usePlatformAdmin();
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
   };
 
-  const NavItem = ({ item }: { item: { name: string; href: string; icon: any; badge?: string } }) => {
+  // Build settings items based on role
+  const settingsItems: NavItem[] = [settingsTeamItem];
+  if (isAdmin) settingsItems.push(...settingsAdminItems);
+
+  const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.href;
     
     const linkContent = (
@@ -116,13 +159,9 @@ function AppSidebar() {
         `}
       >
         <item.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-accent' : ''}`} />
-        {!isCollapsed && (
-          <span className="flex-1">{item.name}</span>
-        )}
+        {!isCollapsed && <span className="flex-1">{item.name}</span>}
         {!isCollapsed && item.badge && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent">
-            {item.badge}
-          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent">{item.badge}</span>
         )}
       </Link>
     );
@@ -138,24 +177,55 @@ function AppSidebar() {
     return linkContent;
   };
 
-  const NavSection = ({ label, items }: { label: string; items: typeof brandNavigation }) => (
-    <SidebarGroup>
-      {!isCollapsed && (
-        <SidebarGroupLabel className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider px-3 mb-1">
-          {label}
-        </SidebarGroupLabel>
-      )}
-      <SidebarGroupContent>
-        <SidebarMenu className="space-y-0.5">
-          {items.map((item) => (
-            <SidebarMenuItem key={item.name}>
-              <NavItem item={item} />
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
+  const CollapsibleSection = ({ label, items, sectionKey }: { label: string; items: NavItem[]; sectionKey: string }) => {
+    const savedState = getSectionState();
+    const [open, setOpen] = useState(savedState[sectionKey] !== false); // default open
+
+    const handleToggle = useCallback((val: boolean) => {
+      setOpen(val);
+      setSectionState(sectionKey, val);
+    }, [sectionKey]);
+
+    if (isCollapsed) {
+      return (
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-0.5">
+              {items.map((item) => (
+                <SidebarMenuItem key={item.name}>
+                  <NavItemComponent item={item} />
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      );
+    }
+
+    return (
+      <Collapsible open={open} onOpenChange={handleToggle}>
+        <SidebarGroup>
+          <CollapsibleTrigger className="flex items-center w-full px-3 mb-1 cursor-pointer group">
+            <SidebarGroupLabel className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider flex-1 text-left pointer-events-none">
+              {label}
+            </SidebarGroupLabel>
+            <ChevronRight className={`w-3 h-3 text-muted-foreground/40 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-0.5">
+                {items.map((item) => (
+                  <SidebarMenuItem key={item.name}>
+                    <NavItemComponent item={item} />
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </CollapsibleContent>
+        </SidebarGroup>
+      </Collapsible>
+    );
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar-background">
@@ -204,11 +274,13 @@ function AppSidebar() {
       )}
 
       <SidebarContent className="py-2">
-        <NavSection label="Brand" items={brandNavigation} />
-        <NavSection label="Studio" items={studioNavigation} />
-        <NavSection label="Analytics" items={analyticsNavigation} />
-        {isAdmin && <NavSection label="Settings" items={settingsNavigation} />}
-        {isAdmin && <NavSection label="Platform" items={adminNavigation} />}
+        <CollapsibleSection label="Studio" items={studioNavigation} sectionKey="studio" />
+        <CollapsibleSection label="Analytics" items={analyticsNavigation} sectionKey="analytics" />
+        <CollapsibleSection label="Brand" items={brandNavigation} sectionKey="brand" />
+        <CollapsibleSection label="Settings" items={settingsItems} sectionKey="settings" />
+        {isPlatformAdmin && (
+          <CollapsibleSection label="Platform" items={[platformAdminItem]} sectionKey="platform" />
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
@@ -255,6 +327,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { isAdmin } = useVenue();
+  const isPlatformAdmin = usePlatformAdmin();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -262,7 +336,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  const allNavItems = [...brandNavigation, ...studioNavigation, ...analyticsNavigation, ...settingsNavigation, ...adminNavigation];
+  // Build mobile nav with same ordering and gating
+  const settingsItems: NavItem[] = [settingsTeamItem];
+  if (isAdmin) settingsItems.push(...settingsAdminItems);
+  const allNavItems: NavItem[] = [
+    ...studioNavigation,
+    ...analyticsNavigation,
+    ...brandNavigation,
+    ...settingsItems,
+    ...(isPlatformAdmin ? [platformAdminItem] : []),
+  ];
 
   return (
     <SidebarProvider>
