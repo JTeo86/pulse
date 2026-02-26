@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Image, X, ArrowRight, Sparkles } from 'lucide-react';
+import { Upload, Image, X, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -14,6 +14,8 @@ import { useVisualEditor } from './VisualEditorContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
+import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/hooks/use-toast';
 
 const vibeOptions = [
   { value: 'casual', label: 'Casual', description: 'Relaxed, welcoming atmosphere' },
@@ -29,12 +31,28 @@ const goalOptions = [
   { value: 'promo', label: 'Promo Creative', description: 'Marketing-ready with overlays' },
 ];
 
+/** Convert a File to base64 string (without data: prefix) */
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function VisualEditorUpload() {
-  const { state, addImages, removeImage, setStep, setPreset } = useVisualEditor();
+  const { state, addImages, removeImage, setStep, setPreset, updateImageUrl, setProcessing } = useVisualEditor();
   const { currentVenue } = useVenue();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [dragActive, setDragActive] = useState(false);
   const [selectedVibe, setSelectedVibe] = useState('casual');
   const [selectedGoal, setSelectedGoal] = useState('clean-studio');
+  const [autoProcessing, setAutoProcessing] = useState(false);
 
   // Fetch venue's brand presets
   const { data: presets } = useQuery({
@@ -65,30 +83,107 @@ export default function VisualEditorUpload() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const files = Array.from(e.dataTransfer.files).filter(f => 
-        f.type.startsWith('image/')
-      );
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
       addImages(files);
     }
   }, [addImages]);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const files = Array.from(e.target.files).filter(f =>
-        f.type.startsWith('image/')
-      );
+      const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
       addImages(files);
     }
   };
 
-  const handleContinue = () => {
-    // Find matching preset or use first one
+  const handleContinue = async () => {
+    // Find matching preset
     const matchingPreset = presets?.find(p => p.vibe === selectedVibe);
     if (matchingPreset) {
       setPreset(matchingPreset.id);
     }
+
+    if (!currentVenue || !user || state.images.length === 0) {
+      setStep('edit');
+      return;
+    }
+
+    // Auto-process: remove background on the hero image, then apply atmosphere background
+    const heroImage = state.images[0];
+    if (!heroImage?.file) {
+      setStep('edit');
+      return;
+    }
+
+    setAutoProcessing(true);
+    setProcessing(true);
+
+    try {
+      // Step 1: Remove background
+      const base64 = await fileToBase64(heroImage.file);
+      const { data: cutoutData, error: cutoutErr } = await supabase.functions.invoke('photoroom-edit', {
+        body: {
+          sourceFileBase64: base64,
+          sourceFileName: heroImage.file.name,
+          operation: 'remove-background',
+          venueId: currentVenue.id,
+        },
+      });
+
+      if (cutoutErr) throw cutoutErr;
+
+      const cutoutUrl = cutoutData?.resultUrl;
+      if (!cutoutUrl) throw new Error('No cutout URL returned');
+
+      // Step 2: Find best atmosphere background
+      const { data: atmAssets } = await supabase
+        .from('style_reference_assets')
+        .select('storage_path, pinned')
+        .eq('venue_id', currentVenue.id)
+        .eq('channel', 'atmosphere')
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      let backgroundUrl: string | undefined;
+      if (atmAssets && atmAssets.length > 0) {
+        backgroundUrl = supabase.storage.from('venue_atmosphere').getPublicUrl(atmAssets[0].storage_path).data.publicUrl;
+      }
+
+      // Step 3: Replace background (or use neutral studio)
+      const { data: replaceData, error: replaceErr } = await supabase.functions.invoke('photoroom-edit', {
+        body: {
+          sourceUrl: cutoutUrl,
+          operation: 'replace-background',
+          backgroundUrl,
+          backgroundColor: backgroundUrl ? undefined : '#F5F5F0',
+          venueId: currentVenue.id,
+        },
+      });
+
+      if (replaceErr) throw replaceErr;
+
+      if (replaceData?.resultUrl) {
+        updateImageUrl(heroImage.id, replaceData.resultUrl);
+        toast({
+          title: 'Auto-processed',
+          description: backgroundUrl
+            ? 'Background removed and venue atmosphere applied'
+            : 'Background removed and studio background applied',
+        });
+      }
+    } catch (error: any) {
+      console.error('Auto-process error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Auto-processing failed',
+        description: error.message || 'Moving to editor without processing',
+      });
+    } finally {
+      setAutoProcessing(false);
+      setProcessing(false);
+    }
+
     setStep('edit');
   };
 
@@ -98,7 +193,7 @@ export default function VisualEditorUpload() {
       <div className="text-center mb-8">
         <h2 className="text-xl font-medium mb-2">Upload Your Photos</h2>
         <p className="text-muted-foreground">
-          Drop your venue photos and we'll transform them into brand-ready content
+          Drop your venue photos and we'll automatically remove backgrounds and apply your venue style
         </p>
       </div>
 
@@ -153,11 +248,7 @@ export default function VisualEditorUpload() {
               transition={{ delay: index * 0.05 }}
               className="relative aspect-square rounded-lg overflow-hidden border border-border group"
             >
-              <img
-                src={img.originalUrl}
-                alt=""
-                className="w-full h-full object-cover"
-              />
+              <img src={img.originalUrl} alt="" className="w-full h-full object-cover" />
               <button
                 onClick={() => removeImage(img.id)}
                 className="absolute top-2 right-2 w-6 h-6 rounded-full bg-foreground/80 text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -181,16 +272,13 @@ export default function VisualEditorUpload() {
           animate={{ opacity: 1, y: 0 }}
           className="grid md:grid-cols-2 gap-6 p-6 rounded-xl bg-muted/30 border border-border"
         >
-          {/* Vibe Selection */}
           <div className="space-y-3">
             <Label className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-accent" />
               Brand Vibe
             </Label>
             <Select value={selectedVibe} onValueChange={setSelectedVibe}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {vibeOptions.map(opt => (
                   <SelectItem key={opt.value} value={opt.value}>
@@ -203,14 +291,10 @@ export default function VisualEditorUpload() {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Goal Selection */}
           <div className="space-y-3">
             <Label>Edit Goal</Label>
             <Select value={selectedGoal} onValueChange={setSelectedGoal}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {goalOptions.map(opt => (
                   <SelectItem key={opt.value} value={opt.value}>
@@ -233,9 +317,18 @@ export default function VisualEditorUpload() {
           animate={{ opacity: 1 }}
           className="flex justify-end"
         >
-          <Button onClick={handleContinue} size="lg" className="gap-2">
-            Continue to Editor
-            <ArrowRight className="w-4 h-4" />
+          <Button onClick={handleContinue} size="lg" className="gap-2" disabled={autoProcessing}>
+            {autoProcessing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                Continue to Editor
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </Button>
         </motion.div>
       )}
