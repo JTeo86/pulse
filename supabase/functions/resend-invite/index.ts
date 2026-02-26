@@ -128,11 +128,8 @@ Deno.serve(async (req: Request) => {
     .eq('id', venueId)
     .maybeSingle();
 
-  const appUrl =
-    Deno.env.get('APP_URL') ||
-    req.headers.get('origin') ||
-    req.headers.get('referer')?.replace(/\/$/, '') ||
-    'https://pulseai-app.lovable.app';
+  const appUrl = getAppUrl(req);
+  console.log('Resolved appUrl:', appUrl);
 
   const venueName = venueData?.name ? encodeURIComponent(venueData.name) : '';
   const redirectTo = `${appUrl}/auth/invite?venueId=${venueId}${venueName ? `&venueName=${venueName}` : ''}`;
