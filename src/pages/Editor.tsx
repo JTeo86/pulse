@@ -180,7 +180,7 @@ export default function EditorPage() {
       const fnName = outputMode === 'reel' ? 'editor-generate-reel' : 'editor-generate-pro-photo';
       const payload = outputMode === 'reel'
         ? { job_id: currentJobId, venue_id: currentVenue.id, hook_text: hookText, cinematic_mode: false }
-        : { job_id: currentJobId, venue_id: currentVenue.id, realism_mode: realismMode, style_preset: stylePreset };
+        : { job_id: currentJobId, venue_id: currentVenue.id, input_image_url: uploadedUrl, realism_mode: realismMode, style_preset: stylePreset };
 
       const { data, error: fnError } = await supabase.functions.invoke(fnName, { body: payload });
       if (fnError) throw fnError;
