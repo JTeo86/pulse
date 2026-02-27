@@ -5,6 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function jsonResp(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 interface EditRequest {
   sourceUrl?: string;
   sourceFileBase64?: string;
@@ -16,223 +23,129 @@ interface EditRequest {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const photoRoomApiKey = Deno.env.get('PHOTOROOM_API_KEY');
 
-    if (!photoRoomApiKey) {
-      return new Response(
-        JSON.stringify({ error: 'PhotoRoom API not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (!photoRoomApiKey) return jsonResp({ error: 'PhotoRoom API not configured' }, 500);
 
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (!authHeader) return jsonResp({ error: 'Unauthorized' }, 401);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (authError || !user) return jsonResp({ error: 'Invalid token' }, 401);
 
     const body = await req.json() as EditRequest;
     const { sourceUrl, sourceFileBase64, sourceFileName, operation, backgroundUrl, backgroundColor, venueId } = body;
 
     console.log(`Processing ${operation} for venue ${venueId}`);
 
-    // Verify user has access to venue
+    // Verify venue access
     const { data: membership } = await supabase
-      .from('venue_members')
-      .select('role')
-      .eq('venue_id', venueId)
-      .eq('user_id', user.id)
-      .single();
+      .from('venue_members').select('role').eq('venue_id', venueId).eq('user_id', user.id).single();
+    if (!membership) return jsonResp({ error: 'Access denied to venue' }, 403);
 
-    if (!membership) {
-      return new Response(
-        JSON.stringify({ error: 'Access denied to venue' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Resolve source image: either from base64 upload or URL
+    // Resolve source image
     let sourceImageBlob: Blob;
     let resolvedSourceUrl = sourceUrl || '';
 
     if (sourceFileBase64) {
-      // Client sent the file as base64 — decode it and upload via service role
-      const binaryStr = atob(sourceFileBase64);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
-      }
-
+      const bin = atob(sourceFileBase64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       const ext = (sourceFileName || 'image.jpg').split('.').pop() || 'jpg';
-      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-      sourceImageBlob = new Blob([bytes], { type: mimeType });
+      const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+      sourceImageBlob = new Blob([bytes], { type: mime });
 
-      // Upload to storage using service role (no RLS issues)
       const uploadPath = `venues/${venueId}/uploads/${crypto.randomUUID()}.${ext}`;
-      const { error: uploadErr } = await supabase.storage
-        .from('venue-assets')
-        .upload(uploadPath, bytes, { contentType: mimeType, upsert: false });
-
-      if (uploadErr) {
-        console.error('Upload error:', uploadErr);
-        throw new Error('Failed to upload source image');
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('venue-assets')
-        .getPublicUrl(uploadPath);
-
-      resolvedSourceUrl = publicUrl;
-      console.log(`Uploaded source image: ${resolvedSourceUrl}`);
+      await supabase.storage.from('venue-assets').upload(uploadPath, bytes, { contentType: mime, upsert: false });
+      resolvedSourceUrl = supabase.storage.from('venue-assets').getPublicUrl(uploadPath).data.publicUrl;
     } else if (sourceUrl) {
-      const sourceImageResponse = await fetch(sourceUrl);
-      if (!sourceImageResponse.ok) {
-        throw new Error('Failed to fetch source image');
-      }
-      sourceImageBlob = await sourceImageResponse.blob();
+      const resp = await fetch(sourceUrl);
+      if (!resp.ok) throw new Error('Failed to fetch source image');
+      sourceImageBlob = await resp.blob();
     } else {
-      return new Response(
-        JSON.stringify({ error: 'sourceUrl or sourceFileBase64 required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return jsonResp({ error: 'sourceUrl or sourceFileBase64 required' }, 400);
     }
 
-    let photoRoomResponse: Response;
+    // ── Use PhotoRoom v2 Edit API ──
+    const params = new URLSearchParams();
 
     if (operation === 'remove-background') {
-      const formData = new FormData();
-      formData.append('image_file', sourceImageBlob, 'image.jpg');
-      formData.append('format', 'png');
-      formData.append('size', 'full');
-
-      photoRoomResponse = await fetch('https://sdk.photoroom.com/v1/segment', {
-        method: 'POST',
-        headers: { 'x-api-key': photoRoomApiKey },
-        body: formData,
-      });
+      // Remove bg → transparent (no background params)
+      // Use v2 edit with no background specified = transparent
     } else if (operation === 'replace-background') {
-      const formData = new FormData();
-      formData.append('image_file', sourceImageBlob, 'image.jpg');
-      formData.append('format', 'png');
-      formData.append('size', 'full');
-
+      params.set('lighting.mode', 'ai.auto');
+      params.set('shadow.mode', 'ai.soft');
       if (backgroundUrl) {
-        const bgResponse = await fetch(backgroundUrl);
-        if (bgResponse.ok) {
-          const bgBlob = await bgResponse.blob();
-          formData.append('background_file', bgBlob, 'background.jpg');
-        }
+        params.set('background.imageUrl', backgroundUrl);
       } else if (backgroundColor) {
-        formData.append('bg_color', backgroundColor);
+        params.set('background.color', backgroundColor.replace('#', ''));
+      } else {
+        params.set('background.color', 'FFFFFF');
       }
-
-      photoRoomResponse = await fetch('https://sdk.photoroom.com/v1/segment', {
-        method: 'POST',
-        headers: { 'x-api-key': photoRoomApiKey },
-        body: formData,
-      });
     } else if (operation === 'enhance') {
-      const formData = new FormData();
-      formData.append('image_file', sourceImageBlob, 'image.jpg');
-      formData.append('format', 'png');
-      formData.append('size', 'full');
-      formData.append('bg_color', '#FFFFFF');
+      params.set('lighting.mode', 'ai.auto');
+      params.set('shadow.mode', 'ai.soft');
+      params.set('background.color', 'FFFFFF');
+    } else {
+      return jsonResp({ error: 'Invalid operation' }, 400);
+    }
 
-      photoRoomResponse = await fetch('https://sdk.photoroom.com/v1/segment', {
+    const formData = new FormData();
+    formData.append('imageFile', sourceImageBlob, 'image.jpg');
+
+    const photoRoomResponse = await fetch(
+      `https://image-api.photoroom.com/v2/edit?${params.toString()}`,
+      {
         method: 'POST',
         headers: { 'x-api-key': photoRoomApiKey },
         body: formData,
-      });
-    } else {
-      return new Response(
-        JSON.stringify({ error: 'Invalid operation' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+      },
+    );
 
     if (!photoRoomResponse.ok) {
       const errorText = await photoRoomResponse.text();
-      console.error('PhotoRoom API error:', errorText);
-      return new Response(
-        JSON.stringify({ error: 'PhotoRoom processing failed', details: errorText }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('PhotoRoom v2 error:', errorText);
+      return jsonResp({ error: 'PhotoRoom processing failed', details: errorText }, 500);
     }
 
-    const processedImageBlob = await photoRoomResponse.blob();
-    const processedImageBuffer = await processedImageBlob.arrayBuffer();
+    const processedBlob = await photoRoomResponse.blob();
+    const processedBuffer = await processedBlob.arrayBuffer();
 
     const fileName = `${crypto.randomUUID()}.png`;
     const storagePath = `venues/${venueId}/edited/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('venue-assets')
-      .upload(storagePath, processedImageBuffer, {
-        contentType: 'image/png',
-        upsert: false,
-      });
+      .upload(storagePath, processedBuffer, { contentType: 'image/png', upsert: false });
 
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      throw new Error('Failed to save processed image');
-    }
+    if (uploadError) throw new Error('Failed to save processed image');
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('venue-assets')
-      .getPublicUrl(storagePath);
-
-    const resultUrl = publicUrl;
+    const resultUrl = supabase.storage.from('venue-assets').getPublicUrl(storagePath).data.publicUrl;
 
     // Log the edit
-    const { error: logError } = await supabase
-      .from('edited_assets')
-      .insert({
-        venue_id: venueId,
-        source_url: resolvedSourceUrl,
-        output_urls: [resultUrl],
-        output_types: ['image/png'],
-        engine_version: 'v1',
-        settings_json: { operation, backgroundUrl, backgroundColor },
-        created_by: user.id,
-        compliance_status: 'approved',
-      });
-
-    if (logError) {
-      console.warn('Failed to log edit:', logError);
-    }
+    await supabase.from('edited_assets').insert({
+      venue_id: venueId,
+      source_url: resolvedSourceUrl,
+      output_urls: [resultUrl],
+      output_types: ['image/png'],
+      engine_version: 'v1',
+      settings_json: { operation, backgroundUrl, backgroundColor },
+      created_by: user.id,
+      compliance_status: 'approved',
+    });
 
     console.log(`Successfully processed image: ${resultUrl}`);
-
-    return new Response(
-      JSON.stringify({ success: true, resultUrl, operation, sourceUrl: resolvedSourceUrl }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResp({ success: true, resultUrl, operation, sourceUrl: resolvedSourceUrl });
   } catch (error: unknown) {
     console.error('Error processing image:', error);
     const message = error instanceof Error ? error.message : 'Processing failed';
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResp({ error: message }, 500);
   }
 });
