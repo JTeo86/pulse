@@ -186,11 +186,13 @@ export default function VisualEditorCanvas() {
       };
 
       const sourceUrl = currentImageUrl;
-      if (sourceUrl?.startsWith('blob:') && selectedImage.file) {
+      if (selectedImage.file && (!sourceUrl || sourceUrl.startsWith('blob:'))) {
         body.sourceFileBase64 = await fileToBase64(selectedImage.file);
         body.sourceFileName = selectedImage.file.name;
-      } else {
+      } else if (sourceUrl) {
         body.input_image_url = sourceUrl;
+      } else {
+        throw new Error('No image source available');
       }
 
       const { data, error } = await supabase.functions.invoke('editor-generate-pro-photo', { body });
