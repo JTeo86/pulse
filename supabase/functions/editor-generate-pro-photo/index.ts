@@ -316,6 +316,12 @@ Make this food photo look like it was shot by a professional food photographer:
       console.log('Step 4: Skipping Gemini polish (no API key)');
     }
 
+    const finalImageVariants = {
+      square_1_1: polishedUrl,
+      portrait_4_5: polishedUrl,
+      vertical_9_16: polishedUrl,
+    };
+
     // Update editor_jobs if job_id was provided
     if (body.job_id) {
       await supabase.from('editor_jobs').update({
@@ -342,12 +348,6 @@ Make this food photo look like it was shot by a professional food photographer:
       created_by: user.id,
       compliance_status: 'approved',
     });
-
-    const finalImageVariants = {
-      square_1_1: polishedUrl,
-      portrait_4_5: polishedUrl,
-      vertical_9_16: polishedUrl,
-    };
 
     return new Response(JSON.stringify({
       success: true,
