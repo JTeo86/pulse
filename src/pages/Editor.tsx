@@ -185,18 +185,12 @@ export default function EditorPage() {
       const { data, error: fnError } = await supabase.functions.invoke(fnName, { body: payload });
       if (fnError) throw fnError;
 
-      // Fetch updated job
-      const { data: updatedJob } = await supabase
-        .from('editor_jobs')
-        .select('final_image_url, final_image_variants, final_video_url')
-        .eq('id', currentJobId!)
-        .single();
-
-      if (updatedJob?.final_image_url) {
+      // Use the direct response from the edge function
+      if (data?.final_image_url) {
         setJobResult({
-          final_image_url: updatedJob.final_image_url,
-          final_image_variants: (updatedJob.final_image_variants as Record<string, string>) || {},
-          final_video_url: updatedJob.final_video_url || null,
+          final_image_url: data.final_image_url,
+          final_image_variants: (data.final_image_variants as Record<string, string>) || {},
+          final_video_url: data.final_video_url || null,
         });
       }
 
