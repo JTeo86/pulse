@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Upload, Camera, Wand2, Film, ChevronRight, Download, 
   CheckSquare, Square, AlertTriangle, Loader2, Star,
-  RotateCcw, Image as ImageIcon, Zap, Lock
+  RotateCcw, Image as ImageIcon, Zap, Lock, Info
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
@@ -33,6 +33,19 @@ const STYLE_PRESETS: { key: StylePreset; label: string; desc: string }[] = [
   { key: 'premium_editorial', label: 'Premium Editorial', desc: 'Dark, dramatic, high-end' },
 ];
 
+/** Convert a File to base64 string (without data: prefix) */
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function CreditBar({ used, total, label }: { used: number; total: number; label: string }) {
   const remaining = Math.max(0, total - used);
   const pct = Math.min(100, (used / total) * 100);
@@ -58,14 +71,11 @@ export default function EditorPage() {
   const { currentVenue, isAdmin } = useVenue();
   const { toast } = useToast();
   const phaseFlags = usePhaseFlags();
-  // Phase 1: video is always coming soon for users
   const videoEnabled = phaseFlags.video_enabled;
 
-  // Upload state
+  // Upload state — file stays local, no client-side storage upload
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -79,13 +89,16 @@ export default function EditorPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [jobResult, setJobResult] = useState<{
+    composed_url: string | null;
     final_image_url: string;
     final_image_variants: Record<string, string>;
     final_video_url: string | null;
+    gemini_used: boolean;
+    background_source: string;
   } | null>(null);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
 
-  // Credits state (mock for now, wire to DB later)
+  // Credits state
   const [usage] = useState({ pro_photo_used: 3, reel_used: 1 });
   const [limits] = useState({ monthly_pro_photo_credits: 50, monthly_reel_credits: 20 });
 
@@ -95,32 +108,12 @@ export default function EditorPage() {
       toast({ variant: 'destructive', title: 'Invalid file', description: 'Please upload an image file.' });
       return;
     }
-
+    // Store file locally — edge function handles storage upload via service role
     setUploadedFile(file);
     setUploadedPreview(URL.createObjectURL(file));
-    setUploading(true);
     setJobResult(null);
     setJobId(null);
     setFidelityConfirmed(false);
-
-    try {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `venues/${currentVenue.id}/editor/${crypto.randomUUID()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('venue-assets')
-        .upload(path, file, { upsert: false });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('venue-assets').getPublicUrl(path);
-      setUploadedUrl(urlData.publicUrl);
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Upload failed', description: err.message });
-      setUploadedPreview(null);
-      setUploadedFile(null);
-    } finally {
-      setUploading(false);
-    }
   }, [currentVenue, user, toast]);
 
   const onDropZone = (e: React.DragEvent) => {
@@ -136,8 +129,7 @@ export default function EditorPage() {
   };
 
   const handleGenerate = async () => {
-    if (!currentVenue || !user || !uploadedUrl) return;
-    // Hard gate: never allow reel/video in Phase 1
+    if (!currentVenue || !user || !uploadedFile) return;
     if (outputMode === 'reel' && !videoEnabled) {
       toast({ title: 'Coming in Phase 2', description: 'Video reels are not available yet.' });
       return;
@@ -153,10 +145,12 @@ export default function EditorPage() {
 
     setGenerating(true);
     try {
+      // Convert file to base64 for edge function (no client-side storage upload)
+      const base64 = await fileToBase64(uploadedFile);
+
       let currentJobId = jobId;
 
       if (outputMode === 'pro_photo' || !currentJobId) {
-        // Create a new editor_job record
         const { data: newJob, error: createError } = await supabase
           .from('editor_jobs')
           .insert({
@@ -166,7 +160,6 @@ export default function EditorPage() {
             mode: outputMode || 'pro_photo',
             realism_mode: realismMode,
             style_preset: stylePreset,
-            input_image_url: uploadedUrl,
           })
           .select('id')
           .single();
@@ -176,29 +169,37 @@ export default function EditorPage() {
         setJobId(currentJobId);
       }
 
-      // Call the appropriate edge function
       const fnName = outputMode === 'reel' ? 'editor-generate-reel' : 'editor-generate-pro-photo';
       const payload = outputMode === 'reel'
         ? { job_id: currentJobId, venue_id: currentVenue.id, hook_text: hookText, cinematic_mode: false }
-        : { job_id: currentJobId, venue_id: currentVenue.id, input_image_url: uploadedUrl, realism_mode: realismMode, style_preset: stylePreset };
+        : {
+            job_id: currentJobId,
+            venue_id: currentVenue.id,
+            sourceFileBase64: base64,
+            sourceFileName: uploadedFile.name,
+            realism_mode: realismMode,
+            style_preset: stylePreset,
+          };
 
       const { data, error: fnError } = await supabase.functions.invoke(fnName, { body: payload });
       if (fnError) throw fnError;
 
-      // Use the direct response from the edge function
       if (data?.final_image_url) {
         setJobResult({
+          composed_url: data.composed_url || null,
           final_image_url: data.final_image_url,
           final_image_variants: (data.final_image_variants as Record<string, string>) || {},
           final_video_url: data.final_video_url || null,
+          gemini_used: data.gemini_used || false,
+          background_source: data.background_source || 'unknown',
         });
       }
 
       toast({
         title: outputMode === 'reel' ? 'Reel queued' : 'Pro Photo generated',
         description: outputMode === 'reel'
-          ? 'Your reel is being prepared. Template renderer is active.'
-          : 'Your professional image is ready.',
+          ? 'Your reel is being prepared.'
+          : `Background: ${data?.background_source || 'studio'} ${data?.gemini_used ? '• AI replated' : ''}`,
       });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message });
@@ -221,7 +222,6 @@ export default function EditorPage() {
 
   const handleReset = () => {
     setUploadedFile(null);
-    setUploadedUrl(null);
     setUploadedPreview(null);
     setJobId(null);
     setJobResult(null);
@@ -230,8 +230,7 @@ export default function EditorPage() {
     setHookText('');
   };
 
-  // canGenerate: never allow reel in Phase 1
-  const canGenerate = uploadedUrl && !uploading && outputMode && !generating && (outputMode !== 'reel' || videoEnabled);
+  const canGenerate = uploadedFile && outputMode && !generating && (outputMode !== 'reel' || videoEnabled);
   const hasProPhoto = !!jobResult?.final_image_url;
 
   return (
@@ -299,11 +298,6 @@ export default function EditorPage() {
                     alt="Uploaded dish"
                     className="w-full aspect-square object-cover rounded-lg border border-border"
                   />
-                  {uploading && (
-                    <div className="absolute inset-0 rounded-lg bg-background/70 flex items-center justify-center">
-                      <Loader2 className="w-6 h-6 animate-spin text-accent" />
-                    </div>
-                  )}
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-card border border-border rounded-md px-2 py-1 text-xs font-medium"
@@ -335,7 +329,7 @@ export default function EditorPage() {
             </div>
 
             {/* Step 2: Output mode */}
-            <div className={cn('rounded-xl border bg-card p-5 space-y-4 transition-opacity', !uploadedUrl || uploading ? 'opacity-40 pointer-events-none' : '')}>
+            <div className={cn('rounded-xl border bg-card p-5 space-y-4 transition-opacity', !uploadedFile ? 'opacity-40 pointer-events-none' : '')}>
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">2</span>
                 <span className="font-medium text-sm">Choose Output</span>
@@ -356,11 +350,10 @@ export default function EditorPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">Professional replate</p>
                   </div>
                 </button>
-                {/* Reel card — Phase 1: coming soon; Phase 2: enabled */}
                 <button
                   onClick={() => {
                     if (!videoEnabled) {
-                      toast({ title: 'Coming in Phase 2', description: 'Video reels are a Phase 2 feature. Images and copy are live now!' });
+                      toast({ title: 'Coming in Phase 2', description: 'Video reels are a Phase 2 feature.' });
                       return;
                     }
                     if (hasProPhoto) setOutputMode('reel');
@@ -412,25 +405,20 @@ export default function EditorPage() {
                           key={m.key}
                           onClick={() => setRealismMode(m.key)}
                           className={cn(
-                            'p-2.5 rounded-lg border text-center transition-all',
+                            'p-2.5 rounded-lg border text-left transition-all',
                             realismMode === m.key
                               ? 'border-accent bg-accent/10'
                               : 'border-border hover:border-accent/30'
                           )}
                         >
-                          <p className="text-xs font-semibold">{m.label}</p>
+                          <p className="text-xs font-semibold flex items-center gap-1">
+                            {m.label}
+                            {m.warn && <AlertTriangle className="w-3 h-3 text-amber-500" />}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{m.desc}</p>
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {REALISM_MODES.find(m => m.key === realismMode)?.desc}
-                    </p>
-                    {realismMode === 'editorial' && (
-                      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-destructive/10 border border-destructive/20">
-                        <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
-                        <p className="text-xs text-destructive">Review to ensure the dish still represents reality.</p>
-                      </div>
-                    )}
                   </div>
 
                   {/* Style presets */}
@@ -442,7 +430,7 @@ export default function EditorPage() {
                           key={p.key}
                           onClick={() => setStylePreset(p.key)}
                           className={cn(
-                            'w-full flex items-center gap-3 p-2.5 rounded-lg border text-left transition-all',
+                            'w-full flex items-start gap-2.5 p-2.5 rounded-lg border text-left transition-all',
                             stylePreset === p.key
                               ? 'border-accent bg-accent/10'
                               : 'border-border hover:border-accent/30'
@@ -474,7 +462,6 @@ export default function EditorPage() {
                     <p className="text-xs text-muted-foreground">Short text overlay on the reel</p>
                   </div>
 
-                  {/* Reel type */}
                   <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground uppercase tracking-wider">Render Mode</Label>
                     <div className="p-3 rounded-lg border border-border bg-muted/20">
@@ -483,7 +470,7 @@ export default function EditorPage() {
                         <span className="text-xs font-semibold">Template Reel (5–8s)</span>
                         <Badge variant="secondary" className="text-[10px]">Active</Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">Ken Burns zoom/pan. No AI required. Fast and cost-efficient.</p>
+                      <p className="text-xs text-muted-foreground">Ken Burns zoom/pan. No AI required.</p>
                     </div>
                     <div className="p-3 rounded-lg border border-border/50 bg-muted/10 opacity-50">
                       <div className="flex items-center gap-2 mb-1">
@@ -541,7 +528,7 @@ export default function EditorPage() {
                   exit={{ opacity: 0 }}
                   className="space-y-4"
                 >
-                  {/* Side by side comparison */}
+                  {/* Side by side: Original vs Final */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Original</p>
@@ -553,8 +540,12 @@ export default function EditorPage() {
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Pro Photo</p>
-                        <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">AI</Badge>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                          {jobResult.gemini_used ? 'Final (Pro Replated)' : 'Pro Photo'}
+                        </p>
+                        <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">
+                          {jobResult.gemini_used ? 'AI Replated' : 'Composed'}
+                        </Badge>
                       </div>
                       <img
                         src={jobResult.final_image_url}
@@ -562,6 +553,43 @@ export default function EditorPage() {
                         className="w-full aspect-square object-cover rounded-lg border border-accent/20"
                       />
                     </div>
+                  </div>
+
+                  {/* Composed intermediate (if Gemini ran, show both) */}
+                  {jobResult.gemini_used && jobResult.composed_url && (
+                    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground font-medium">Composed (Background Applied)</p>
+                      </div>
+                      <img
+                        src={jobResult.composed_url}
+                        alt="Composed"
+                        className="w-full max-w-xs aspect-square object-cover rounded-lg border border-border"
+                      />
+                    </div>
+                  )}
+
+                  {/* Note if Gemini was skipped */}
+                  {!jobResult.gemini_used && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/30 border border-border">
+                      <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <p className="text-sm text-muted-foreground">
+                        Pro Replate (AI polish) was skipped. Configure Gemini in Platform Admin → Integrations for enhanced results.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Background source info */}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>
+                      Background: {
+                        jobResult.background_source === 'atmosphere' ? 'Venue Atmosphere Reference' :
+                        jobResult.background_source === 'ai_generated' ? 'AI Generated (Brand Identity)' :
+                        'Studio Default'
+                      }
+                    </span>
                   </div>
 
                   {/* Fidelity confirmation (admin only) */}
@@ -586,7 +614,6 @@ export default function EditorPage() {
                     </button>
                   )}
 
-                  {/* Low fidelity warning */}
                   {!fidelityConfirmed && realismMode === 'editorial' && isAdmin && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                       <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
@@ -639,7 +666,6 @@ export default function EditorPage() {
                         <div className="p-4 rounded-lg bg-muted/30 border border-border text-center">
                           <Film className="w-6 h-6 text-muted-foreground/40 mx-auto mb-2" />
                           <p className="text-sm text-muted-foreground">Reel queued. Template renderer will generate your 5–8s vertical video.</p>
-                          <p className="text-xs text-muted-foreground/60 mt-1">Connect a renderer in Platform Admin → Integrations to activate.</p>
                         </div>
                       )}
                     </div>
