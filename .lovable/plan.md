@@ -1,47 +1,46 @@
 
+## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
 
-## Problem
+### What's Happening
 
-The edge function `editor-generate-pro-photo` returns the generated image URL in its HTTP response body, but **two things go wrong**:
+The database constraint `copy_projects_module_check` currently only allows:
 
-1. **Edge function** never updates the `editor_jobs` row with the final image URL — it only inserts into `edited_assets`.
-2. **`Editor.tsx`** (lines 189-201) ignores the direct response from `supabase.functions.invoke()` and instead queries `editor_jobs` for `final_image_url`, which is always `null`.
-
-The `VisualEditorCanvas.tsx` (TheEditor page) handles this correctly — it reads `data.final_image_url` directly from the response. The bug is only in `Editor.tsx`.
-
-## Fix (2 changes)
-
-### 1. Edge function: update `editor_jobs` with the result
-
-In `supabase/functions/editor-generate-pro-photo/index.ts`, after saving to `edited_assets` (around line 334), add an update to `editor_jobs` if a `job_id` was provided in the request body:
-
-```typescript
-// Update editor_jobs if job_id was provided
-if (body.job_id) {
-  await supabase.from('editor_jobs').update({
-    status: 'done',
-    final_image_url: polishedUrl,
-    final_image_variants: finalImageVariants,
-  }).eq('id', body.job_id);
-}
+```
+'email', 'blog', 'ad_copy', 'sms_push'
 ```
 
-### 2. Frontend: use the direct response instead of re-querying
+This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
 
-In `src/pages/Editor.tsx` (lines 185-208), use the `data` returned from `supabase.functions.invoke()` directly to set the job result, instead of re-querying the `editor_jobs` table:
+There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
 
-```typescript
-const { data, error: fnError } = await supabase.functions.invoke(fnName, { body: payload });
-if (fnError) throw fnError;
+### Fix
 
-if (data?.final_image_url) {
-  setJobResult({
-    final_image_url: data.final_image_url,
-    final_image_variants: data.final_image_variants || {},
-    final_video_url: data.final_video_url || null,
-  });
-}
+One new migration file will be created:
+
+```sql
+-- Drop the old constraint
+ALTER TABLE public.copy_projects
+  DROP CONSTRAINT copy_projects_module_check;
+
+-- Recreate it with 'campaign' included
+ALTER TABLE public.copy_projects
+  ADD CONSTRAINT copy_projects_module_check
+  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
+
+-- Notify PostgREST to reload its schema cache immediately
+NOTIFY pgrst, 'reload schema';
 ```
 
-Remove the secondary `editor_jobs` SELECT query (lines 189-201) since it's redundant and returns stale data.
+The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
 
+### No Frontend Changes Needed
+
+The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
+
+### What Changes
+
+- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
+
+### Verification
+
+After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
