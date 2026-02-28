@@ -66,7 +66,7 @@ interface AppLayoutProps {
 const studioNavigation = [
   { name: 'AI Marketing Assistant', href: '/studio/events', icon: CalendarDays },
   { name: 'Campaign Engine', href: '/studio/content', icon: PenTool },
-  { name: 'Editor', href: '/editor', icon: Camera },
+  { name: 'Editor', href: '/studio/editor', icon: Camera },
 ];
 
 const analyticsNavigation = [

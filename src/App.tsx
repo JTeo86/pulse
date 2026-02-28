@@ -29,7 +29,7 @@ import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
 import EventsPlanner from "./pages/EventsPlanner";
-import EditorPage from "./pages/Editor";
+// EditorPage removed — /editor now redirects to /studio/editor
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import NotFound from "./pages/NotFound";
@@ -120,8 +120,8 @@ function AppRoutes() {
         <Route path="/admin/platform" element={<PlatformAdmin />} />
         <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
-        {/* Editor */}
-        <Route path="/editor" element={<EditorPage />} />
+        {/* Legacy editor redirect */}
+        <Route path="/editor" element={<Navigate to="/studio/editor" replace />} />
 
         {/* Legacy redirects */}
         <Route path="/dashboard" element={<Navigate to="/brand/overview" replace />} />

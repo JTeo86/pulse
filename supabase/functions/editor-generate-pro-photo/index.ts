@@ -5,8 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// ─── Helpers ──────────────────────────────────────────────
-
 function jsonResp(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -47,20 +45,28 @@ async function uploadResultBuffer(
   buffer: ArrayBuffer,
   suffix: string,
   contentType = 'image/jpeg',
-): Promise<string> {
+): Promise<{ publicUrl: string; storagePath: string }> {
   const ext = contentType === 'image/png' ? 'png' : 'jpg';
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
   await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
-  return supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
+  const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
+  return { publicUrl, storagePath: path };
 }
 
-// ─── Main Handler ─────────────────────────────────────────
+/** Check if a URL is actually reachable (returns 2xx) */
+async function isUrlAccessible(url: string): Promise<boolean> {
+  try {
+    const resp = await fetch(url, { method: 'HEAD' });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    // ── Auth ──
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) return jsonResp({ error: 'Unauthorized' }, 401);
 
@@ -76,7 +82,6 @@ Deno.serve(async (req) => {
     const { venue_id, input_image_url, sourceFileBase64, sourceFileName, style_preset, realism_mode, job_id } = body;
     if (!venue_id) return jsonResp({ error: 'venue_id required' }, 400);
 
-    // ── Venue membership ──
     const { data: membership } = await supabase
       .from('venue_members').select('id').eq('venue_id', venue_id).eq('user_id', user.id).single();
     if (!membership) return jsonResp({ error: 'Access denied' }, 403);
@@ -93,11 +98,10 @@ Deno.serve(async (req) => {
     );
 
     // ══════════════════════════════════════════════════════
-    // STEP 1 — Gather style context (atmosphere + plating + brand)
+    // STEP 1 — Gather style context
     // ══════════════════════════════════════════════════════
     console.log('[PRO-PHOTO] Step 1: Gathering style context…');
 
-    // Atmosphere references
     const { data: atmosphereAssets } = await supabase
       .from('style_reference_assets')
       .select('id, storage_path, pinned')
@@ -108,7 +112,6 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(5);
 
-    // Plating references
     const { data: platingAssets } = await supabase
       .from('style_reference_assets')
       .select('id, storage_path, pinned, analysis:style_analysis(analysis_json)')
@@ -119,14 +122,12 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(3);
 
-    // Brand kit
     const { data: brandKit } = await supabase
       .from('brand_kits')
       .select('preset, rules_text')
       .eq('venue_id', venue_id)
       .single();
 
-    // Venue info
     const { data: venue } = await supabase
       .from('venues')
       .select('name, city')
@@ -145,12 +146,8 @@ Deno.serve(async (req) => {
     let backgroundPrompt: string | null = null;
     let backgroundSource = 'none';
 
-    if (atmosphereAssets && atmosphereAssets.length > 0) {
-      const best = atmosphereAssets[0];
-      backgroundImageUrl = supabase.storage.from('venue_atmosphere').getPublicUrl(best.storage_path).data.publicUrl;
-      backgroundSource = 'atmosphere';
-      console.log(`[PRO-PHOTO] Step 2: Background mode = atmosphere_ref (asset ${best.id}, pinned: ${best.pinned})`);
-    } else {
+    // Helper to build AI background prompt from brand identity
+    const buildBrandBackgroundPrompt = () => {
       const toneMap: Record<string, string> = {
         casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
         midrange: 'elegant mid-range restaurant with linen tablecloths, warm overhead lighting, and tasteful decor',
@@ -160,10 +157,39 @@ Deno.serve(async (req) => {
         family: 'bright family-friendly restaurant with clean tables and cheerful warm lighting',
       };
       const tone = toneMap[brandPreset] || toneMap.casual;
+      return `Realistic photo of a ${tone}. ${venueCity ? `Located in ${venueCity}.` : ''} Shot on a DSLR camera with shallow depth of field, natural lighting, soft bokeh. The table is set for food photography. Photorealistic, no fantasy, no illustration, no text, no watermarks. ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}`.trim();
+    };
 
-      backgroundPrompt = `Realistic photo of a ${tone}. ${venueCity ? `Located in ${venueCity}.` : ''} Shot on a DSLR camera with shallow depth of field, natural lighting, soft bokeh. The table is set for food photography. Photorealistic, no fantasy, no illustration, no text, no watermarks. ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}`.trim();
-      backgroundSource = 'ai_generated';
-      console.log('[PRO-PHOTO] Step 2: Background mode = ai_prompt');
+    if (atmosphereAssets && atmosphereAssets.length > 0) {
+      // FIX: Use correct bucket "venue-assets" (not "venue_atmosphere")
+      // Atmosphere assets are stored in venue-assets bucket under their storage_path
+      const best = atmosphereAssets[0];
+      const candidateUrl = supabase.storage.from('venue-assets').getPublicUrl(best.storage_path).data.publicUrl;
+
+      // Validate the URL is accessible before using it
+      const accessible = await isUrlAccessible(candidateUrl);
+      if (accessible) {
+        backgroundImageUrl = candidateUrl;
+        backgroundSource = 'atmosphere_ref';
+        console.log(`[PRO-PHOTO] Step 2: Background mode = atmosphere_ref (asset ${best.id}, pinned: ${best.pinned})`);
+      } else {
+        // Try venue_atmosphere bucket as fallback
+        const fallbackUrl = supabase.storage.from('venue_atmosphere').getPublicUrl(best.storage_path).data.publicUrl;
+        const fallbackOk = await isUrlAccessible(fallbackUrl);
+        if (fallbackOk) {
+          backgroundImageUrl = fallbackUrl;
+          backgroundSource = 'atmosphere_ref';
+          console.log(`[PRO-PHOTO] Step 2: Background from venue_atmosphere bucket (asset ${best.id})`);
+        } else {
+          console.warn(`[PRO-PHOTO] Step 2: Atmosphere ref URL not accessible, falling back to AI prompt`);
+          backgroundPrompt = buildBrandBackgroundPrompt();
+          backgroundSource = 'ai_prompt';
+        }
+      }
+    } else {
+      backgroundPrompt = buildBrandBackgroundPrompt();
+      backgroundSource = 'ai_prompt';
+      console.log('[PRO-PHOTO] Step 2: Background mode = ai_prompt (no atmosphere refs)');
     }
 
     // ══════════════════════════════════════════════════════
@@ -194,23 +220,20 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════════
-    // STEP 4 — PhotoRoom v2 Edit API (background + lighting + shadow)
-    //          Forces JPEG output to ensure flattened (no alpha)
+    // STEP 4 — PhotoRoom v2 Edit API (forces JPEG = flattened)
     // ══════════════════════════════════════════════════════
     console.log('[PRO-PHOTO] Step 4: Calling PhotoRoom v2 Edit API…');
 
     const params = new URLSearchParams();
     params.set('lighting.mode', 'ai.auto');
     params.set('shadow.mode', 'ai.soft');
-    // Force JPEG output so the result is always flattened (no transparency)
-    params.set('outputFormat', 'jpg');
+    params.set('outputFormat', 'jpg'); // Always flatten — no transparency
 
     if (backgroundImageUrl) {
       params.set('background.imageUrl', backgroundImageUrl);
     } else if (backgroundPrompt) {
       params.set('background.prompt', backgroundPrompt);
     } else {
-      // Fallback: solid warm-white background
       params.set('background.color', 'F5F5F0');
     }
 
@@ -233,14 +256,15 @@ Deno.serve(async (req) => {
     }
 
     const composedBuffer = await editResp.arrayBuffer();
-    const composedUrl = await uploadResultBuffer(supabase, venue_id, composedBuffer, 'composed', 'image/jpeg');
+    const { publicUrl: composedUrl, storagePath: composedStoragePath } = await uploadResultBuffer(supabase, venue_id, composedBuffer, 'composed', 'image/jpeg');
     console.log('[PRO-PHOTO] Step 4 DONE — composed_url:', composedUrl);
 
     // ══════════════════════════════════════════════════════
-    // STEP 5 — Gemini / NanoBanana replating (optional)
+    // STEP 5 — Gemini replating (optional)
     // ══════════════════════════════════════════════════════
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     let finalUrl = composedUrl;
+    let finalStoragePath = composedStoragePath;
     let geminiUsed = false;
 
     if (lovableApiKey) {
@@ -287,20 +311,24 @@ STRICT RULES:
           const generatedImage = geminiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
           if (generatedImage && generatedImage.startsWith('data:image')) {
+            // Convert to flattened JPEG regardless of source format
             const base64Data = generatedImage.split(',')[1];
             const imgBin = atob(base64Data);
             const imgBytes = new Uint8Array(imgBin.length);
             for (let i = 0; i < imgBin.length; i++) imgBytes[i] = imgBin.charCodeAt(i);
 
-            finalUrl = await uploadResultBuffer(supabase, venue_id, imgBytes.buffer, 'replated', 'image/png');
+            const { publicUrl: replatedUrl, storagePath: replatedPath } = await uploadResultBuffer(
+              supabase, venue_id, imgBytes.buffer, 'replated', 'image/jpeg'
+            );
+            finalUrl = replatedUrl;
+            finalStoragePath = replatedPath;
             geminiUsed = true;
             console.log('[PRO-PHOTO] Step 5 DONE — Gemini replating applied, final_url:', finalUrl);
           } else {
             console.warn('[PRO-PHOTO] Gemini returned no image data, using composed result');
           }
         } else {
-          const status = geminiResp.status;
-          console.warn(`[PRO-PHOTO] Gemini failed (${status}), using composed result`);
+          console.warn(`[PRO-PHOTO] Gemini failed (${geminiResp.status}), using composed result`);
         }
       } catch (geminiErr) {
         console.warn('[PRO-PHOTO] Gemini replating error (non-fatal):', geminiErr);
@@ -310,7 +338,7 @@ STRICT RULES:
     }
 
     // ══════════════════════════════════════════════════════
-    // STEP 6 — Save results & respond
+    // STEP 6 — Save results
     // ══════════════════════════════════════════════════════
     const finalImageVariants = {
       square_1_1: finalUrl,
@@ -348,7 +376,16 @@ STRICT RULES:
       compliance_status: 'approved',
     });
 
-    console.log(`[PRO-PHOTO] COMPLETE — cutout_url: (n/a, composed directly), composed_url: ${composedUrl}, final_url: ${finalUrl}, gemini_used: ${geminiUsed}, background: ${backgroundSource}`);
+    // ── NEW: Insert into uploads so it appears in Content Library ──
+    await supabase.from('uploads').insert({
+      venue_id,
+      storage_path: finalStoragePath,
+      uploaded_by: user.id,
+      status: 'completed',
+      notes: `Pro Photo output (${backgroundSource}${geminiUsed ? ' + AI replated' : ''})`,
+    });
+
+    console.log(`[PRO-PHOTO] COMPLETE — composed_url: ${composedUrl}, final_url: ${finalUrl}, gemini_used: ${geminiUsed}, background: ${backgroundSource}`);
 
     return jsonResp({
       success: true,
