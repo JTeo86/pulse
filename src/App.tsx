@@ -29,7 +29,7 @@ import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
 import EventsPlanner from "./pages/EventsPlanner";
-import EditorPage from "./pages/Editor";
+// EditorPage removed — /editor now redirects to /studio/editor
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import NotFound from "./pages/NotFound";
