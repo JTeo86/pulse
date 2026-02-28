@@ -120,8 +120,8 @@ function AppRoutes() {
         <Route path="/admin/platform" element={<PlatformAdmin />} />
         <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
-        {/* Editor */}
-        <Route path="/editor" element={<EditorPage />} />
+        {/* Legacy editor redirect */}
+        <Route path="/editor" element={<Navigate to="/studio/editor" replace />} />
 
         {/* Legacy redirects */}
         <Route path="/dashboard" element={<Navigate to="/brand/overview" replace />} />
