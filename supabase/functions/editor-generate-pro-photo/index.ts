@@ -41,15 +41,16 @@ async function resolveSourceImage(
   throw new Error('input_image_url or sourceFileBase64 required');
 }
 
-async function uploadResultBlob(
+async function uploadResultBuffer(
   supabase: any,
   venueId: string,
-  blob: Blob,
+  buffer: ArrayBuffer,
   suffix: string,
+  contentType = 'image/jpeg',
 ): Promise<string> {
-  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.png`;
-  const buffer = await blob.arrayBuffer();
-  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType: 'image/png' });
+  const ext = contentType === 'image/png' ? 'png' : 'jpg';
+  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
+  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
   return supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
 }
 
@@ -86,7 +87,7 @@ Deno.serve(async (req) => {
     // ══════════════════════════════════════════════════════
     // STEP 0 — Resolve source image
     // ══════════════════════════════════════════════════════
-    console.log('Step 0: Resolving source image…');
+    console.log('[PRO-PHOTO] Step 0: Resolving source image…');
     const { blob: sourceBlob, publicUrl: resolvedSourceUrl } = await resolveSourceImage(
       supabase, venue_id, input_image_url, sourceFileBase64, sourceFileName,
     );
@@ -94,7 +95,7 @@ Deno.serve(async (req) => {
     // ══════════════════════════════════════════════════════
     // STEP 1 — Gather style context (atmosphere + plating + brand)
     // ══════════════════════════════════════════════════════
-    console.log('Step 1: Gathering style context…');
+    console.log('[PRO-PHOTO] Step 1: Gathering style context…');
 
     // Atmosphere references
     const { data: atmosphereAssets } = await supabase
@@ -140,20 +141,16 @@ Deno.serve(async (req) => {
     // ══════════════════════════════════════════════════════
     // STEP 2 — Determine background strategy
     // ══════════════════════════════════════════════════════
-    console.log('Step 2: Determining background strategy…');
-
     let backgroundImageUrl: string | null = null;
     let backgroundPrompt: string | null = null;
     let backgroundSource = 'none';
 
     if (atmosphereAssets && atmosphereAssets.length > 0) {
-      // Use best atmosphere reference as background image
       const best = atmosphereAssets[0];
       backgroundImageUrl = supabase.storage.from('venue_atmosphere').getPublicUrl(best.storage_path).data.publicUrl;
       backgroundSource = 'atmosphere';
-      console.log(`Using atmosphere asset ${best.id} (pinned: ${best.pinned})`);
+      console.log(`[PRO-PHOTO] Step 2: Background mode = atmosphere_ref (asset ${best.id}, pinned: ${best.pinned})`);
     } else {
-      // Generate AI background prompt from brand identity
       const toneMap: Record<string, string> = {
         casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
         midrange: 'elegant mid-range restaurant with linen tablecloths, warm overhead lighting, and tasteful decor',
@@ -166,7 +163,7 @@ Deno.serve(async (req) => {
 
       backgroundPrompt = `Realistic photo of a ${tone}. ${venueCity ? `Located in ${venueCity}.` : ''} Shot on a DSLR camera with shallow depth of field, natural lighting, soft bokeh. The table is set for food photography. Photorealistic, no fantasy, no illustration, no text, no watermarks. ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}`.trim();
       backgroundSource = 'ai_generated';
-      console.log('Using AI-generated background prompt');
+      console.log('[PRO-PHOTO] Step 2: Background mode = ai_prompt');
     }
 
     // ══════════════════════════════════════════════════════
@@ -186,9 +183,8 @@ Deno.serve(async (req) => {
       if (summaries.length > 0) {
         platingHints = `Plating style: ${summaries.join('; ')}. Enhance symmetry, garnish balance, and edge cleanliness. Do not change ingredients, portion size, or cuisine type.`;
       }
-      console.log(`Plating guidance from ${platingAssets.length} references`);
+      console.log(`[PRO-PHOTO] Step 3: Plating guidance from ${platingAssets.length} references`);
     } else {
-      // Derive from preset
       const presetPlating: Record<string, string> = {
         casual: 'Clean, approachable plating with natural garnish',
         premium: 'Refined plating with precise placement and elegant garnish',
@@ -199,18 +195,22 @@ Deno.serve(async (req) => {
 
     // ══════════════════════════════════════════════════════
     // STEP 4 — PhotoRoom v2 Edit API (background + lighting + shadow)
+    //          Forces JPEG output to ensure flattened (no alpha)
     // ══════════════════════════════════════════════════════
-    console.log('Step 4: Calling PhotoRoom v2 Edit API…');
+    console.log('[PRO-PHOTO] Step 4: Calling PhotoRoom v2 Edit API…');
 
     const params = new URLSearchParams();
     params.set('lighting.mode', 'ai.auto');
     params.set('shadow.mode', 'ai.soft');
+    // Force JPEG output so the result is always flattened (no transparency)
+    params.set('outputFormat', 'jpg');
 
     if (backgroundImageUrl) {
       params.set('background.imageUrl', backgroundImageUrl);
     } else if (backgroundPrompt) {
       params.set('background.prompt', backgroundPrompt);
     } else {
+      // Fallback: solid warm-white background
       params.set('background.color', 'F5F5F0');
     }
 
@@ -228,13 +228,13 @@ Deno.serve(async (req) => {
 
     if (!editResp.ok) {
       const errText = await editResp.text();
-      console.error('PhotoRoom v2 error:', editResp.status, errText);
+      console.error('[PRO-PHOTO] PhotoRoom v2 error:', editResp.status, errText);
       throw new Error(`PhotoRoom processing failed (${editResp.status})`);
     }
 
-    const composedBlob = await editResp.blob();
-    const composedUrl = await uploadResultBlob(supabase, venue_id, composedBlob, 'composed');
-    console.log('Composed image saved:', composedUrl);
+    const composedBuffer = await editResp.arrayBuffer();
+    const composedUrl = await uploadResultBuffer(supabase, venue_id, composedBuffer, 'composed', 'image/jpeg');
+    console.log('[PRO-PHOTO] Step 4 DONE — composed_url:', composedUrl);
 
     // ══════════════════════════════════════════════════════
     // STEP 5 — Gemini / NanoBanana replating (optional)
@@ -245,7 +245,7 @@ Deno.serve(async (req) => {
 
     if (lovableApiKey) {
       try {
-        console.log('Step 5: Gemini replating…');
+        console.log('[PRO-PHOTO] Step 5: Attempting Gemini replating…');
 
         const prompt = `You are a professional food photographer doing final retouching.
 Brand preset: ${brandPreset}
@@ -292,27 +292,25 @@ STRICT RULES:
             const imgBytes = new Uint8Array(imgBin.length);
             for (let i = 0; i < imgBin.length; i++) imgBytes[i] = imgBin.charCodeAt(i);
 
-            const polishedPath = `venues/${venue_id}/edited/${crypto.randomUUID()}_replated.png`;
-            await supabase.storage.from('venue-assets').upload(polishedPath, imgBytes, { contentType: 'image/png' });
-            finalUrl = supabase.storage.from('venue-assets').getPublicUrl(polishedPath).data.publicUrl;
+            finalUrl = await uploadResultBuffer(supabase, venue_id, imgBytes.buffer, 'replated', 'image/png');
             geminiUsed = true;
-            console.log('Gemini replating applied');
+            console.log('[PRO-PHOTO] Step 5 DONE — Gemini replating applied, final_url:', finalUrl);
+          } else {
+            console.warn('[PRO-PHOTO] Gemini returned no image data, using composed result');
           }
         } else {
           const status = geminiResp.status;
-          if (status === 429) console.warn('Gemini rate limited, using composed result');
-          else if (status === 402) console.warn('Gemini credits exhausted, using composed result');
-          else console.warn(`Gemini failed (${status}), using composed result`);
+          console.warn(`[PRO-PHOTO] Gemini failed (${status}), using composed result`);
         }
       } catch (geminiErr) {
-        console.warn('Gemini replating error (non-fatal):', geminiErr);
+        console.warn('[PRO-PHOTO] Gemini replating error (non-fatal):', geminiErr);
       }
     } else {
-      console.log('Step 5: Skipped (no API key)');
+      console.log('[PRO-PHOTO] Step 5: Skipped (no LOVABLE_API_KEY)');
     }
 
     // ══════════════════════════════════════════════════════
-    // STEP 6 — Save results
+    // STEP 6 — Save results & respond
     // ══════════════════════════════════════════════════════
     const finalImageVariants = {
       square_1_1: finalUrl,
@@ -320,13 +318,14 @@ STRICT RULES:
       vertical_9_16: finalUrl,
     };
 
-    // Update editor_jobs
+    // Update editor_jobs if job_id provided
     if (job_id) {
       await supabase.from('editor_jobs').update({
         status: 'done',
         final_image_url: finalUrl,
         final_image_variants: finalImageVariants,
         cutout_url: composedUrl,
+        replated_url: geminiUsed ? finalUrl : null,
       }).eq('id', job_id);
     }
 
@@ -335,7 +334,7 @@ STRICT RULES:
       venue_id,
       source_url: resolvedSourceUrl,
       output_urls: [finalUrl, composedUrl].filter(Boolean),
-      output_types: ['image/png'],
+      output_types: ['image/jpeg'],
       engine_version: 'v2',
       settings_json: {
         style_preset: brandPreset,
@@ -349,6 +348,8 @@ STRICT RULES:
       compliance_status: 'approved',
     });
 
+    console.log(`[PRO-PHOTO] COMPLETE — cutout_url: (n/a, composed directly), composed_url: ${composedUrl}, final_url: ${finalUrl}, gemini_used: ${geminiUsed}, background: ${backgroundSource}`);
+
     return jsonResp({
       success: true,
       composed_url: composedUrl,
@@ -358,7 +359,7 @@ STRICT RULES:
       gemini_used: geminiUsed,
     });
   } catch (err: unknown) {
-    console.error('editor-generate-pro-photo error:', err);
+    console.error('[PRO-PHOTO] ERROR:', err);
     const message = err instanceof Error ? err.message : 'Internal server error';
     return jsonResp({ error: message }, 500);
   }

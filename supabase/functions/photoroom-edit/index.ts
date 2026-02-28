@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     const body = await req.json() as EditRequest;
     const { sourceUrl, sourceFileBase64, sourceFileName, operation, backgroundUrl, backgroundColor, venueId } = body;
 
-    console.log(`Processing ${operation} for venue ${venueId}`);
+    console.log(`[PHOTOROOM-EDIT] Processing ${operation} for venue ${venueId}`);
 
     // Verify venue access
     const { data: membership } = await supabase
@@ -76,9 +76,14 @@ Deno.serve(async (req) => {
     // ── Use PhotoRoom v2 Edit API ──
     const params = new URLSearchParams();
 
+    // Force JPEG for replace-background and enhance to prevent transparent outputs
+    const useJpeg = operation !== 'remove-background';
+    if (useJpeg) {
+      params.set('outputFormat', 'jpg');
+    }
+
     if (operation === 'remove-background') {
-      // Remove bg → transparent (no background params)
-      // Use v2 edit with no background specified = transparent
+      // Remove bg → transparent (PNG, no background params)
     } else if (operation === 'replace-background') {
       params.set('lighting.mode', 'ai.auto');
       params.set('shadow.mode', 'ai.soft');
@@ -111,19 +116,20 @@ Deno.serve(async (req) => {
 
     if (!photoRoomResponse.ok) {
       const errorText = await photoRoomResponse.text();
-      console.error('PhotoRoom v2 error:', errorText);
+      console.error('[PHOTOROOM-EDIT] v2 error:', errorText);
       return jsonResp({ error: 'PhotoRoom processing failed', details: errorText }, 500);
     }
 
-    const processedBlob = await photoRoomResponse.blob();
-    const processedBuffer = await processedBlob.arrayBuffer();
+    const processedBuffer = await photoRoomResponse.arrayBuffer();
+    const outputContentType = useJpeg ? 'image/jpeg' : 'image/png';
+    const outputExt = useJpeg ? 'jpg' : 'png';
 
-    const fileName = `${crypto.randomUUID()}.png`;
+    const fileName = `${crypto.randomUUID()}.${outputExt}`;
     const storagePath = `venues/${venueId}/edited/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('venue-assets')
-      .upload(storagePath, processedBuffer, { contentType: 'image/png', upsert: false });
+      .upload(storagePath, processedBuffer, { contentType: outputContentType, upsert: false });
 
     if (uploadError) throw new Error('Failed to save processed image');
 
@@ -134,17 +140,17 @@ Deno.serve(async (req) => {
       venue_id: venueId,
       source_url: resolvedSourceUrl,
       output_urls: [resultUrl],
-      output_types: ['image/png'],
+      output_types: [outputContentType],
       engine_version: 'v1',
       settings_json: { operation, backgroundUrl, backgroundColor },
       created_by: user.id,
       compliance_status: 'approved',
     });
 
-    console.log(`Successfully processed image: ${resultUrl}`);
+    console.log(`[PHOTOROOM-EDIT] Successfully processed image: ${resultUrl}`);
     return jsonResp({ success: true, resultUrl, operation, sourceUrl: resolvedSourceUrl });
   } catch (error: unknown) {
-    console.error('Error processing image:', error);
+    console.error('[PHOTOROOM-EDIT] Error:', error);
     const message = error instanceof Error ? error.message : 'Processing failed';
     return jsonResp({ error: message }, 500);
   }
