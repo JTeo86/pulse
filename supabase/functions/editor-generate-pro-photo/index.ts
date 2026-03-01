@@ -260,8 +260,13 @@ Deno.serve(async (req) => {
     console.log('[PRO-PHOTO] Step 4 DONE — composed_url:', composedUrl);
 
     // ══════════════════════════════════════════════════════
-    // STEP 5 — Gemini replating (optional)
+    // STEP 5 — Gemini dish-only retouch + recomposite
     // ══════════════════════════════════════════════════════
+    // Strategy: Send the ORIGINAL source image to Gemini (not the composed one).
+    // Gemini retouches the dish/food only. Then we run PhotoRoom AGAIN on
+    // Gemini's output with the SAME background params, so the background
+    // is always controlled by PhotoRoom — never by Gemini.
+    // This permanently eliminates "dish on black" issues.
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     let finalUrl = composedUrl;
     let finalStoragePath = composedStoragePath;
@@ -269,12 +274,11 @@ Deno.serve(async (req) => {
 
     if (lovableApiKey) {
       try {
-        console.log('[PRO-PHOTO] Step 5: Attempting Gemini retouch on composed image (flattened JPG)…');
-        console.log('[PRO-PHOTO] Gemini input = composed_url:', composedUrl);
+        console.log('[PRO-PHOTO] Step 5: Gemini dish-only retouch on ORIGINAL source (not composed)…');
+        console.log('[PRO-PHOTO] Gemini input = resolvedSourceUrl:', resolvedSourceUrl);
 
-        // Mode-based lighting intensity
         const modeMap: Record<string, string> = {
-          safe: 'Minimal lighting correction. Preserve the original tone and exposure as closely as possible.',
+          safe: 'Minimal lighting correction. Preserve original tone and exposure as closely as possible.',
           enhanced: 'Professional lighting refinement. Strengthen micro-contrast subtly. Add subtle depth-of-field enhancement.',
           editorial: 'Slightly stronger mood lighting with enhanced highlight control. Cinematic tone grading. Still absolutely no structural changes.',
         };
@@ -282,9 +286,7 @@ Deno.serve(async (req) => {
 
         const prompt = `You are a professional food photography retouch specialist.
 
-Your task is to improve lighting, clarity, and realism while preserving the exact physical structure of the dish.
-
-This is a retouch task, NOT a redesign task.
+Retouch ONLY the dish, food, and plate area in this image. The background will be replaced separately — do not spend effort on it.
 
 Hard constraints (non-negotiable):
 - Do NOT add garnish.
@@ -300,7 +302,6 @@ Hard constraints (non-negotiable):
 - Do NOT add sauces or decorative elements.
 - Do NOT add text, watermarks, logos, or any overlays.
 - Do NOT make the image look artificial, illustrated, or AI-generated.
-- Keep the background exactly as-is.
 
 You must preserve:
 - Ingredient count
@@ -309,23 +310,21 @@ You must preserve:
 - Food structure
 - Garnish quantity and position
 
-Allowed improvements:
+Allowed improvements (dish/food area only):
 - Adjust lighting to look like professional DSLR food photography.
 - Improve white balance.
-- Improve natural shadows and highlights.
-- Enhance crispness and texture detail.
+- Improve natural shadows and highlights on the food.
+- Enhance crispness and texture detail of the food.
 - Clean minor plating imperfections without adding new elements.
 - Subtle color grading consistent with a real restaurant shoot.
 - Realistic depth-of-field enhancement.
 
 Mode: ${modeInstruction}
-
 Brand preset: ${brandPreset}
 ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}
 
 If unsure whether a change alters the dish identity, do NOT make the change.
-
-The final image must look like the same dish photographed professionally in the same venue environment.
+Return the full image including whatever background exists — we only use the dish pixels.
 
 Maximum realism. Zero hallucination. Zero new elements.`;
 
@@ -341,7 +340,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
               role: 'user',
               content: [
                 { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: composedUrl } },
+                { type: 'image_url', image_url: { url: resolvedSourceUrl } },
               ],
             }],
             modalities: ['image', 'text'],
@@ -353,20 +352,46 @@ Maximum realism. Zero hallucination. Zero new elements.`;
           const generatedImage = geminiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
           if (generatedImage && generatedImage.startsWith('data:image')) {
-            // Convert to flattened JPEG regardless of source format
+            console.log('[PRO-PHOTO] Step 5.5: Recompositing Gemini-retouched dish onto composed background via PhotoRoom…');
+
+            // Convert Gemini base64 output to blob
             const base64Data = generatedImage.split(',')[1];
             const imgBin = atob(base64Data);
             const imgBytes = new Uint8Array(imgBin.length);
             for (let i = 0; i < imgBin.length; i++) imgBytes[i] = imgBin.charCodeAt(i);
+            const geminiBlob = new Blob([imgBytes], { type: 'image/jpeg' });
 
-            const { publicUrl: replatedUrl, storagePath: replatedPath } = await uploadResultBuffer(
-              supabase, venue_id, imgBytes.buffer, 'replated', 'image/jpeg'
+            // Run PhotoRoom AGAIN on Gemini's retouched output with the SAME
+            // background params (backgroundImageUrl or backgroundPrompt).
+            // PhotoRoom will: remove Gemini's background → apply the venue background → flatten to JPG.
+            // Result: dish has Gemini's lighting improvements, background is 100% from PhotoRoom.
+            const recomposeForm = new FormData();
+            recomposeForm.append('imageFile', geminiBlob, 'retouched.jpg');
+
+            const recomposeResp = await fetch(
+              `https://image-api.photoroom.com/v2/edit?${params.toString()}`,
+              {
+                method: 'POST',
+                headers: { 'x-api-key': photoRoomApiKey },
+                body: recomposeForm,
+              },
             );
-            finalUrl = replatedUrl;
-            finalStoragePath = replatedPath;
-            geminiUsed = true;
-            console.log('[PRO-PHOTO] Step 5 DONE — Gemini retouch applied (lighting/polish only), final_url:', finalUrl);
-            console.log('[PRO-PHOTO] Gemini input was composed_url (flattened JPG with background). No structural drift allowed.');
+
+            if (recomposeResp.ok) {
+              const recomposedBuffer = await recomposeResp.arrayBuffer();
+              const { publicUrl: recomposedUrl, storagePath: recomposedPath } = await uploadResultBuffer(
+                supabase, venue_id, recomposedBuffer, 'final', 'image/jpeg',
+              );
+              finalUrl = recomposedUrl;
+              finalStoragePath = recomposedPath;
+              geminiUsed = true;
+              console.log('[PRO-PHOTO] Step 5.5 DONE — Recomposed (dish from Gemini + background from PhotoRoom)');
+              console.log('[PRO-PHOTO] final_url:', finalUrl);
+            } else {
+              const errText = await recomposeResp.text();
+              console.warn(`[PRO-PHOTO] Recompose PhotoRoom call failed (${recomposeResp.status}): ${errText}`);
+              console.warn('[PRO-PHOTO] Falling back to composed_url as final');
+            }
           } else {
             console.warn('[PRO-PHOTO] Gemini returned no image data, using composed result');
           }
@@ -374,7 +399,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
           console.warn(`[PRO-PHOTO] Gemini failed (${geminiResp.status}), using composed result`);
         }
       } catch (geminiErr) {
-        console.warn('[PRO-PHOTO] Gemini replating error (non-fatal):', geminiErr);
+        console.warn('[PRO-PHOTO] Gemini error (non-fatal):', geminiErr);
       }
     } else {
       console.log('[PRO-PHOTO] Step 5: Skipped (no LOVABLE_API_KEY)');
