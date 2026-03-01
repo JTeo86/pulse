@@ -269,23 +269,65 @@ Deno.serve(async (req) => {
 
     if (lovableApiKey) {
       try {
-        console.log('[PRO-PHOTO] Step 5: Attempting Gemini replating…');
+        console.log('[PRO-PHOTO] Step 5: Attempting Gemini retouch on composed image (flattened JPG)…');
+        console.log('[PRO-PHOTO] Gemini input = composed_url:', composedUrl);
 
-        const prompt = `You are a professional food photographer doing final retouching.
+        // Mode-based lighting intensity
+        const modeMap: Record<string, string> = {
+          safe: 'Minimal lighting correction. Preserve the original tone and exposure as closely as possible.',
+          enhanced: 'Professional lighting refinement. Strengthen micro-contrast subtly. Add subtle depth-of-field enhancement.',
+          editorial: 'Slightly stronger mood lighting with enhanced highlight control. Cinematic tone grading. Still absolutely no structural changes.',
+        };
+        const modeInstruction = modeMap[realism_mode] || modeMap.safe;
+
+        const prompt = `You are a professional food photography retouch specialist.
+
+Your task is to improve lighting, clarity, and realism while preserving the exact physical structure of the dish.
+
+This is a retouch task, NOT a redesign task.
+
+Hard constraints (non-negotiable):
+- Do NOT add garnish.
+- Do NOT remove garnish.
+- Do NOT add ingredients.
+- Do NOT remove ingredients.
+- Do NOT change portion size.
+- Do NOT change plate shape.
+- Do NOT change tableware.
+- Do NOT introduce new props.
+- Do NOT alter cuisine identity.
+- Do NOT reposition food items.
+- Do NOT add sauces or decorative elements.
+- Do NOT add text, watermarks, logos, or any overlays.
+- Do NOT make the image look artificial, illustrated, or AI-generated.
+- Keep the background exactly as-is.
+
+You must preserve:
+- Ingredient count
+- Ingredient placement
+- Plate geometry
+- Food structure
+- Garnish quantity and position
+
+Allowed improvements:
+- Adjust lighting to look like professional DSLR food photography.
+- Improve white balance.
+- Improve natural shadows and highlights.
+- Enhance crispness and texture detail.
+- Clean minor plating imperfections without adding new elements.
+- Subtle color grading consistent with a real restaurant shoot.
+- Realistic depth-of-field enhancement.
+
+Mode: ${modeInstruction}
+
 Brand preset: ${brandPreset}
-${brandRules ? `Brand rules: ${brandRules.substring(0, 300)}` : ''}
-${platingHints}
+${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}
 
-STRICT RULES:
-- This is the SAME dish — do NOT change ingredients, cuisine, or portion size
-- Only subtle improvements: symmetry, garnish balance, edge cleanliness, sauce control
-- Enhance lighting to be soft, diffused, and appetizing
-- Boost food colors to look fresh and vibrant without looking artificial
-- Ensure realistic shadows and depth of field
-- The result must look like a real DSLR photo taken by a professional food photographer
-- Do NOT add text, watermarks, logos, or any overlays
-- Do NOT make the image look artificial, illustrated, or AI-generated
-- Keep the background exactly as-is`;
+If unsure whether a change alters the dish identity, do NOT make the change.
+
+The final image must look like the same dish photographed professionally in the same venue environment.
+
+Maximum realism. Zero hallucination. Zero new elements.`;
 
         const geminiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',
