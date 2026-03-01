@@ -46,14 +46,12 @@ async function uploadResultBuffer(
   suffix: string,
   contentType = 'image/jpeg',
 ): Promise<{ publicUrl: string; storagePath: string }> {
-  const ext = contentType === 'image/png' ? 'png' : 'jpg';
-  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
-  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
+  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.jpg`;
+  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType: 'image/jpeg' });
   const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
   return { publicUrl, storagePath: path };
 }
 
-/** Check if a URL is actually reachable (returns 2xx) */
 async function isUrlAccessible(url: string): Promise<boolean> {
   try {
     const resp = await fetch(url, { method: 'HEAD' });
@@ -139,6 +137,8 @@ Deno.serve(async (req) => {
     const venueName = venue?.name || 'restaurant';
     const venueCity = venue?.city || '';
 
+    console.log(`[PRO-PHOTO] DEBUG: atmosphere_refs_found_count=${atmosphereAssets?.length || 0}, plating_refs_count=${platingAssets?.length || 0}, brand_preset=${brandPreset}`);
+
     // ══════════════════════════════════════════════════════
     // STEP 2 — Determine background strategy
     // ══════════════════════════════════════════════════════
@@ -146,7 +146,6 @@ Deno.serve(async (req) => {
     let backgroundPrompt: string | null = null;
     let backgroundSource = 'none';
 
-    // Helper to build AI background prompt from brand identity
     const buildBrandBackgroundPrompt = () => {
       const toneMap: Record<string, string> = {
         casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
@@ -161,73 +160,51 @@ Deno.serve(async (req) => {
     };
 
     if (atmosphereAssets && atmosphereAssets.length > 0) {
-      // FIX: Use correct bucket "venue-assets" (not "venue_atmosphere")
-      // Atmosphere assets are stored in venue-assets bucket under their storage_path
-      const best = atmosphereAssets[0];
-      const candidateUrl = supabase.storage.from('venue-assets').getPublicUrl(best.storage_path).data.publicUrl;
+      // Try each atmosphere asset until we find an accessible URL
+      for (const asset of atmosphereAssets) {
+        // Primary: venue-assets bucket (where Style Intelligence stores uploads)
+        const candidateUrl = supabase.storage.from('venue-assets').getPublicUrl(asset.storage_path).data.publicUrl;
+        const accessible = await isUrlAccessible(candidateUrl);
+        if (accessible) {
+          backgroundImageUrl = candidateUrl;
+          backgroundSource = 'atmosphere_ref';
+          console.log(`[PRO-PHOTO] Step 2: Background = atmosphere_ref (asset ${asset.id}, pinned: ${asset.pinned}), URL: ${candidateUrl}`);
+          break;
+        }
 
-      // Validate the URL is accessible before using it
-      const accessible = await isUrlAccessible(candidateUrl);
-      if (accessible) {
-        backgroundImageUrl = candidateUrl;
-        backgroundSource = 'atmosphere_ref';
-        console.log(`[PRO-PHOTO] Step 2: Background mode = atmosphere_ref (asset ${best.id}, pinned: ${best.pinned})`);
-      } else {
-        // Try venue_atmosphere bucket as fallback
-        const fallbackUrl = supabase.storage.from('venue_atmosphere').getPublicUrl(best.storage_path).data.publicUrl;
+        // Fallback: venue_atmosphere bucket (legacy)
+        const fallbackUrl = supabase.storage.from('venue_atmosphere').getPublicUrl(asset.storage_path).data.publicUrl;
         const fallbackOk = await isUrlAccessible(fallbackUrl);
         if (fallbackOk) {
           backgroundImageUrl = fallbackUrl;
           backgroundSource = 'atmosphere_ref';
-          console.log(`[PRO-PHOTO] Step 2: Background from venue_atmosphere bucket (asset ${best.id})`);
-        } else {
-          console.warn(`[PRO-PHOTO] Step 2: Atmosphere ref URL not accessible, falling back to AI prompt`);
-          backgroundPrompt = buildBrandBackgroundPrompt();
-          backgroundSource = 'ai_prompt';
+          console.log(`[PRO-PHOTO] Step 2: Background from venue_atmosphere bucket (asset ${asset.id}), URL: ${fallbackUrl}`);
+          break;
         }
+
+        console.warn(`[PRO-PHOTO] Step 2: Atmosphere asset ${asset.id} URL not accessible in either bucket, trying next…`);
+      }
+
+      if (!backgroundImageUrl) {
+        console.warn('[PRO-PHOTO] Step 2: All atmosphere ref URLs inaccessible, falling back to brand-generated prompt');
+        backgroundPrompt = buildBrandBackgroundPrompt();
+        backgroundSource = 'brand_generated';
       }
     } else {
       backgroundPrompt = buildBrandBackgroundPrompt();
-      backgroundSource = 'ai_prompt';
-      console.log('[PRO-PHOTO] Step 2: Background mode = ai_prompt (no atmosphere refs)');
+      backgroundSource = 'brand_generated';
+      console.log('[PRO-PHOTO] Step 2: Background = brand_generated (no atmosphere refs)');
     }
 
-    // ══════════════════════════════════════════════════════
-    // STEP 3 — Build plating influence hints
-    // ══════════════════════════════════════════════════════
-    let platingHints = '';
-    if (platingAssets && platingAssets.length > 0) {
-      const summaries: string[] = [];
-      for (const pa of platingAssets) {
-        const analysis = pa.analysis?.[0]?.analysis_json;
-        if (analysis) {
-          const comp = analysis.composition || {};
-          const mood = analysis.mood_tags || [];
-          summaries.push(`${comp.framing || 'centered'} framing, ${comp.angle || 'eye-level'} angle, mood: ${(mood as string[]).slice(0, 3).join(', ')}`);
-        }
-      }
-      if (summaries.length > 0) {
-        platingHints = `Plating style: ${summaries.join('; ')}. Enhance symmetry, garnish balance, and edge cleanliness. Do not change ingredients, portion size, or cuisine type.`;
-      }
-      console.log(`[PRO-PHOTO] Step 3: Plating guidance from ${platingAssets.length} references`);
-    } else {
-      const presetPlating: Record<string, string> = {
-        casual: 'Clean, approachable plating with natural garnish',
-        premium: 'Refined plating with precise placement and elegant garnish',
-        luxury: 'Architectural plating with meticulous detail and fine garnish',
-      };
-      platingHints = presetPlating[brandPreset] || presetPlating.casual;
-    }
+    console.log(`[PRO-PHOTO] DEBUG: selected_background_mode=${backgroundSource}, selected_background_url=${backgroundImageUrl || 'N/A (using prompt)'}`);
 
     // ══════════════════════════════════════════════════════
-    // STEP 4 — PhotoRoom v2 Edit API (forces JPEG = flattened)
+    // STEP 3 — Build PhotoRoom params (reused for compose + recompose)
     // ══════════════════════════════════════════════════════
-    console.log('[PRO-PHOTO] Step 4: Calling PhotoRoom v2 Edit API…');
-
     const params = new URLSearchParams();
     params.set('lighting.mode', 'ai.auto');
     params.set('shadow.mode', 'ai.soft');
-    params.set('outputFormat', 'jpg'); // Always flatten — no transparency
+    params.set('outputFormat', 'jpg'); // ALWAYS flatten — no transparency
 
     if (backgroundImageUrl) {
       params.set('background.imageUrl', backgroundImageUrl);
@@ -236,6 +213,11 @@ Deno.serve(async (req) => {
     } else {
       params.set('background.color', 'F5F5F0');
     }
+
+    // ══════════════════════════════════════════════════════
+    // STEP 4 — PhotoRoom v2 Edit: Compose dish onto background
+    // ══════════════════════════════════════════════════════
+    console.log('[PRO-PHOTO] Step 4: Calling PhotoRoom v2 Edit (compose)…');
 
     const editForm = new FormData();
     editForm.append('imageFile', sourceBlob, 'image.jpg');
@@ -256,17 +238,16 @@ Deno.serve(async (req) => {
     }
 
     const composedBuffer = await editResp.arrayBuffer();
-    const { publicUrl: composedUrl, storagePath: composedStoragePath } = await uploadResultBuffer(supabase, venue_id, composedBuffer, 'composed', 'image/jpeg');
-    console.log('[PRO-PHOTO] Step 4 DONE — composed_url:', composedUrl);
+    const { publicUrl: composedUrl, storagePath: composedStoragePath } = await uploadResultBuffer(supabase, venue_id, composedBuffer, 'composed');
+    console.log(`[PRO-PHOTO] Step 4 DONE — composed_url: ${composedUrl}, content-type: image/jpeg`);
 
     // ══════════════════════════════════════════════════════
-    // STEP 5 — Gemini dish-only retouch + recomposite
+    // STEP 5 — Gemini dish retouch on COMPOSED image
     // ══════════════════════════════════════════════════════
-    // Strategy: Send the ORIGINAL source image to Gemini (not the composed one).
-    // Gemini retouches the dish/food only. Then we run PhotoRoom AGAIN on
-    // Gemini's output with the SAME background params, so the background
-    // is always controlled by PhotoRoom — never by Gemini.
-    // This permanently eliminates "dish on black" issues.
+    // Strategy: Send the COMPOSED image (with background) to Gemini.
+    // Gemini retouches lighting/texture only. If Gemini returns alpha/PNG,
+    // we recomposite via PhotoRoom with the SAME background to guarantee
+    // the final is always a flattened JPG with the correct background.
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     let finalUrl = composedUrl;
     let finalStoragePath = composedStoragePath;
@@ -274,8 +255,8 @@ Deno.serve(async (req) => {
 
     if (lovableApiKey) {
       try {
-        console.log('[PRO-PHOTO] Step 5: Gemini dish-only retouch on ORIGINAL source (not composed)…');
-        console.log('[PRO-PHOTO] Gemini input = resolvedSourceUrl:', resolvedSourceUrl);
+        console.log('[PRO-PHOTO] Step 5: Gemini retouch on COMPOSED image (with background)…');
+        console.log(`[PRO-PHOTO] Gemini input = composedUrl: ${composedUrl}`);
 
         const modeMap: Record<string, string> = {
           safe: 'Minimal lighting correction. Preserve original tone and exposure as closely as possible.',
@@ -286,7 +267,9 @@ Deno.serve(async (req) => {
 
         const prompt = `You are a professional food photography retouch specialist.
 
-Retouch ONLY the dish, food, and plate area in this image. The background will be replaced separately — do not spend effort on it.
+Your task is to improve lighting, clarity, and realism while preserving the exact physical structure of the dish AND the background environment.
+
+This is a retouch task, NOT a redesign task. The background is a real venue environment — preserve it exactly.
 
 Hard constraints (non-negotiable):
 - Do NOT add garnish.
@@ -302,6 +285,9 @@ Hard constraints (non-negotiable):
 - Do NOT add sauces or decorative elements.
 - Do NOT add text, watermarks, logos, or any overlays.
 - Do NOT make the image look artificial, illustrated, or AI-generated.
+- Do NOT alter, darken, remove, or replace the background.
+- Do NOT make the background black or transparent.
+- The background must remain EXACTLY as it appears in the input.
 
 You must preserve:
 - Ingredient count
@@ -309,11 +295,12 @@ You must preserve:
 - Plate geometry
 - Food structure
 - Garnish quantity and position
+- Background environment (tables, lighting, venue decor)
 
-Allowed improvements (dish/food area only):
+Allowed improvements (apply to the whole image naturally):
 - Adjust lighting to look like professional DSLR food photography.
 - Improve white balance.
-- Improve natural shadows and highlights on the food.
+- Improve natural shadows and highlights.
 - Enhance crispness and texture detail of the food.
 - Clean minor plating imperfections without adding new elements.
 - Subtle color grading consistent with a real restaurant shoot.
@@ -323,8 +310,10 @@ Mode: ${modeInstruction}
 Brand preset: ${brandPreset}
 ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}
 
-If unsure whether a change alters the dish identity, do NOT make the change.
-Return the full image including whatever background exists — we only use the dish pixels.
+Output the FULL image including the background, not just the dish.
+Output as JPEG — do NOT output PNG with transparency.
+
+If unsure whether a change alters the dish identity or background, do NOT make the change.
 
 Maximum realism. Zero hallucination. Zero new elements.`;
 
@@ -340,7 +329,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
               role: 'user',
               content: [
                 { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: resolvedSourceUrl } },
+                { type: 'image_url', image_url: { url: composedUrl } },
               ],
             }],
             modalities: ['image', 'text'],
@@ -352,51 +341,62 @@ Maximum realism. Zero hallucination. Zero new elements.`;
           const generatedImage = geminiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
           if (generatedImage && generatedImage.startsWith('data:image')) {
-            console.log('[PRO-PHOTO] Step 5.5: Recompositing Gemini-retouched dish onto composed background via PhotoRoom…');
+            // Detect if Gemini returned PNG (potential alpha)
+            const isPng = generatedImage.startsWith('data:image/png');
+            console.log(`[PRO-PHOTO] Step 5: Gemini returned image, format=${isPng ? 'PNG' : 'JPEG'}`);
 
-            // Convert Gemini base64 output to blob
+            // Convert base64 to bytes
             const base64Data = generatedImage.split(',')[1];
             const imgBin = atob(base64Data);
             const imgBytes = new Uint8Array(imgBin.length);
             for (let i = 0; i < imgBin.length; i++) imgBytes[i] = imgBin.charCodeAt(i);
-            const geminiBlob = new Blob([imgBytes], { type: 'image/jpeg' });
+            const geminiBlob = new Blob([imgBytes], { type: isPng ? 'image/png' : 'image/jpeg' });
 
-            // Run PhotoRoom AGAIN on Gemini's retouched output with the SAME
-            // background params (backgroundImageUrl or backgroundPrompt).
-            // PhotoRoom will: remove Gemini's background → apply the venue background → flatten to JPG.
-            // Result: dish has Gemini's lighting improvements, background is 100% from PhotoRoom.
-            const recomposeForm = new FormData();
-            recomposeForm.append('imageFile', geminiBlob, 'retouched.jpg');
+            if (isPng) {
+              // PNG from Gemini may have alpha → recomposite via PhotoRoom to flatten
+              // with the SAME background, guaranteeing no transparency in final
+              console.log('[PRO-PHOTO] Step 5.5: Gemini returned PNG — recompositing via PhotoRoom to flatten…');
+              const recomposeForm = new FormData();
+              recomposeForm.append('imageFile', geminiBlob, 'retouched.png');
 
-            const recomposeResp = await fetch(
-              `https://image-api.photoroom.com/v2/edit?${params.toString()}`,
-              {
-                method: 'POST',
-                headers: { 'x-api-key': photoRoomApiKey },
-                body: recomposeForm,
-              },
-            );
-
-            if (recomposeResp.ok) {
-              const recomposedBuffer = await recomposeResp.arrayBuffer();
-              const { publicUrl: recomposedUrl, storagePath: recomposedPath } = await uploadResultBuffer(
-                supabase, venue_id, recomposedBuffer, 'final', 'image/jpeg',
+              const recomposeResp = await fetch(
+                `https://image-api.photoroom.com/v2/edit?${params.toString()}`,
+                {
+                  method: 'POST',
+                  headers: { 'x-api-key': photoRoomApiKey },
+                  body: recomposeForm,
+                },
               );
-              finalUrl = recomposedUrl;
-              finalStoragePath = recomposedPath;
-              geminiUsed = true;
-              console.log('[PRO-PHOTO] Step 5.5 DONE — Recomposed (dish from Gemini + background from PhotoRoom)');
-              console.log('[PRO-PHOTO] final_url:', finalUrl);
+
+              if (recomposeResp.ok) {
+                const recomposedBuffer = await recomposeResp.arrayBuffer();
+                const { publicUrl: recomposedUrl, storagePath: recomposedPath } = await uploadResultBuffer(
+                  supabase, venue_id, recomposedBuffer, 'final',
+                );
+                finalUrl = recomposedUrl;
+                finalStoragePath = recomposedPath;
+                geminiUsed = true;
+                console.log(`[PRO-PHOTO] Step 5.5 DONE — Recomposed final (PNG flattened onto background), final_url: ${finalUrl}`);
+              } else {
+                const errText = await recomposeResp.text();
+                console.warn(`[PRO-PHOTO] Recompose failed (${recomposeResp.status}): ${errText} — using composed_url as final`);
+              }
             } else {
-              const errText = await recomposeResp.text();
-              console.warn(`[PRO-PHOTO] Recompose PhotoRoom call failed (${recomposeResp.status}): ${errText}`);
-              console.warn('[PRO-PHOTO] Falling back to composed_url as final');
+              // JPEG from Gemini — save directly as final (already flattened)
+              const geminiBuffer = imgBytes.buffer;
+              const { publicUrl: geminiUrl, storagePath: geminiPath } = await uploadResultBuffer(
+                supabase, venue_id, geminiBuffer, 'final',
+              );
+              finalUrl = geminiUrl;
+              finalStoragePath = geminiPath;
+              geminiUsed = true;
+              console.log(`[PRO-PHOTO] Step 5 DONE — Gemini JPEG saved directly as final, final_url: ${finalUrl}`);
             }
           } else {
-            console.warn('[PRO-PHOTO] Gemini returned no image data, using composed result');
+            console.warn('[PRO-PHOTO] Gemini returned no image data, using composed_url as final');
           }
         } else {
-          console.warn(`[PRO-PHOTO] Gemini failed (${geminiResp.status}), using composed result`);
+          console.warn(`[PRO-PHOTO] Gemini failed (${geminiResp.status}), using composed_url as final`);
         }
       } catch (geminiErr) {
         console.warn('[PRO-PHOTO] Gemini error (non-fatal):', geminiErr);
@@ -414,7 +414,6 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       vertical_9_16: finalUrl,
     };
 
-    // Update editor_jobs if job_id provided
     if (job_id) {
       await supabase.from('editor_jobs').update({
         status: 'done',
@@ -425,7 +424,6 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       }).eq('id', job_id);
     }
 
-    // Log in edited_assets
     await supabase.from('edited_assets').insert({
       venue_id,
       source_url: resolvedSourceUrl,
@@ -444,16 +442,21 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       compliance_status: 'approved',
     });
 
-    // ── NEW: Insert into uploads so it appears in Content Library ──
     await supabase.from('uploads').insert({
       venue_id,
       storage_path: finalStoragePath,
       uploaded_by: user.id,
       status: 'completed',
-      notes: `Pro Photo output (${backgroundSource}${geminiUsed ? ' + AI replated' : ''})`,
+      notes: `Pro Photo output (${backgroundSource}${geminiUsed ? ' + AI retouched' : ''})`,
     });
 
-    console.log(`[PRO-PHOTO] COMPLETE — composed_url: ${composedUrl}, final_url: ${finalUrl}, gemini_used: ${geminiUsed}, background: ${backgroundSource}`);
+    console.log(`[PRO-PHOTO] ═══ RUN COMPLETE ═══`);
+    console.log(`[PRO-PHOTO]   atmosphere_refs_found_count: ${atmosphereAssets?.length || 0}`);
+    console.log(`[PRO-PHOTO]   selected_background_mode: ${backgroundSource}`);
+    console.log(`[PRO-PHOTO]   selected_background_url: ${backgroundImageUrl || 'N/A (prompt-based)'}`);
+    console.log(`[PRO-PHOTO]   composed_url: ${composedUrl} (content-type: image/jpeg)`);
+    console.log(`[PRO-PHOTO]   gemini_used: ${geminiUsed}`);
+    console.log(`[PRO-PHOTO]   final_url: ${finalUrl} (content-type: image/jpeg, ext: .jpg)`);
 
     return jsonResp({
       success: true,
