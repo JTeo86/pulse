@@ -365,7 +365,8 @@ Maximum realism. Zero hallucination. Zero new elements.`;
             finalUrl = replatedUrl;
             finalStoragePath = replatedPath;
             geminiUsed = true;
-            console.log('[PRO-PHOTO] Step 5 DONE — Gemini replating applied, final_url:', finalUrl);
+            console.log('[PRO-PHOTO] Step 5 DONE — Gemini retouch applied (lighting/polish only), final_url:', finalUrl);
+            console.log('[PRO-PHOTO] Gemini input was composed_url (flattened JPG with background). No structural drift allowed.');
           } else {
             console.warn('[PRO-PHOTO] Gemini returned no image data, using composed result');
           }
