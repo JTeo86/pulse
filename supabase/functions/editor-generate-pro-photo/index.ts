@@ -53,35 +53,27 @@ async function uploadResultBuffer(
   return { publicUrl, storagePath: path };
 }
 
-/** Resolve a background image URL from a style_reference_asset, using signed URLs for private buckets */
+/** Resolve a background image URL from a style_reference_asset.
+ *  venue_atmosphere is now PUBLIC, so we use getPublicUrl + HEAD check.
+ *  Falls back to venue-assets (also public). */
 async function resolveBackgroundUrl(
   supabase: any,
   storagePath: string,
-): Promise<{ url: string; bucket: string; signedUrlUsed: boolean } | null> {
-  // Determine which bucket the asset lives in
-  const bucketCandidates = [
-    { name: 'venue-assets', isPublic: true },
-    { name: 'venue_atmosphere', isPublic: false },
-  ];
+): Promise<{ url: string; bucket: string; headStatus: number } | null> {
+  // venue_atmosphere is the primary bucket for atmosphere assets (now public)
+  // venue-assets is a fallback (also public)
+  const buckets = ['venue_atmosphere', 'venue-assets'];
 
-  for (const bucket of bucketCandidates) {
-    if (bucket.isPublic) {
-      const candidateUrl = supabase.storage.from(bucket.name).getPublicUrl(storagePath).data.publicUrl;
-      try {
-        const resp = await fetch(candidateUrl, { method: 'HEAD' });
-        if (resp.ok) return { url: candidateUrl, bucket: bucket.name, signedUrlUsed: false };
-      } catch { /* continue */ }
-    } else {
-      // Private bucket → signed URL (300s TTL)
-      const { data, error } = await supabase.storage
-        .from(bucket.name)
-        .createSignedUrl(storagePath, 300);
-      if (!error && data?.signedUrl) {
-        try {
-          const resp = await fetch(data.signedUrl, { method: 'HEAD' });
-          if (resp.ok) return { url: data.signedUrl, bucket: bucket.name, signedUrlUsed: true };
-        } catch { /* continue */ }
+  for (const bucketName of buckets) {
+    const candidateUrl = supabase.storage.from(bucketName).getPublicUrl(storagePath).data.publicUrl;
+    try {
+      const resp = await fetch(candidateUrl, { method: 'HEAD' });
+      console.log(`[PRO-PHOTO] HEAD ${bucketName}/${storagePath} → ${resp.status}`);
+      if (resp.ok) {
+        return { url: candidateUrl, bucket: bucketName, headStatus: resp.status };
       }
+    } catch (e) {
+      console.warn(`[PRO-PHOTO] HEAD failed for ${bucketName}/${storagePath}:`, e);
     }
   }
   return null;
@@ -182,7 +174,7 @@ Deno.serve(async (req) => {
     let backgroundPrompt: string | null = null;
     type BackgroundMode = 'atmosphere_ref' | 'brand_generated' | 'studio_default';
     let backgroundMode: BackgroundMode = 'brand_generated';
-    let bgMeta = { bucket: '', path: '', signed_url_used: false, ttl_seconds: 0 };
+    let bgMeta = { bucket: '', path: '', public_url: '', public_url_head_status: 0 };
 
     if (atmosphereAssets && atmosphereAssets.length > 0) {
       // Shuffle top 3 to avoid repetitive visuals
@@ -200,10 +192,10 @@ Deno.serve(async (req) => {
           bgMeta = {
             bucket: result.bucket,
             path: asset.storage_path,
-            signed_url_used: result.signedUrlUsed,
-            ttl_seconds: result.signedUrlUsed ? 300 : 0,
+            public_url: result.url,
+            public_url_head_status: result.headStatus,
           };
-          console.log(`[PRO-PHOTO] Step 2: Background = atmosphere_ref (asset ${asset.id}, bucket=${result.bucket}, signed=${result.signedUrlUsed})`);
+          console.log(`[PRO-PHOTO] Step 2: Background = atmosphere_ref (asset ${asset.id}, bucket=${result.bucket}, HEAD=${result.headStatus})`);
           break;
         }
         console.warn(`[PRO-PHOTO] Step 2: Asset ${asset.id} not accessible in any bucket, trying next…`);
@@ -226,7 +218,7 @@ Deno.serve(async (req) => {
       console.log(`[PRO-PHOTO] Step 2: Background = brand_generated (no valid atmosphere refs)`);
     }
 
-    console.log(`[PRO-PHOTO] DEBUG: background_mode=${backgroundMode}, bg_bucket=${bgMeta.bucket}, signed_url=${bgMeta.signed_url_used}`);
+    console.log(`[PRO-PHOTO] DEBUG: background_mode=${backgroundMode}, bg_bucket=${bgMeta.bucket}, public_url_head=${bgMeta.public_url_head_status}`);
 
     // ═══ STEP 3 — Build PhotoRoom params ═══
     const params = new URLSearchParams();
@@ -473,19 +465,21 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       notes: `Pro Photo output (${backgroundMode}${geminiUsed ? ' + AI retouched' : ''})`,
     });
 
-    // ═══ Final diagnostic log ═══
-    console.log(`[PRO-PHOTO] ═══ RUN COMPLETE ═══`);
-    console.log(`[PRO-PHOTO]   background_mode_selected: ${backgroundMode}`);
-    console.log(`[PRO-PHOTO]   atmosphere_refs_found_count: ${atmosphereAssets?.length || 0}`);
-    console.log(`[PRO-PHOTO]   selected_background_bucket: ${bgMeta.bucket || 'N/A'}`);
-    console.log(`[PRO-PHOTO]   selected_background_path: ${bgMeta.path || 'N/A'}`);
-    console.log(`[PRO-PHOTO]   signed_url_generated: ${bgMeta.signed_url_used}`);
-    console.log(`[PRO-PHOTO]   signed_url_ttl_seconds: ${bgMeta.ttl_seconds}`);
-    console.log(`[PRO-PHOTO]   photoroom_compose_status: ${composeResult.status}`);
-    console.log(`[PRO-PHOTO]   composed_url: ${composedUrl} (content-type: image/jpeg)`);
-    console.log(`[PRO-PHOTO]   gemini_output_content_type: ${geminiOutputContentType}`);
-    console.log(`[PRO-PHOTO]   gemini_used: ${geminiUsed}`);
-    console.log(`[PRO-PHOTO]   final_url: ${finalUrl} (content-type: image/jpeg)`);
+    // ═══ Final diagnostic log (single structured JSON) ═══
+    console.log(JSON.stringify({
+      tag: 'PRO-PHOTO-RESULT',
+      background_mode: backgroundMode,
+      atmosphere_refs_found_count: atmosphereAssets?.length || 0,
+      selected_background_bucket: bgMeta.bucket || 'N/A',
+      selected_background_path: bgMeta.path || 'N/A',
+      public_url: bgMeta.public_url || 'N/A',
+      public_url_head_status: bgMeta.public_url_head_status,
+      photoroom_compose_status: composeResult.status,
+      composed_url: composedUrl,
+      gemini_output_content_type: geminiOutputContentType,
+      gemini_used: geminiUsed,
+      final_url: finalUrl,
+    }));
 
     return jsonResp({
       success: true,

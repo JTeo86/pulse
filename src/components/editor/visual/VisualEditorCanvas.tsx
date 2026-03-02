@@ -200,9 +200,14 @@ export default function VisualEditorCanvas() {
 
       if (data.final_image_url) {
         updateImageUrl(selectedImage.id, data.final_image_url);
+        const bgLabel = data.background_mode === 'atmosphere_ref'
+          ? 'Style Intelligence (Atmosphere)'
+          : data.background_mode === 'brand_generated'
+            ? 'AI Generated (Brand Identity)'
+            : data.background_mode || 'studio';
         toast({
           title: 'Pro Photo generated',
-          description: `Background: ${data.background_source || 'studio'} ${data.gemini_used ? '• AI polished' : ''}`,
+          description: `Background: ${bgLabel}${data.gemini_used ? ' • AI polished' : ''}`,
         });
       }
     } catch (error: any) {
