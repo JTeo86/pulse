@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
     let backgroundPrompt: string | null = null;
     type BackgroundMode = 'atmosphere_ref' | 'brand_generated' | 'studio_default';
     let backgroundMode: BackgroundMode = 'brand_generated';
-    let bgMeta = { bucket: '', path: '', signed_url_used: false, ttl_seconds: 0 };
+    let bgMeta = { bucket: '', path: '', public_url: '', public_url_head_status: 0 };
 
     if (atmosphereAssets && atmosphereAssets.length > 0) {
       // Shuffle top 3 to avoid repetitive visuals
@@ -192,10 +192,10 @@ Deno.serve(async (req) => {
           bgMeta = {
             bucket: result.bucket,
             path: asset.storage_path,
-            signed_url_used: result.signedUrlUsed,
-            ttl_seconds: result.signedUrlUsed ? 300 : 0,
+            public_url: result.url,
+            public_url_head_status: result.headStatus,
           };
-          console.log(`[PRO-PHOTO] Step 2: Background = atmosphere_ref (asset ${asset.id}, bucket=${result.bucket}, signed=${result.signedUrlUsed})`);
+          console.log(`[PRO-PHOTO] Step 2: Background = atmosphere_ref (asset ${asset.id}, bucket=${result.bucket}, HEAD=${result.headStatus})`);
           break;
         }
         console.warn(`[PRO-PHOTO] Step 2: Asset ${asset.id} not accessible in any bucket, trying next…`);
