@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
       console.log(`[PRO-PHOTO] Step 2: Background = brand_generated (no valid atmosphere refs)`);
     }
 
-    console.log(`[PRO-PHOTO] DEBUG: background_mode=${backgroundMode}, bg_bucket=${bgMeta.bucket}, signed_url=${bgMeta.signed_url_used}`);
+    console.log(`[PRO-PHOTO] DEBUG: background_mode=${backgroundMode}, bg_bucket=${bgMeta.bucket}, public_url_head=${bgMeta.public_url_head_status}`);
 
     // ═══ STEP 3 — Build PhotoRoom params ═══
     const params = new URLSearchParams();
