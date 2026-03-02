@@ -53,35 +53,27 @@ async function uploadResultBuffer(
   return { publicUrl, storagePath: path };
 }
 
-/** Resolve a background image URL from a style_reference_asset, using signed URLs for private buckets */
+/** Resolve a background image URL from a style_reference_asset.
+ *  venue_atmosphere is now PUBLIC, so we use getPublicUrl + HEAD check.
+ *  Falls back to venue-assets (also public). */
 async function resolveBackgroundUrl(
   supabase: any,
   storagePath: string,
-): Promise<{ url: string; bucket: string; signedUrlUsed: boolean } | null> {
-  // Determine which bucket the asset lives in
-  const bucketCandidates = [
-    { name: 'venue-assets', isPublic: true },
-    { name: 'venue_atmosphere', isPublic: false },
-  ];
+): Promise<{ url: string; bucket: string; headStatus: number } | null> {
+  // venue_atmosphere is the primary bucket for atmosphere assets (now public)
+  // venue-assets is a fallback (also public)
+  const buckets = ['venue_atmosphere', 'venue-assets'];
 
-  for (const bucket of bucketCandidates) {
-    if (bucket.isPublic) {
-      const candidateUrl = supabase.storage.from(bucket.name).getPublicUrl(storagePath).data.publicUrl;
-      try {
-        const resp = await fetch(candidateUrl, { method: 'HEAD' });
-        if (resp.ok) return { url: candidateUrl, bucket: bucket.name, signedUrlUsed: false };
-      } catch { /* continue */ }
-    } else {
-      // Private bucket → signed URL (300s TTL)
-      const { data, error } = await supabase.storage
-        .from(bucket.name)
-        .createSignedUrl(storagePath, 300);
-      if (!error && data?.signedUrl) {
-        try {
-          const resp = await fetch(data.signedUrl, { method: 'HEAD' });
-          if (resp.ok) return { url: data.signedUrl, bucket: bucket.name, signedUrlUsed: true };
-        } catch { /* continue */ }
+  for (const bucketName of buckets) {
+    const candidateUrl = supabase.storage.from(bucketName).getPublicUrl(storagePath).data.publicUrl;
+    try {
+      const resp = await fetch(candidateUrl, { method: 'HEAD' });
+      console.log(`[PRO-PHOTO] HEAD ${bucketName}/${storagePath} → ${resp.status}`);
+      if (resp.ok) {
+        return { url: candidateUrl, bucket: bucketName, headStatus: resp.status };
       }
+    } catch (e) {
+      console.warn(`[PRO-PHOTO] HEAD failed for ${bucketName}/${storagePath}:`, e);
     }
   }
   return null;
