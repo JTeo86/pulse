@@ -465,19 +465,21 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       notes: `Pro Photo output (${backgroundMode}${geminiUsed ? ' + AI retouched' : ''})`,
     });
 
-    // ═══ Final diagnostic log ═══
-    console.log(`[PRO-PHOTO] ═══ RUN COMPLETE ═══`);
-    console.log(`[PRO-PHOTO]   background_mode_selected: ${backgroundMode}`);
-    console.log(`[PRO-PHOTO]   atmosphere_refs_found_count: ${atmosphereAssets?.length || 0}`);
-    console.log(`[PRO-PHOTO]   selected_background_bucket: ${bgMeta.bucket || 'N/A'}`);
-    console.log(`[PRO-PHOTO]   selected_background_path: ${bgMeta.path || 'N/A'}`);
-    console.log(`[PRO-PHOTO]   signed_url_generated: ${bgMeta.signed_url_used}`);
-    console.log(`[PRO-PHOTO]   signed_url_ttl_seconds: ${bgMeta.ttl_seconds}`);
-    console.log(`[PRO-PHOTO]   photoroom_compose_status: ${composeResult.status}`);
-    console.log(`[PRO-PHOTO]   composed_url: ${composedUrl} (content-type: image/jpeg)`);
-    console.log(`[PRO-PHOTO]   gemini_output_content_type: ${geminiOutputContentType}`);
-    console.log(`[PRO-PHOTO]   gemini_used: ${geminiUsed}`);
-    console.log(`[PRO-PHOTO]   final_url: ${finalUrl} (content-type: image/jpeg)`);
+    // ═══ Final diagnostic log (single structured JSON) ═══
+    console.log(JSON.stringify({
+      tag: 'PRO-PHOTO-RESULT',
+      background_mode: backgroundMode,
+      atmosphere_refs_found_count: atmosphereAssets?.length || 0,
+      selected_background_bucket: bgMeta.bucket || 'N/A',
+      selected_background_path: bgMeta.path || 'N/A',
+      public_url: bgMeta.public_url || 'N/A',
+      public_url_head_status: bgMeta.public_url_head_status,
+      photoroom_compose_status: composeResult.status,
+      composed_url: composedUrl,
+      gemini_output_content_type: geminiOutputContentType,
+      gemini_used: geminiUsed,
+      final_url: finalUrl,
+    }));
 
     return jsonResp({
       success: true,
