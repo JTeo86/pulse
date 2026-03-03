@@ -655,6 +655,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       },
       composition_success: compositionSuccess,
       gemini_used: geminiUsed,
+      replate_skip_reason: replateSkipReason,
     });
   } catch (err: unknown) {
     console.error('[PRO-PHOTO] ERROR:', err);
