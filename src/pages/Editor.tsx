@@ -193,6 +193,7 @@ export default function EditorPage() {
           final_video_url: data.final_video_url || null,
           gemini_used: data.gemini_used || false,
           background_source: data.background_source || 'unknown',
+          replate_skip_reason: data.replate_skip_reason || null,
         });
       }
 

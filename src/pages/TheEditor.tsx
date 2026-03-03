@@ -153,6 +153,7 @@ export default function TheEditorPage() {
           final_image_variants: (data.final_image_variants as Record<string, string>) || {},
           gemini_used: data.gemini_used || false,
           background_source: data.background_source || 'unknown',
+          replate_skip_reason: data.replate_skip_reason || null,
         });
       }
 
