@@ -95,6 +95,7 @@ export default function EditorPage() {
     final_video_url: string | null;
     gemini_used: boolean;
     background_source: string;
+    replate_skip_reason?: string | null;
   } | null>(null);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
 
@@ -192,6 +193,7 @@ export default function EditorPage() {
           final_video_url: data.final_video_url || null,
           gemini_used: data.gemini_used || false,
           background_source: data.background_source || 'unknown',
+          replate_skip_reason: data.replate_skip_reason || null,
         });
       }
 
@@ -571,11 +573,11 @@ export default function EditorPage() {
                   )}
 
                   {/* Note if Gemini was skipped */}
-                  {!jobResult.gemini_used && (
+                   {!jobResult.gemini_used && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/30 border border-border">
                       <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                       <p className="text-sm text-muted-foreground">
-                        Pro Replate (AI polish) was skipped. Configure Gemini in Platform Admin → Integrations for enhanced results.
+                        Pro Replate (AI polish) was skipped. {jobResult.replate_skip_reason || 'Gemini API key not found. Add GEMINI_IMAGE_API_KEY in Platform Admin.'}
                       </p>
                     </div>
                   )}

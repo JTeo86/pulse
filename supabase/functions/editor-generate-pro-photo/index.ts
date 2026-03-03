@@ -388,15 +388,25 @@ Deno.serve(async (req) => {
     );
     console.log(`[PRO-PHOTO] Step 4 DONE — composed_url: ${composedUrl}, photoroom_status=${composeResult.status}, size=${composeResult.buffer.byteLength} bytes`);
 
-    // ═══ STEP 5 — Gemini retouch (only if composition succeeded) ═══
+    // ═══ STEP 5 — Gemini retouch (Pro Replate) ═══
+    // Guard: run replate when we have an AI key AND composition succeeded
+    const geminiImageKey = Deno.env.get('GEMINI_IMAGE_API_KEY');
+    const replateApiKey = geminiImageKey || lovableApiKey; // prefer dedicated key, fall back to gateway
     let finalUrl = composedUrl;
     let finalStoragePath = composedStoragePath;
     let geminiUsed = false;
     let geminiOutputContentType = 'skipped';
+    let replateSkipReason: string | null = null;
 
-    if (lovableApiKey && compositionSuccess) {
+    if (!replateApiKey) {
+      replateSkipReason = 'Gemini API key not found. Add GEMINI_IMAGE_API_KEY in Platform Admin.';
+      console.log(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
+    } else if (!compositionSuccess) {
+      replateSkipReason = 'Composition step failed — replate skipped.';
+      console.log(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
+    } else {
       try {
-        console.log('[PRO-PHOTO] Step 5: Gemini retouch on composed image…');
+        console.log(`[PRO-PHOTO] Step 5: Gemini retouch on composed image (key=${geminiImageKey ? 'GEMINI_IMAGE_API_KEY' : 'LOVABLE_API_KEY'})…`);
 
         const modeMap: Record<string, string> = {
           safe: 'Minimal lighting correction. Preserve original tone and exposure as closely as possible.',
@@ -460,7 +470,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
         const geminiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${lovableApiKey}`,
+            'Authorization': `Bearer ${replateApiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -520,6 +530,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
                 console.log(`[PRO-PHOTO] Step 5.5 DONE — Recomposed final (PNG flattened), final_url: ${finalUrl}`);
               } else {
                 console.warn(`[PRO-PHOTO] Recompose failed (${recomposeResult.status}): ${recomposeResult.errorBody} — using composed_url as final`);
+                replateSkipReason = `Recompose flattening failed (${recomposeResult.status})`;
               }
             } else {
               // JPEG from Gemini — save directly
@@ -533,16 +544,17 @@ Maximum realism. Zero hallucination. Zero new elements.`;
               console.log(`[PRO-PHOTO] Step 5 DONE — Gemini JPEG saved as final, final_url: ${finalUrl}`);
             }
           } else {
-            console.warn('[PRO-PHOTO] Gemini returned no image data, using composed_url as final');
+            replateSkipReason = 'Gemini returned no image data';
+            console.warn(`[PRO-PHOTO] ${replateSkipReason}, using composed_url as final`);
           }
         } else {
+          replateSkipReason = `Gemini API returned ${geminiResp.status}`;
           console.warn(`[PRO-PHOTO] Gemini failed (${geminiResp.status}), using composed_url as final`);
         }
       } catch (geminiErr) {
+        replateSkipReason = `Gemini error: ${geminiErr instanceof Error ? geminiErr.message : 'unknown'}`;
         console.warn('[PRO-PHOTO] Gemini error (non-fatal):', geminiErr);
       }
-    } else if (!lovableApiKey) {
-      console.log('[PRO-PHOTO] Step 5: Skipped (no LOVABLE_API_KEY)');
     }
 
     // ═══ STEP 6 — Integrity check: final must be .jpg ═══
@@ -643,6 +655,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       },
       composition_success: compositionSuccess,
       gemini_used: geminiUsed,
+      replate_skip_reason: replateSkipReason,
     });
   } catch (err: unknown) {
     console.error('[PRO-PHOTO] ERROR:', err);
