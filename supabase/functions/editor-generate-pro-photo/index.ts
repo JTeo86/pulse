@@ -53,30 +53,157 @@ async function uploadResultBuffer(
   return { publicUrl, storagePath: path };
 }
 
-/** Resolve a background image URL from a style_reference_asset.
- *  venue_atmosphere is now PUBLIC, so we use getPublicUrl + HEAD check.
- *  Falls back to venue-assets (also public). */
-async function resolveBackgroundUrl(
+/** Fetch an atmosphere reference image as a downloadable Blob.
+ *  Tries venue_atmosphere (public) then venue-assets (public).
+ *  Returns the raw bytes so we can send them directly to PhotoRoom. */
+async function fetchAtmosphereBackground(
   supabase: any,
-  storagePath: string,
-): Promise<{ url: string; bucket: string; headStatus: number } | null> {
-  // venue_atmosphere is the primary bucket for atmosphere assets (now public)
-  // venue-assets is a fallback (also public)
+  venueId: string,
+): Promise<{
+  blob: Blob;
+  assetId: string;
+  storagePath: string;
+  publicUrl: string;
+  headStatus: number;
+  bucket: string;
+} | null> {
+  const { data: assets, error } = await supabase
+    .from('style_reference_assets')
+    .select('id, storage_path, pinned')
+    .eq('venue_id', venueId)
+    .eq('channel', 'atmosphere')
+    .eq('status', 'analyzed')
+    .order('pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  if (error) {
+    console.error('[PRO-PHOTO] Error querying atmosphere assets:', error.message);
+    return null;
+  }
+  if (!assets || assets.length === 0) {
+    console.log('[PRO-PHOTO] No analyzed atmosphere assets found for this venue');
+    return null;
+  }
+
+  console.log(`[PRO-PHOTO] Found ${assets.length} analyzed atmosphere asset(s)`);
+
+  // Shuffle top 3 to avoid repetitive visuals
+  const pool = assets.slice(0, Math.min(3, assets.length));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
   const buckets = ['venue_atmosphere', 'venue-assets'];
 
-  for (const bucketName of buckets) {
-    const candidateUrl = supabase.storage.from(bucketName).getPublicUrl(storagePath).data.publicUrl;
-    try {
-      const resp = await fetch(candidateUrl, { method: 'HEAD' });
-      console.log(`[PRO-PHOTO] HEAD ${bucketName}/${storagePath} → ${resp.status}`);
-      if (resp.ok) {
-        return { url: candidateUrl, bucket: bucketName, headStatus: resp.status };
+  for (const asset of pool) {
+    for (const bucketName of buckets) {
+      const publicUrl = supabase.storage.from(bucketName).getPublicUrl(asset.storage_path).data.publicUrl;
+      try {
+        console.log(`[PRO-PHOTO] HEAD ${bucketName}/${asset.storage_path} → ${publicUrl}`);
+        const headResp = await fetch(publicUrl, { method: 'HEAD' });
+        console.log(`[PRO-PHOTO] HEAD status=${headResp.status}`);
+
+        if (headResp.ok) {
+          // Download the actual image bytes
+          console.log(`[PRO-PHOTO] Downloading background image…`);
+          const dlResp = await fetch(publicUrl);
+          if (dlResp.ok) {
+            const blob = await dlResp.blob();
+            console.log(`[PRO-PHOTO] Background downloaded: ${blob.size} bytes, type=${blob.type}`);
+            return {
+              blob,
+              assetId: asset.id,
+              storagePath: asset.storage_path,
+              publicUrl,
+              headStatus: headResp.status,
+              bucket: bucketName,
+            };
+          }
+          console.warn(`[PRO-PHOTO] Download failed after HEAD OK: ${dlResp.status}`);
+        }
+      } catch (e) {
+        console.warn(`[PRO-PHOTO] Fetch error for ${bucketName}/${asset.storage_path}:`, e);
       }
-    } catch (e) {
-      console.warn(`[PRO-PHOTO] HEAD failed for ${bucketName}/${storagePath}:`, e);
     }
+    console.warn(`[PRO-PHOTO] Asset ${asset.id} not accessible in any bucket, trying next…`);
   }
+
   return null;
+}
+
+/** Generate an AI background image via Gemini and return as Blob */
+async function generateAIBackgroundImage(
+  lovableApiKey: string,
+  brandPreset: string,
+  brandRules: string,
+  venueName: string,
+  venueCity: string,
+): Promise<Blob | null> {
+  const toneMap: Record<string, string> = {
+    casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
+    midrange: 'elegant mid-range restaurant with linen tablecloths, warm overhead lighting, and tasteful decor',
+    premium: 'upscale fine dining restaurant with dark wood, candlelight, and luxury tableware',
+    luxury: 'exclusive luxury restaurant with marble surfaces, crystal glassware, and dramatic low lighting',
+    nightlife: 'trendy bar-restaurant with moody neon-accented lighting and dark contemporary interiors',
+    family: 'bright family-friendly restaurant with clean tables and cheerful warm lighting',
+  };
+  const tone = toneMap[brandPreset] || toneMap.casual;
+  const prompt = `Generate a photorealistic restaurant table background image for food photography compositing. Style: ${tone}. ${venueCity ? `Located in ${venueCity}.` : ''} The image shows an empty table surface with the restaurant environment behind it. No food items, no people, no plates — just the empty tabletop and venue ambiance. Shot on a DSLR camera with shallow depth of field, natural lighting, soft bokeh. Photorealistic, no illustration, no text, no watermarks. ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''} Output as JPEG.`.trim();
+
+  try {
+    console.log('[PRO-PHOTO] Generating AI background via Gemini…');
+    const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${lovableApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+        modalities: ['image', 'text'],
+      }),
+    });
+
+    if (!resp.ok) {
+      console.warn(`[PRO-PHOTO] Gemini background gen failed: ${resp.status}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!imageUrl || !imageUrl.startsWith('data:image')) {
+      console.warn('[PRO-PHOTO] Gemini returned no background image data');
+      return null;
+    }
+
+    const base64Data = imageUrl.split(',')[1];
+    const bin = atob(base64Data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const isPng = imageUrl.startsWith('data:image/png');
+    const blob = new Blob([bytes], { type: isPng ? 'image/png' : 'image/jpeg' });
+    console.log(`[PRO-PHOTO] AI background generated: ${blob.size} bytes, format=${isPng ? 'PNG' : 'JPEG'}`);
+    return blob;
+  } catch (e) {
+    console.warn('[PRO-PHOTO] Gemini background generation error:', e);
+    return null;
+  }
+}
+
+function buildBackgroundPrompt(brandPreset: string, venueCity: string, brandRules: string): string {
+  const toneMap: Record<string, string> = {
+    casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
+    midrange: 'elegant mid-range restaurant with linen tablecloths, warm overhead lighting, and tasteful decor',
+    premium: 'upscale fine dining restaurant with dark wood, candlelight, and luxury tableware',
+    luxury: 'exclusive luxury restaurant with marble surfaces, crystal glassware, and dramatic low lighting',
+    nightlife: 'trendy bar-restaurant with moody neon-accented lighting and dark contemporary interiors',
+    family: 'bright family-friendly restaurant with clean tables and cheerful warm lighting',
+  };
+  const tone = toneMap[brandPreset] || toneMap.casual;
+  return `Realistic photo of a ${tone}. ${venueCity ? `Located in ${venueCity}.` : ''} Shot on a DSLR camera with shallow depth of field, natural lighting, soft bokeh. The table is set for food photography. Photorealistic, no fantasy, no illustration, no text, no watermarks. ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}`.trim();
 }
 
 /** Call PhotoRoom v2/edit with one automatic retry on 5xx */
@@ -131,6 +258,8 @@ Deno.serve(async (req) => {
     const photoRoomApiKey = Deno.env.get('PHOTOROOM_API_KEY');
     if (!photoRoomApiKey) return jsonResp({ error: 'PhotoRoom API not configured' }, 500);
 
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+
     // ═══ STEP 0 — Resolve source image ═══
     console.log('[PRO-PHOTO] Step 0: Resolving source image…');
     const { blob: sourceBlob, publicUrl: resolvedSourceUrl } = await resolveSourceImage(
@@ -139,16 +268,6 @@ Deno.serve(async (req) => {
 
     // ═══ STEP 1 — Gather style context ═══
     console.log('[PRO-PHOTO] Step 1: Gathering style context…');
-
-    const { data: atmosphereAssets } = await supabase
-      .from('style_reference_assets')
-      .select('id, storage_path, pinned')
-      .eq('venue_id', venue_id)
-      .eq('channel', 'atmosphere')
-      .eq('status', 'analyzed')
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(5);
 
     const { data: brandKit } = await supabase
       .from('brand_kits')
@@ -167,78 +286,82 @@ Deno.serve(async (req) => {
     const venueName = venue?.name || 'restaurant';
     const venueCity = venue?.city || '';
 
-    // ═══ STEP 2 — Select background ═══
-    console.log(`[PRO-PHOTO] Step 2: atmosphere_refs_found_count=${atmosphereAssets?.length || 0}`);
+    // ═══ STEP 2 — Fetch background as actual image BYTES ═══
+    console.log('[PRO-PHOTO] Step 2: Resolving background image…');
 
-    let backgroundImageUrl: string | null = null;
-    let backgroundPrompt: string | null = null;
+    let backgroundBlob: Blob | null = null;
     type BackgroundMode = 'atmosphere_ref' | 'brand_generated' | 'studio_default';
     let backgroundMode: BackgroundMode = 'brand_generated';
-    let bgMeta = { bucket: '', path: '', public_url: '', public_url_head_status: 0 };
+    let bgMeta = {
+      bucket: '',
+      path: '',
+      public_url: '',
+      public_url_head_status: 0,
+      asset_id: '',
+      background_blob_size: 0,
+      background_blob_type: '',
+    };
 
-    if (atmosphereAssets && atmosphereAssets.length > 0) {
-      // Shuffle top 3 to avoid repetitive visuals
-      const pool = atmosphereAssets.slice(0, Math.min(3, atmosphereAssets.length));
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
-      }
-
-      for (const asset of pool) {
-        const result = await resolveBackgroundUrl(supabase, asset.storage_path);
-        if (result) {
-          backgroundImageUrl = result.url;
-          backgroundMode = 'atmosphere_ref';
-          bgMeta = {
-            bucket: result.bucket,
-            path: asset.storage_path,
-            public_url: result.url,
-            public_url_head_status: result.headStatus,
-          };
-          console.log(`[PRO-PHOTO] Step 2: Background = atmosphere_ref (asset ${asset.id}, bucket=${result.bucket}, HEAD=${result.headStatus})`);
-          break;
-        }
-        console.warn(`[PRO-PHOTO] Step 2: Asset ${asset.id} not accessible in any bucket, trying next…`);
-      }
-    }
-
-    // Fallback: brand-generated prompt
-    if (!backgroundImageUrl) {
-      const toneMap: Record<string, string> = {
-        casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
-        midrange: 'elegant mid-range restaurant with linen tablecloths, warm overhead lighting, and tasteful decor',
-        premium: 'upscale fine dining restaurant with dark wood, candlelight, and luxury tableware',
-        luxury: 'exclusive luxury restaurant with marble surfaces, crystal glassware, and dramatic low lighting',
-        nightlife: 'trendy bar-restaurant with moody neon-accented lighting and dark contemporary interiors',
-        family: 'bright family-friendly restaurant with clean tables and cheerful warm lighting',
+    // Priority 1: Style Intelligence atmosphere references
+    const atmosphereResult = await fetchAtmosphereBackground(supabase, venue_id);
+    if (atmosphereResult) {
+      backgroundBlob = atmosphereResult.blob;
+      backgroundMode = 'atmosphere_ref';
+      bgMeta = {
+        bucket: atmosphereResult.bucket,
+        path: atmosphereResult.storagePath,
+        public_url: atmosphereResult.publicUrl,
+        public_url_head_status: atmosphereResult.headStatus,
+        asset_id: atmosphereResult.assetId,
+        background_blob_size: atmosphereResult.blob.size,
+        background_blob_type: atmosphereResult.blob.type,
       };
-      const tone = toneMap[brandPreset] || toneMap.casual;
-      backgroundPrompt = `Realistic photo of a ${tone}. ${venueCity ? `Located in ${venueCity}.` : ''} Shot on a DSLR camera with shallow depth of field, natural lighting, soft bokeh. The table is set for food photography. Photorealistic, no fantasy, no illustration, no text, no watermarks. ${brandRules ? `Brand notes: ${brandRules.substring(0, 200)}` : ''}`.trim();
-      backgroundMode = 'brand_generated';
-      console.log(`[PRO-PHOTO] Step 2: Background = brand_generated (no valid atmosphere refs)`);
+      console.log(`[PRO-PHOTO] Step 2: Background = atmosphere_ref (asset=${atmosphereResult.assetId}, ${atmosphereResult.blob.size} bytes)`);
     }
 
-    console.log(`[PRO-PHOTO] DEBUG: background_mode=${backgroundMode}, bg_bucket=${bgMeta.bucket}, public_url_head=${bgMeta.public_url_head_status}`);
+    // Priority 2: Generate AI background image via Gemini (actual image, not just a prompt)
+    if (!backgroundBlob && lovableApiKey) {
+      console.log('[PRO-PHOTO] Step 2: No atmosphere ref — generating AI background image…');
+      backgroundBlob = await generateAIBackgroundImage(lovableApiKey, brandPreset, brandRules, venueName, venueCity);
+      if (backgroundBlob) {
+        backgroundMode = 'brand_generated';
+        // Save AI background for debugging/audit
+        const bgUpload = await uploadResultBuffer(supabase, venue_id, await backgroundBlob.arrayBuffer(), 'ai_background');
+        bgMeta.public_url = bgUpload.publicUrl;
+        bgMeta.path = bgUpload.storagePath;
+        bgMeta.background_blob_size = backgroundBlob.size;
+        bgMeta.background_blob_type = backgroundBlob.type;
+        console.log(`[PRO-PHOTO] Step 2: AI background generated and saved: ${bgUpload.publicUrl}`);
+      }
+    }
 
-    // ═══ STEP 3 — Build PhotoRoom params ═══
+    // ═══ STEP 3 — Build PhotoRoom compose request ═══
+    console.log('[PRO-PHOTO] Step 3: Building compose request…');
+
     const params = new URLSearchParams();
     params.set('lighting.mode', 'ai.auto');
     params.set('shadow.mode', 'ai.soft');
     params.set('outputFormat', 'jpg');
 
-    if (backgroundImageUrl) {
-      params.set('background.imageUrl', backgroundImageUrl);
-    } else if (backgroundPrompt) {
-      params.set('background.prompt', backgroundPrompt);
+    const composeForm = new FormData();
+    composeForm.append('imageFile', sourceBlob, 'image.jpg');
+
+    if (backgroundBlob) {
+      // KEY FIX: Send background as a FILE in the multipart form data.
+      // This bypasses URL reachability issues AND WebP format issues.
+      // PhotoRoom receives the raw bytes directly.
+      composeForm.append('background.image', backgroundBlob, 'background.jpg');
+      console.log(`[PRO-PHOTO] Step 3: Background attached as FILE (${backgroundBlob.size} bytes, type=${backgroundBlob.type})`);
     } else {
-      params.set('background.color', 'F5F5F0');
+      // Last resort: use PhotoRoom's prompt-based background generation
+      const bgPrompt = buildBackgroundPrompt(brandPreset, venueCity, brandRules);
+      params.set('background.prompt', bgPrompt);
+      backgroundMode = 'brand_generated';
+      console.log('[PRO-PHOTO] Step 3: Using background.prompt (no background image available)');
     }
 
     // ═══ STEP 4 — PhotoRoom compose (with retry) ═══
-    console.log('[PRO-PHOTO] Step 4: Calling PhotoRoom v2 Edit (compose)…');
-
-    const composeForm = new FormData();
-    composeForm.append('imageFile', sourceBlob, 'image.jpg');
+    console.log('[PRO-PHOTO] Step 4: Calling PhotoRoom v2/edit (compose)…');
 
     const composeResult = await callPhotoRoomWithRetry(composeForm, params, photoRoomApiKey);
 
@@ -263,10 +386,9 @@ Deno.serve(async (req) => {
     const { publicUrl: composedUrl, storagePath: composedStoragePath } = await uploadResultBuffer(
       supabase, venue_id, composeResult.buffer, 'composed',
     );
-    console.log(`[PRO-PHOTO] Step 4 DONE — composed_url: ${composedUrl}, photoroom_status=${composeResult.status}`);
+    console.log(`[PRO-PHOTO] Step 4 DONE — composed_url: ${composedUrl}, photoroom_status=${composeResult.status}, size=${composeResult.buffer.byteLength} bytes`);
 
     // ═══ STEP 5 — Gemini retouch (only if composition succeeded) ═══
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     let finalUrl = composedUrl;
     let finalStoragePath = composedStoragePath;
     let geminiUsed = false;
@@ -342,7 +464,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-image',
+            model: 'google/gemini-2.5-flash',
             messages: [{
               role: 'user',
               content: [
@@ -375,7 +497,18 @@ Maximum realism. Zero hallucination. Zero new elements.`;
               const recomposeForm = new FormData();
               recomposeForm.append('imageFile', geminiBlob, 'retouched.png');
 
-              const recomposeResult = await callPhotoRoomWithRetry(recomposeForm, params, photoRoomApiKey);
+              // Send the same background to ensure flattening
+              const flattenParams = new URLSearchParams();
+              flattenParams.set('outputFormat', 'jpg');
+              flattenParams.set('lighting.mode', 'ai.auto');
+              flattenParams.set('shadow.mode', 'ai.soft');
+              if (backgroundBlob) {
+                recomposeForm.append('background.image', backgroundBlob, 'background.jpg');
+              } else {
+                flattenParams.set('background.color', 'F5F5F0');
+              }
+
+              const recomposeResult = await callPhotoRoomWithRetry(recomposeForm, flattenParams, photoRoomApiKey);
 
               if (recomposeResult.ok && recomposeResult.buffer) {
                 const { publicUrl: recomposedUrl, storagePath: recomposedPath } = await uploadResultBuffer(
@@ -415,7 +548,6 @@ Maximum realism. Zero hallucination. Zero new elements.`;
     // ═══ STEP 6 — Integrity check: final must be .jpg ═══
     if (!finalUrl.endsWith('.jpg')) {
       console.error(`[PRO-PHOTO] INTEGRITY FAIL: final_url does not end in .jpg: ${finalUrl}`);
-      // Force use composed (which is always .jpg)
       finalUrl = composedUrl;
       finalStoragePath = composedStoragePath;
       geminiUsed = false;
@@ -451,31 +583,46 @@ Maximum realism. Zero hallucination. Zero new elements.`;
         background_source_metadata: bgMeta,
         composition_success: compositionSuccess,
         gemini_used: geminiUsed,
-        atmosphere_ref_count: atmosphereAssets?.length || 0,
+        atmosphere_ref_count: bgMeta.asset_id ? 1 : 0,
+        background_sent_as_file: !!backgroundBlob,
       },
       created_by: user.id,
       compliance_status: 'approved',
     });
 
-    await supabase.from('uploads').insert({
-      venue_id,
-      storage_path: finalStoragePath,
-      uploaded_by: user.id,
-      status: 'completed',
-      notes: `Pro Photo output (${backgroundMode}${geminiUsed ? ' + AI retouched' : ''})`,
-    });
+    // Insert to uploads — non-blocking, log errors
+    try {
+      const { error: uploadErr } = await supabase.from('uploads').insert({
+        venue_id,
+        storage_path: finalStoragePath,
+        uploaded_by: user.id,
+        status: 'completed',
+        notes: `Pro Photo output (${backgroundMode}${geminiUsed ? ' + AI retouched' : ''})`,
+      });
+      if (uploadErr) {
+        console.warn(`[PRO-PHOTO] uploads insert failed (non-blocking): ${uploadErr.message}`);
+      }
+    } catch (e) {
+      console.warn('[PRO-PHOTO] uploads insert error (non-blocking):', e);
+    }
 
     // ═══ Final diagnostic log (single structured JSON) ═══
     console.log(JSON.stringify({
       tag: 'PRO-PHOTO-RESULT',
+      job_id: job_id || 'none',
+      venue_id,
       background_mode: backgroundMode,
-      atmosphere_refs_found_count: atmosphereAssets?.length || 0,
-      selected_background_bucket: bgMeta.bucket || 'N/A',
-      selected_background_path: bgMeta.path || 'N/A',
+      atmosphere_asset_id: bgMeta.asset_id || 'N/A',
+      atmosphere_storage_path: bgMeta.path || 'N/A',
+      atmosphere_bucket: bgMeta.bucket || 'N/A',
       public_url: bgMeta.public_url || 'N/A',
       public_url_head_status: bgMeta.public_url_head_status,
+      background_blob_size: bgMeta.background_blob_size,
+      background_blob_type: bgMeta.background_blob_type,
+      background_sent_as_file: !!backgroundBlob,
       photoroom_compose_status: composeResult.status,
       composed_url: composedUrl,
+      composed_size_bytes: composeResult.buffer?.byteLength || 0,
       gemini_output_content_type: geminiOutputContentType,
       gemini_used: geminiUsed,
       final_url: finalUrl,
@@ -487,7 +634,13 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       final_image_url: finalUrl,
       final_image_variants: finalImageVariants,
       background_mode: backgroundMode,
-      background_source_metadata: bgMeta,
+      background_source_metadata: {
+        bucket: bgMeta.bucket,
+        path: bgMeta.path,
+        public_url: bgMeta.public_url,
+        head_status: bgMeta.public_url_head_status,
+        sent_as_file: !!backgroundBlob,
+      },
       composition_success: compositionSuccess,
       gemini_used: geminiUsed,
     });
