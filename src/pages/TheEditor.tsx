@@ -74,6 +74,7 @@ export default function TheEditorPage() {
     final_image_variants: Record<string, string>;
     gemini_used: boolean;
     background_source: string;
+    replate_skip_reason?: string | null;
   } | null>(null);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [manualToolsOpen, setManualToolsOpen] = useState(false);

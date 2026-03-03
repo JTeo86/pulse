@@ -95,6 +95,7 @@ export default function EditorPage() {
     final_video_url: string | null;
     gemini_used: boolean;
     background_source: string;
+    replate_skip_reason?: string | null;
   } | null>(null);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
 
