@@ -141,7 +141,8 @@ function GeminiTestButton() {
         .select('value')
         .eq('key', 'gemini_replate_model')
         .single();
-      const model = modelSetting?.value || 'google/gemini-2.5-flash';
+      // Strip google/ prefix — direct API uses bare model names
+      const model = (modelSetting?.value || 'gemini-2.5-flash-image').replace(/^google\//, '');
 
       const resp = await supabase.functions.invoke('check-key-health', {
         body: { key_name: 'GEMINI_IMAGE_API_KEY', test_gemini_replate: true, gemini_model: model },
@@ -161,14 +162,13 @@ function GeminiTestButton() {
     <div className="space-y-2">
       <Button size="sm" variant="outline" onClick={handleTest} disabled={testing} className="gap-1.5">
         <FlaskConical className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
-        {testing ? 'Testing Gemini…' : 'Test Gemini (Replate)'}
+        {testing ? 'Testing Gemini Image…' : 'Test Gemini (Image)'}
       </Button>
       {result && (
         <div className="text-xs bg-muted rounded-lg p-3 space-y-1 font-mono">
           <p>Model: <strong>{String(result.model || 'unknown')}</strong></p>
-          <p>Status: <strong>{String(result.gemini_status || result.status)}</strong></p>
           <p className={result.status === 'healthy' ? 'text-accent' : 'text-destructive'}>
-            {String(result.message || result.gemini_message || 'No response')}
+            {String(result.message || 'No response')}
           </p>
         </div>
       )}

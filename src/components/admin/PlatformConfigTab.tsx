@@ -87,9 +87,9 @@ const AI_DEFAULTS: Array<{
   {
     key: 'gemini_replate_model',
     label: 'Gemini Replate Model',
-    description: 'Model ID used for Pro Replate (AI polish). Must be a valid Lovable AI Gateway model.',
+    description: 'Model ID for Pro Replate (AI polish). Must be image-capable (e.g. gemini-2.5-flash-image). Do not use google/ prefix.',
     type: 'text',
-    defaultValue: 'google/gemini-2.5-flash',
+    defaultValue: 'gemini-2.5-flash-image',
   },
 ];
 
