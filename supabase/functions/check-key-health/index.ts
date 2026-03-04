@@ -117,51 +117,76 @@ Deno.serve(async (req) => {
           }
           await r.text();
         }
-      } else if (key_name === 'GEMINI_IMAGE_API_KEY') {
+    } else if (key_name === 'GEMINI_IMAGE_API_KEY') {
         if (test_gemini_replate) {
-          // Full replate endpoint test via Lovable AI Gateway using the configured model
-          const model = gemini_model || 'google/gemini-2.5-flash';
-          const lovableKey = Deno.env.get('LOVABLE_API_KEY');
-          const testKey = value || lovableKey;
-          if (!testKey) {
+          // Full image-capable test using direct Gemini Developer API
+          // Strip google/ prefix — direct API uses bare model names
+          let model = (gemini_model || 'gemini-2.5-flash-image').replace(/^google\//, '');
+          const isImageCapable = model.includes('-image') || model.includes('image-generation');
+
+          if (!isImageCapable) {
             status = 'invalid';
-            message = 'No Gemini or gateway key available for test';
+            message = `Model "${model}" is text-only. Pro Replate requires an image model (e.g. gemini-2.5-flash-image).`;
           } else {
-            const testResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            // Test with direct Gemini Developer API using the actual key
+            const testEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${value}`;
+            console.log(`[CHECK-KEY] Testing Gemini image model: ${model}`);
+
+            const testResp = await fetch(testEndpoint, {
               method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${testKey}`,
-                'Content-Type': 'application/json',
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                model,
-                messages: [{ role: 'user', content: [{ type: 'text', text: 'Reply with the word OK.' }] }],
-                max_tokens: 5,
+                contents: [{
+                  parts: [{ text: 'Generate a tiny 64x64 pixel solid blue square image.' }],
+                }],
+                generationConfig: {
+                  responseModalities: ['TEXT', 'IMAGE'],
+                },
               }),
             });
+
             const testStatus = testResp.status;
             if (testStatus === 404) {
               status = 'invalid';
-              message = `Gemini 404: model/endpoint not found. Check model name "${model}" in Platform Admin → Integrations.`;
+              message = `Gemini 404: model "${model}" not found. Check model name in Platform Admin → Integrations.`;
+            } else if (testStatus === 400) {
+              const errBody = await testResp.text().catch(() => '');
+              // 400 may indicate model doesn't support image output
+              if (errBody.includes('not supported') || errBody.includes('responseModalities')) {
+                status = 'invalid';
+                message = `Model "${model}" does not support image generation. Try gemini-2.5-flash-image.`;
+              } else {
+                status = 'invalid';
+                message = `Gemini ${testStatus}: ${errBody.substring(0, 300)}`;
+              }
             } else if (!testResp.ok) {
               const errBody = await testResp.text().catch(() => '');
               status = 'invalid';
               message = `Gemini ${testStatus}: ${errBody.substring(0, 300)}`;
             } else {
-              message = `Gemini replate test passed (model=${model}, status=${testStatus})`;
+              const respData = await testResp.json();
+              const parts = respData.candidates?.[0]?.content?.parts || [];
+              const hasImage = parts.some((p: any) => p.inlineData?.data);
+              if (hasImage) {
+                message = `Gemini image test passed ✓ (model=${model}, direct API)`;
+              } else {
+                message = `Gemini responded but returned no image data (model=${model}). Model may not support image output.`;
+                status = 'invalid';
+              }
             }
-            // Update result to include model info
-            await supabase.from('platform_api_keys').update({
-              health_status: status,
-              last_checked_at: new Date().toISOString(),
-              last_error: status !== 'healthy' ? message : null,
-              is_configured: true,
-            }).eq('key_name', key_name);
-
-            return new Response(JSON.stringify({ status, message, model, gemini_status: testStatus }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
           }
+
+          // Update result
+          await supabase.from('platform_api_keys').update({
+            health_status: status,
+            last_checked_at: new Date().toISOString(),
+            last_error: status !== 'healthy' ? message : null,
+            is_configured: true,
+          }).eq('key_name', key_name);
+
+          return new Response(JSON.stringify({ status, message, model }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         } else {
           // Standard key validation: list models
           const r = await fetch(

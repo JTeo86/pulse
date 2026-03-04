@@ -389,7 +389,7 @@ Deno.serve(async (req) => {
     console.log(`[PRO-PHOTO] Step 4 DONE — composed_url: ${composedUrl}, photoroom_status=${composeResult.status}, size=${composeResult.buffer.byteLength} bytes`);
 
     // ═══ STEP 5 — Gemini retouch (Pro Replate) ═══
-    // Try multiple key names in priority order
+    // Try multiple key names in priority order (direct Gemini AI Studio keys)
     const geminiKeyNames = ['GEMINI_IMAGE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'] as const;
     let replateApiKey: string | undefined;
     let replateKeySource = 'none';
@@ -398,27 +398,28 @@ Deno.serve(async (req) => {
       if (v) { replateApiKey = v; replateKeySource = kn; break; }
     }
     // Fall back to Lovable gateway
+    const useGateway = !replateApiKey;
     if (!replateApiKey && lovableApiKey) {
       replateApiKey = lovableApiKey;
       replateKeySource = 'LOVABLE_API_KEY';
     }
 
-    // Fetch model name from platform_settings (default fallback)
-    let geminiReplateModel = 'google/gemini-2.5-flash';
+    // Fetch model name from platform_settings
+    let geminiReplateModel = 'gemini-2.5-flash-image';
     try {
       const { data: modelSetting } = await supabase
         .from('platform_settings')
         .select('value')
         .eq('key', 'gemini_replate_model')
         .single();
-      if (modelSetting?.value) geminiReplateModel = modelSetting.value;
+      if (modelSetting?.value) {
+        // Strip google/ prefix if present — direct API uses bare model names
+        geminiReplateModel = modelSetting.value.replace(/^google\//, '');
+      }
     } catch { /* use default */ }
 
-    // Determine if using direct Gemini API vs gateway
-    const useDirectGemini = replateKeySource !== 'LOVABLE_API_KEY' && replateKeySource !== 'none';
-    const geminiEndpoint = useDirectGemini
-      ? 'https://generativelanguage.googleapis.com/v1beta/models'
-      : 'https://ai.gateway.lovable.dev/v1/chat/completions';
+    // Check if model is image-capable (must contain '-image' in name)
+    const isImageCapable = geminiReplateModel.includes('-image') || geminiReplateModel.includes('image-generation');
 
     let finalUrl = composedUrl;
     let finalStoragePath = composedStoragePath;
@@ -426,11 +427,15 @@ Deno.serve(async (req) => {
     let geminiOutputContentType = 'skipped';
     let replateSkipReason: string | null = null;
 
+    // For gateway calls, re-add google/ prefix
+    const gatewayModel = geminiReplateModel.startsWith('google/') ? geminiReplateModel : `google/${geminiReplateModel}`;
+
     console.log(JSON.stringify({
       tag: 'PRO-REPLATE-CONFIG',
       key_source: replateKeySource,
       model: geminiReplateModel,
-      endpoint_base: geminiEndpoint,
+      use_gateway: useGateway,
+      is_image_capable: isImageCapable,
       has_key: !!replateApiKey,
     }));
 
@@ -440,9 +445,12 @@ Deno.serve(async (req) => {
     } else if (!compositionSuccess) {
       replateSkipReason = 'Composition step failed — replate skipped.';
       console.log(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
+    } else if (!isImageCapable) {
+      replateSkipReason = `Selected Gemini model is text-only (${geminiReplateModel}); choose an image model (e.g. gemini-2.5-flash-image). Update in Platform Admin → Integrations.`;
+      console.warn(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
     } else {
       try {
-        console.log(`[PRO-PHOTO] Step 5: Gemini retouch (key=${replateKeySource}, model=${geminiReplateModel})…`);
+        console.log(`[PRO-PHOTO] Step 5: Gemini retouch (key=${replateKeySource}, model=${geminiReplateModel}, gateway=${useGateway})…`);
 
         const modeMap: Record<string, string> = {
           safe: 'Minimal lighting correction. Preserve original tone and exposure as closely as possible.',
@@ -503,95 +511,171 @@ If unsure whether a change alters the dish identity or background, do NOT make t
 
 Maximum realism. Zero hallucination. Zero new elements.`;
 
-        const geminiResp = await fetch(geminiEndpoint === 'https://ai.gateway.lovable.dev/v1/chat/completions'
-          ? geminiEndpoint
-          : geminiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${replateApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: geminiReplateModel,
-            messages: [{
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: composedUrl } },
-              ],
-            }],
-            modalities: ['image', 'text'],
-          }),
-        });
+        let geminiStatus: number;
+        let geminiImageBase64: string | null = null;
+        let geminiImageMime = 'image/jpeg';
 
-        const geminiStatus = geminiResp.status;
-        console.log(`[PRO-PHOTO] Step 5: Gemini response status=${geminiStatus}`);
+        if (useGateway) {
+          // ── Lovable AI Gateway (OpenAI-compatible format) ──
+          const geminiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${replateApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: gatewayModel,
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'text', text: prompt },
+                  { type: 'image_url', image_url: { url: composedUrl } },
+                ],
+              }],
+              modalities: ['image', 'text'],
+            }),
+          });
+          geminiStatus = geminiResp.status;
+          console.log(`[PRO-PHOTO] Step 5: Gateway response status=${geminiStatus}`);
 
-        if (geminiStatus === 404) {
-          replateSkipReason = `Gemini 404: model/endpoint not found. Check model name in Platform Admin → Integrations. (model=${geminiReplateModel})`;
-          console.warn(`[PRO-PHOTO] ${replateSkipReason}`);
-        } else if (geminiResp.ok) {
-          const geminiData = await geminiResp.json();
-          const generatedImage = geminiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-          if (generatedImage && generatedImage.startsWith('data:image')) {
-            const isPng = generatedImage.startsWith('data:image/png');
-            geminiOutputContentType = isPng ? 'image/png' : 'image/jpeg';
-            console.log(`[PRO-PHOTO] Step 5: Gemini returned image, format=${isPng ? 'PNG' : 'JPEG'}`);
-
-            const base64Data = generatedImage.split(',')[1];
-            const imgBin = atob(base64Data);
-            const imgBytes = new Uint8Array(imgBin.length);
-            for (let i = 0; i < imgBin.length; i++) imgBytes[i] = imgBin.charCodeAt(i);
-            const geminiBlob = new Blob([imgBytes], { type: isPng ? 'image/png' : 'image/jpeg' });
-
-            if (isPng) {
-              console.log('[PRO-PHOTO] Step 5.5: Gemini returned PNG — recompositing via PhotoRoom to flatten…');
-              const recomposeForm = new FormData();
-              recomposeForm.append('imageFile', geminiBlob, 'retouched.png');
-
-              const flattenParams = new URLSearchParams();
-              flattenParams.set('outputFormat', 'jpg');
-              flattenParams.set('lighting.mode', 'ai.auto');
-              flattenParams.set('shadow.mode', 'ai.soft');
-              if (backgroundBlob) {
-                recomposeForm.append('background.image', backgroundBlob, 'background.jpg');
-              } else {
-                flattenParams.set('background.color', 'F5F5F0');
-              }
-
-              const recomposeResult = await callPhotoRoomWithRetry(recomposeForm, flattenParams, photoRoomApiKey);
-
-              if (recomposeResult.ok && recomposeResult.buffer) {
-                const { publicUrl: recomposedUrl, storagePath: recomposedPath } = await uploadResultBuffer(
-                  supabase, venue_id, recomposeResult.buffer, 'final',
-                );
-                finalUrl = recomposedUrl;
-                finalStoragePath = recomposedPath;
-                geminiUsed = true;
-                console.log(`[PRO-PHOTO] Step 5.5 DONE — Recomposed final (PNG flattened), final_url: ${finalUrl}`);
-              } else {
-                console.warn(`[PRO-PHOTO] Recompose failed (${recomposeResult.status}): ${recomposeResult.errorBody} — using composed_url as final`);
-                replateSkipReason = `Recompose flattening failed (${recomposeResult.status})`;
-              }
-            } else {
-              const geminiBuffer = imgBytes.buffer;
-              const { publicUrl: geminiUrl, storagePath: geminiPath } = await uploadResultBuffer(
-                supabase, venue_id, geminiBuffer, 'final',
-              );
-              finalUrl = geminiUrl;
-              finalStoragePath = geminiPath;
-              geminiUsed = true;
-              console.log(`[PRO-PHOTO] Step 5 DONE — Gemini JPEG saved as final, final_url: ${finalUrl}`);
+          if (geminiResp.ok) {
+            const geminiData = await geminiResp.json();
+            const generatedImage = geminiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+            if (generatedImage && generatedImage.startsWith('data:image')) {
+              geminiImageBase64 = generatedImage.split(',')[1];
+              geminiImageMime = generatedImage.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
             }
           } else {
-            replateSkipReason = 'Gemini returned no image data';
-            console.warn(`[PRO-PHOTO] ${replateSkipReason}, using composed_url as final`);
+            const errBody = await geminiResp.text().catch(() => '');
+            if (geminiStatus === 404) {
+              replateSkipReason = `Gemini 404: model/endpoint not found. Check model name "${gatewayModel}" in Platform Admin → Integrations.`;
+            } else {
+              replateSkipReason = `Gemini API returned ${geminiStatus}: ${errBody.substring(0, 500)}`;
+            }
+            console.warn(`[PRO-PHOTO] ${replateSkipReason}`);
           }
         } else {
-          const errBody = await geminiResp.text().catch(() => '');
-          replateSkipReason = `Gemini API returned ${geminiStatus}: ${errBody.substring(0, 500)}`;
-          console.warn(`[PRO-PHOTO] ${replateSkipReason}`);
+          // ── Direct Gemini Developer API (AI Studio) ──
+          // Download composed image to send as inline_data
+          let composedBase64 = '';
+          let composedMime = 'image/jpeg';
+          try {
+            const dlResp = await fetch(composedUrl);
+            if (dlResp.ok) {
+              const arrBuf = await dlResp.arrayBuffer();
+              const bytes = new Uint8Array(arrBuf);
+              // Convert to base64
+              let binary = '';
+              for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+              composedBase64 = btoa(binary);
+              composedMime = dlResp.headers.get('content-type') || 'image/jpeg';
+            } else {
+              throw new Error(`Failed to download composed image: ${dlResp.status}`);
+            }
+          } catch (dlErr) {
+            replateSkipReason = `Failed to download composed image for Gemini: ${dlErr instanceof Error ? dlErr.message : 'unknown'}`;
+            console.warn(`[PRO-PHOTO] ${replateSkipReason}`);
+          }
+
+          if (!replateSkipReason && composedBase64) {
+            const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiReplateModel}:generateContent?key=${replateApiKey}`;
+            console.log(`[PRO-PHOTO] Step 5: Direct Gemini API → models/${geminiReplateModel}:generateContent`);
+
+            const geminiResp = await fetch(geminiEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [
+                    { text: prompt },
+                    { inline_data: { mime_type: composedMime, data: composedBase64 } },
+                  ],
+                }],
+                generationConfig: {
+                  responseModalities: ['TEXT', 'IMAGE'],
+                },
+              }),
+            });
+
+            geminiStatus = geminiResp.status;
+            console.log(`[PRO-PHOTO] Step 5: Direct Gemini response status=${geminiStatus}`);
+
+            if (geminiResp.ok) {
+              const geminiData = await geminiResp.json();
+              // Gemini Developer API returns inlineData in parts
+              const parts = geminiData.candidates?.[0]?.content?.parts || [];
+              for (const part of parts) {
+                if (part.inlineData?.data) {
+                  geminiImageBase64 = part.inlineData.data;
+                  geminiImageMime = part.inlineData.mimeType || 'image/jpeg';
+                  break;
+                }
+              }
+            } else {
+              const errBody = await geminiResp.text().catch(() => '');
+              if (geminiStatus === 404) {
+                replateSkipReason = `Gemini 404: model "${geminiReplateModel}" not found. Check model name in Platform Admin → Integrations.`;
+              } else {
+                replateSkipReason = `Gemini API returned ${geminiStatus}: ${errBody.substring(0, 500)}`;
+              }
+              console.warn(`[PRO-PHOTO] ${replateSkipReason}`);
+            }
+          }
+        }
+
+        // Process the image result (same for both paths)
+        if (!replateSkipReason && geminiImageBase64) {
+          const isPng = geminiImageMime.includes('png');
+          geminiOutputContentType = geminiImageMime;
+          console.log(`[PRO-PHOTO] Step 5: Gemini returned image, format=${isPng ? 'PNG' : 'JPEG'}`);
+
+          const imgBin = atob(geminiImageBase64);
+          const imgBytes = new Uint8Array(imgBin.length);
+          for (let i = 0; i < imgBin.length; i++) imgBytes[i] = imgBin.charCodeAt(i);
+          const geminiBlob = new Blob([imgBytes], { type: geminiImageMime });
+
+          if (isPng) {
+            console.log('[PRO-PHOTO] Step 5.5: Gemini returned PNG — recompositing via PhotoRoom to flatten…');
+            const recomposeForm = new FormData();
+            recomposeForm.append('imageFile', geminiBlob, 'retouched.png');
+
+            const flattenParams = new URLSearchParams();
+            flattenParams.set('outputFormat', 'jpg');
+            flattenParams.set('lighting.mode', 'ai.auto');
+            flattenParams.set('shadow.mode', 'ai.soft');
+            if (backgroundBlob) {
+              recomposeForm.append('background.image', backgroundBlob, 'background.jpg');
+            } else {
+              flattenParams.set('background.color', 'F5F5F0');
+            }
+
+            const recomposeResult = await callPhotoRoomWithRetry(recomposeForm, flattenParams, photoRoomApiKey);
+
+            if (recomposeResult.ok && recomposeResult.buffer) {
+              const { publicUrl: recomposedUrl, storagePath: recomposedPath } = await uploadResultBuffer(
+                supabase, venue_id, recomposeResult.buffer, 'final',
+              );
+              finalUrl = recomposedUrl;
+              finalStoragePath = recomposedPath;
+              geminiUsed = true;
+              console.log(`[PRO-PHOTO] Step 5.5 DONE — Recomposed final (PNG flattened), final_url: ${finalUrl}`);
+            } else {
+              console.warn(`[PRO-PHOTO] Recompose failed (${recomposeResult.status}): ${recomposeResult.errorBody} — using composed_url as final`);
+              replateSkipReason = `Recompose flattening failed (${recomposeResult.status})`;
+            }
+          } else {
+            const geminiBuffer = imgBytes.buffer;
+            const { publicUrl: geminiUrl, storagePath: geminiPath } = await uploadResultBuffer(
+              supabase, venue_id, geminiBuffer, 'final',
+            );
+            finalUrl = geminiUrl;
+            finalStoragePath = geminiPath;
+            geminiUsed = true;
+            console.log(`[PRO-PHOTO] Step 5 DONE — Gemini JPEG saved as final, final_url: ${finalUrl}`);
+          }
+        } else if (!replateSkipReason) {
+          replateSkipReason = 'Gemini returned no image data';
+          console.warn(`[PRO-PHOTO] ${replateSkipReason}, using composed_url as final`);
         }
       } catch (geminiErr) {
         replateSkipReason = `Gemini error: ${geminiErr instanceof Error ? geminiErr.message : 'unknown'}`;
