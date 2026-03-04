@@ -41,7 +41,11 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { key_name } = body as { key_name: string };
+    const { key_name, test_gemini_replate, gemini_model } = body as {
+      key_name: string;
+      test_gemini_replate?: boolean;
+      gemini_model?: string;
+    };
     if (!key_name) {
       return new Response(JSON.stringify({ error: 'key_name is required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -114,16 +118,62 @@ Deno.serve(async (req) => {
           await r.text();
         }
       } else if (key_name === 'GEMINI_IMAGE_API_KEY') {
-        // List Gemini models as a lightweight ping
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models?key=${value}`
-        );
-        if (r.status === 400 || r.status === 401 || r.status === 403) {
-          const j = await r.json().catch(() => ({}));
-          status = 'invalid';
-          message = j?.error?.message ?? `HTTP ${r.status} — check Gemini API key`;
+        if (test_gemini_replate) {
+          // Full replate endpoint test via Lovable AI Gateway using the configured model
+          const model = gemini_model || 'google/gemini-2.5-flash';
+          const lovableKey = Deno.env.get('LOVABLE_API_KEY');
+          const testKey = value || lovableKey;
+          if (!testKey) {
+            status = 'invalid';
+            message = 'No Gemini or gateway key available for test';
+          } else {
+            const testResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${testKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model,
+                messages: [{ role: 'user', content: [{ type: 'text', text: 'Reply with the word OK.' }] }],
+                max_tokens: 5,
+              }),
+            });
+            const testStatus = testResp.status;
+            if (testStatus === 404) {
+              status = 'invalid';
+              message = `Gemini 404: model/endpoint not found. Check model name "${model}" in Platform Admin → Integrations.`;
+            } else if (!testResp.ok) {
+              const errBody = await testResp.text().catch(() => '');
+              status = 'invalid';
+              message = `Gemini ${testStatus}: ${errBody.substring(0, 300)}`;
+            } else {
+              message = `Gemini replate test passed (model=${model}, status=${testStatus})`;
+            }
+            // Update result to include model info
+            await supabase.from('platform_api_keys').update({
+              health_status: status,
+              last_checked_at: new Date().toISOString(),
+              last_error: status !== 'healthy' ? message : null,
+              is_configured: true,
+            }).eq('key_name', key_name);
+
+            return new Response(JSON.stringify({ status, message, model, gemini_status: testStatus }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
         } else {
-          await r.text();
+          // Standard key validation: list models
+          const r = await fetch(
+            `https://generativelanguage.googleapis.com/v1/models?key=${value}`
+          );
+          if (r.status === 400 || r.status === 401 || r.status === 403) {
+            const j = await r.json().catch(() => ({}));
+            status = 'invalid';
+            message = j?.error?.message ?? `HTTP ${r.status} — check Gemini API key`;
+          } else {
+            await r.text();
+          }
         }
       } else if (key_name === 'KLING_API_KEY') {
         // Kling: validate key length as minimal check (no public ping endpoint)
