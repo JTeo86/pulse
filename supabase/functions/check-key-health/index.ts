@@ -41,7 +41,11 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { key_name } = body as { key_name: string };
+    const { key_name, test_gemini_replate, gemini_model } = body as {
+      key_name: string;
+      test_gemini_replate?: boolean;
+      gemini_model?: string;
+    };
     if (!key_name) {
       return new Response(JSON.stringify({ error: 'key_name is required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
