@@ -84,6 +84,13 @@ const AI_DEFAULTS: Array<{
     type: 'number',
     defaultValue: '70',
   },
+  {
+    key: 'gemini_replate_model',
+    label: 'Gemini Replate Model',
+    description: 'Model ID used for Pro Replate (AI polish). Must be a valid Lovable AI Gateway model.',
+    type: 'text',
+    defaultValue: 'google/gemini-2.5-flash',
+  },
 ];
 
 type SettingsMap = Record<string, string>;

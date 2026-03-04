@@ -123,6 +123,59 @@ function SerpApiTestButton() {
   );
 }
 
+// ─── Gemini Test Button ───────────────────────────────────────────────────────
+function GeminiTestButton() {
+  const { toast } = useToast();
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+
+  const handleTest = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Fetch the model name from platform_settings
+      const { data: modelSetting } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', 'gemini_replate_model')
+        .single();
+      const model = modelSetting?.value || 'google/gemini-2.5-flash';
+
+      const resp = await supabase.functions.invoke('check-key-health', {
+        body: { key_name: 'GEMINI_IMAGE_API_KEY', test_gemini_replate: true, gemini_model: model },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (resp.error) throw new Error(resp.error.message);
+      const data = resp.data as Record<string, unknown>;
+      setResult(data);
+    } catch (err) {
+      toast({ title: 'Test failed', description: (err as Error).message, variant: 'destructive' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Button size="sm" variant="outline" onClick={handleTest} disabled={testing} className="gap-1.5">
+        <FlaskConical className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
+        {testing ? 'Testing Gemini…' : 'Test Gemini (Replate)'}
+      </Button>
+      {result && (
+        <div className="text-xs bg-muted rounded-lg p-3 space-y-1 font-mono">
+          <p>Model: <strong>{String(result.model || 'unknown')}</strong></p>
+          <p>Status: <strong>{String(result.gemini_status || result.status)}</strong></p>
+          <p className={result.status === 'healthy' ? 'text-accent' : 'text-destructive'}>
+            {String(result.message || result.gemini_message || 'No response')}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Single key row ───────────────────────────────────────────────────────────
 function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => void }) {
   const { toast } = useToast();
