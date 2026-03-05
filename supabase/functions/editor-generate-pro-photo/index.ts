@@ -290,8 +290,20 @@ Deno.serve(async (req) => {
       .from('venue_members').select('id').eq('venue_id', venue_id).eq('user_id', user.id).single();
     if (!membership) return jsonResp({ error: 'Access denied' }, 403);
 
-    const photoRoomApiKey = Deno.env.get('PHOTOROOM_API_KEY');
-    if (!photoRoomApiKey) return jsonResp({ error: 'PhotoRoom API not configured' }, 500);
+    // ═══ Resolve API keys from platform_api_keys DB (fallback: env) ═══
+    const photoRoomResult = await getPlatformKey(supabase, 'PHOTOROOM_API_KEY');
+    const photoRoomApiKey = photoRoomResult.value;
+    if (!photoRoomApiKey) {
+      console.error('[PRO-PHOTO] Missing API key: PHOTOROOM_API_KEY (checked DB + env)');
+      if (job_id) {
+        await supabase.from('editor_jobs').update({
+          status: 'error',
+          error_message: 'Missing API key: PHOTOROOM_API_KEY. Configure in Platform Admin → Integrations.',
+        }).eq('id', job_id);
+      }
+      return jsonResp({ error: 'Missing API key: PHOTOROOM_API_KEY. Configure in Platform Admin → Integrations.' }, 500);
+    }
+    console.log(`[PRO-PHOTO] PhotoRoom key source: ${photoRoomResult.source}`);
 
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
 
