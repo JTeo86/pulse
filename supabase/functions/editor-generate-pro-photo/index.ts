@@ -477,7 +477,8 @@ Deno.serve(async (req) => {
 
     console.log(JSON.stringify({
       tag: 'PRO-REPLATE-CONFIG',
-      key_source: replateKeySource,
+      photoroom_key_source: photoRoomResult.source,
+      gemini_key_source: replateKeySource,
       model: geminiReplateModel,
       use_gateway: useGateway,
       is_image_capable: isImageCapable,
@@ -485,8 +486,8 @@ Deno.serve(async (req) => {
     }));
 
     if (!replateApiKey) {
-      replateSkipReason = 'Gemini key not found in Platform Admin → Integrations.';
-      console.log(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
+      replateSkipReason = 'Missing Gemini API key. Configure GEMINI_IMAGE_API_KEY in Platform Admin → Integrations.';
+      console.error(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
     } else if (!compositionSuccess) {
       replateSkipReason = 'Composition step failed — replate skipped.';
       console.log(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
