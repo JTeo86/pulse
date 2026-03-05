@@ -14,6 +14,41 @@ function jsonResp(body: Record<string, unknown>, status = 200) {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+/** Fetch an API key from platform_api_keys table, falling back to Deno.env */
+async function getPlatformKey(
+  supabase: any,
+  keyName: string,
+): Promise<{ value: string | null; source: 'db' | 'env' | 'none' }> {
+  try {
+    const { data, error } = await supabase
+      .from('platform_api_keys')
+      .select('key_value, is_configured')
+      .eq('key_name', keyName)
+      .single();
+    if (!error && data?.is_configured && data.key_value?.trim()) {
+      return { value: data.key_value.trim(), source: 'db' };
+    }
+  } catch { /* fall through to env */ }
+  const envVal = Deno.env.get(keyName);
+  if (envVal?.trim()) {
+    return { value: envVal.trim(), source: 'env' };
+  }
+  return { value: null, source: 'none' };
+}
+
+/** Resolve Gemini key with priority: GEMINI_IMAGE_API_KEY > GEMINI_API_KEY > GOOGLE_API_KEY */
+async function resolveGeminiKey(
+  supabase: any,
+): Promise<{ value: string | null; source: string }> {
+  for (const keyName of ['GEMINI_IMAGE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY']) {
+    const result = await getPlatformKey(supabase, keyName);
+    if (result.value) {
+      return { value: result.value, source: `${keyName}(${result.source})` };
+    }
+  }
+  return { value: null, source: 'none' };
+}
+
 async function resolveSourceImage(
   supabase: any,
   venueId: string,
