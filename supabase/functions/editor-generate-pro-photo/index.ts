@@ -625,19 +625,27 @@ Maximum realism. Zero hallucination. Zero new elements.`;
 
         // Process the image result (same for both paths)
         if (!replateSkipReason && geminiImageBase64) {
-          const isPng = geminiImageMime.includes('png');
           geminiOutputContentType = geminiImageMime;
-          console.log(`[PRO-PHOTO] Step 5: Gemini returned image, format=${isPng ? 'PNG' : 'JPEG'}`);
 
           const imgBin = atob(geminiImageBase64);
           const imgBytes = new Uint8Array(imgBin.length);
           for (let i = 0; i < imgBin.length; i++) imgBytes[i] = imgBin.charCodeAt(i);
-          const geminiBlob = new Blob([imgBytes], { type: geminiImageMime });
+
+          // Magic-byte PNG detection (89 50 4E 47 0D 0A 1A 0A) — never trust reported mime
+          const isPng = imgBytes.length >= 8
+            && imgBytes[0] === 0x89 && imgBytes[1] === 0x50
+            && imgBytes[2] === 0x4E && imgBytes[3] === 0x47
+            && imgBytes[4] === 0x0D && imgBytes[5] === 0x0A
+            && imgBytes[6] === 0x1A && imgBytes[7] === 0x0A;
+
+          console.log(`[PRO-PHOTO] Step 5: Gemini returned image — reported_mime=${geminiImageMime}, magic_bytes_png=${isPng}, size=${imgBytes.length}`);
 
           if (isPng) {
-            console.log('[PRO-PHOTO] Step 5.5: Gemini returned PNG — recompositing via PhotoRoom to flatten…');
+            // Route through PhotoRoom to flatten transparency onto a solid background
+            console.log('[PRO-PHOTO] Step 5.5: PNG detected (magic bytes) — recompositing via PhotoRoom to flatten…');
+            const pngBlob = new Blob([imgBytes], { type: 'image/png' });
             const recomposeForm = new FormData();
-            recomposeForm.append('imageFile', geminiBlob, 'retouched.png');
+            recomposeForm.append('imageFile', pngBlob, 'retouched.png');
 
             const flattenParams = new URLSearchParams();
             flattenParams.set('outputFormat', 'jpg');
@@ -658,12 +666,13 @@ Maximum realism. Zero hallucination. Zero new elements.`;
               finalUrl = recomposedUrl;
               finalStoragePath = recomposedPath;
               geminiUsed = true;
-              console.log(`[PRO-PHOTO] Step 5.5 DONE — Recomposed final (PNG flattened), final_url: ${finalUrl}`);
+              console.log(`[PRO-PHOTO] Step 5.5 DONE — PNG flattened to JPEG, final_url: ${finalUrl}`);
             } else {
               console.warn(`[PRO-PHOTO] Recompose failed (${recomposeResult.status}): ${recomposeResult.errorBody} — using composed_url as final`);
               replateSkipReason = `Recompose flattening failed (${recomposeResult.status})`;
             }
           } else {
+            // Verified non-PNG (JPEG) — safe to upload directly
             const geminiBuffer = imgBytes.buffer;
             const { publicUrl: geminiUrl, storagePath: geminiPath } = await uploadResultBuffer(
               supabase, venue_id, geminiBuffer, 'final',
@@ -671,7 +680,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
             finalUrl = geminiUrl;
             finalStoragePath = geminiPath;
             geminiUsed = true;
-            console.log(`[PRO-PHOTO] Step 5 DONE — Gemini JPEG saved as final, final_url: ${finalUrl}`);
+            console.log(`[PRO-PHOTO] Step 5 DONE — Gemini JPEG (verified non-PNG) saved as final, final_url: ${finalUrl}`);
           }
         } else if (!replateSkipReason) {
           replateSkipReason = 'Gemini returned no image data';
