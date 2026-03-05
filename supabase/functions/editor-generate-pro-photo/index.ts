@@ -14,6 +14,41 @@ function jsonResp(body: Record<string, unknown>, status = 200) {
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
+/** Fetch an API key from platform_api_keys table, falling back to Deno.env */
+async function getPlatformKey(
+  supabase: any,
+  keyName: string,
+): Promise<{ value: string | null; source: 'db' | 'env' | 'none' }> {
+  try {
+    const { data, error } = await supabase
+      .from('platform_api_keys')
+      .select('key_value, is_configured')
+      .eq('key_name', keyName)
+      .single();
+    if (!error && data?.is_configured && data.key_value?.trim()) {
+      return { value: data.key_value.trim(), source: 'db' };
+    }
+  } catch { /* fall through to env */ }
+  const envVal = Deno.env.get(keyName);
+  if (envVal?.trim()) {
+    return { value: envVal.trim(), source: 'env' };
+  }
+  return { value: null, source: 'none' };
+}
+
+/** Resolve Gemini key with priority: GEMINI_IMAGE_API_KEY > GEMINI_API_KEY > GOOGLE_API_KEY */
+async function resolveGeminiKey(
+  supabase: any,
+): Promise<{ value: string | null; source: string }> {
+  for (const keyName of ['GEMINI_IMAGE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY']) {
+    const result = await getPlatformKey(supabase, keyName);
+    if (result.value) {
+      return { value: result.value, source: `${keyName}(${result.source})` };
+    }
+  }
+  return { value: null, source: 'none' };
+}
+
 async function resolveSourceImage(
   supabase: any,
   venueId: string,
@@ -255,8 +290,20 @@ Deno.serve(async (req) => {
       .from('venue_members').select('id').eq('venue_id', venue_id).eq('user_id', user.id).single();
     if (!membership) return jsonResp({ error: 'Access denied' }, 403);
 
-    const photoRoomApiKey = Deno.env.get('PHOTOROOM_API_KEY');
-    if (!photoRoomApiKey) return jsonResp({ error: 'PhotoRoom API not configured' }, 500);
+    // ═══ Resolve API keys from platform_api_keys DB (fallback: env) ═══
+    const photoRoomResult = await getPlatformKey(supabase, 'PHOTOROOM_API_KEY');
+    const photoRoomApiKey = photoRoomResult.value;
+    if (!photoRoomApiKey) {
+      console.error('[PRO-PHOTO] Missing API key: PHOTOROOM_API_KEY (checked DB + env)');
+      if (job_id) {
+        await supabase.from('editor_jobs').update({
+          status: 'error',
+          error_message: 'Missing API key: PHOTOROOM_API_KEY. Configure in Platform Admin → Integrations.',
+        }).eq('id', job_id);
+      }
+      return jsonResp({ error: 'Missing API key: PHOTOROOM_API_KEY. Configure in Platform Admin → Integrations.' }, 500);
+    }
+    console.log(`[PRO-PHOTO] PhotoRoom key source: ${photoRoomResult.source}`);
 
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
 
@@ -390,19 +437,17 @@ Deno.serve(async (req) => {
 
     // ═══ STEP 5 — Gemini retouch (Pro Replate) ═══
     // Try multiple key names in priority order (direct Gemini AI Studio keys)
-    const geminiKeyNames = ['GEMINI_IMAGE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'] as const;
-    let replateApiKey: string | undefined;
-    let replateKeySource = 'none';
-    for (const kn of geminiKeyNames) {
-      const v = Deno.env.get(kn);
-      if (v) { replateApiKey = v; replateKeySource = kn; break; }
-    }
+    // Resolve Gemini key from platform_api_keys DB first, then env
+    const geminiResult = await resolveGeminiKey(supabase);
+    let replateApiKey: string | undefined = geminiResult.value ?? undefined;
+    let replateKeySource = geminiResult.source;
     // Fall back to Lovable gateway
     const useGateway = !replateApiKey;
     if (!replateApiKey && lovableApiKey) {
       replateApiKey = lovableApiKey;
-      replateKeySource = 'LOVABLE_API_KEY';
+      replateKeySource = 'LOVABLE_API_KEY(env)';
     }
+    console.log(`[PRO-PHOTO] Gemini key source: ${replateKeySource}`);
 
     // Fetch model name from platform_settings
     let geminiReplateModel = 'gemini-2.5-flash-image';
@@ -432,7 +477,8 @@ Deno.serve(async (req) => {
 
     console.log(JSON.stringify({
       tag: 'PRO-REPLATE-CONFIG',
-      key_source: replateKeySource,
+      photoroom_key_source: photoRoomResult.source,
+      gemini_key_source: replateKeySource,
       model: geminiReplateModel,
       use_gateway: useGateway,
       is_image_capable: isImageCapable,
@@ -440,8 +486,8 @@ Deno.serve(async (req) => {
     }));
 
     if (!replateApiKey) {
-      replateSkipReason = 'Gemini key not found in Platform Admin → Integrations.';
-      console.log(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
+      replateSkipReason = 'Missing Gemini API key. Configure GEMINI_IMAGE_API_KEY in Platform Admin → Integrations.';
+      console.error(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
     } else if (!compositionSuccess) {
       replateSkipReason = 'Composition step failed — replate skipped.';
       console.log(`[PRO-PHOTO] Step 5: Skipped — ${replateSkipReason}`);
@@ -758,6 +804,8 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       tag: 'PRO-PHOTO-RESULT',
       job_id: job_id || 'none',
       venue_id,
+      photoroom_key_source: photoRoomResult.source,
+      gemini_key_source: replateKeySource,
       background_mode: backgroundMode,
       atmosphere_asset_id: bgMeta.asset_id || 'N/A',
       atmosphere_storage_path: bgMeta.path || 'N/A',
@@ -772,6 +820,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       composed_size_bytes: composeResult.buffer?.byteLength || 0,
       gemini_output_content_type: geminiOutputContentType,
       gemini_used: geminiUsed,
+      replate_skip_reason: replateSkipReason,
       final_url: finalUrl,
     }));
 
