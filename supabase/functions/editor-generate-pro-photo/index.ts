@@ -804,6 +804,8 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       tag: 'PRO-PHOTO-RESULT',
       job_id: job_id || 'none',
       venue_id,
+      photoroom_key_source: photoRoomResult.source,
+      gemini_key_source: replateKeySource,
       background_mode: backgroundMode,
       atmosphere_asset_id: bgMeta.asset_id || 'N/A',
       atmosphere_storage_path: bgMeta.path || 'N/A',
@@ -818,6 +820,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       composed_size_bytes: composeResult.buffer?.byteLength || 0,
       gemini_output_content_type: geminiOutputContentType,
       gemini_used: geminiUsed,
+      replate_skip_reason: replateSkipReason,
       final_url: finalUrl,
     }));
 
