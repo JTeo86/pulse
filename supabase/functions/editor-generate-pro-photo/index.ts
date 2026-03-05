@@ -437,19 +437,17 @@ Deno.serve(async (req) => {
 
     // ═══ STEP 5 — Gemini retouch (Pro Replate) ═══
     // Try multiple key names in priority order (direct Gemini AI Studio keys)
-    const geminiKeyNames = ['GEMINI_IMAGE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'] as const;
-    let replateApiKey: string | undefined;
-    let replateKeySource = 'none';
-    for (const kn of geminiKeyNames) {
-      const v = Deno.env.get(kn);
-      if (v) { replateApiKey = v; replateKeySource = kn; break; }
-    }
+    // Resolve Gemini key from platform_api_keys DB first, then env
+    const geminiResult = await resolveGeminiKey(supabase);
+    let replateApiKey: string | undefined = geminiResult.value ?? undefined;
+    let replateKeySource = geminiResult.source;
     // Fall back to Lovable gateway
     const useGateway = !replateApiKey;
     if (!replateApiKey && lovableApiKey) {
       replateApiKey = lovableApiKey;
-      replateKeySource = 'LOVABLE_API_KEY';
+      replateKeySource = 'LOVABLE_API_KEY(env)';
     }
+    console.log(`[PRO-PHOTO] Gemini key source: ${replateKeySource}`);
 
     // Fetch model name from platform_settings
     let geminiReplateModel = 'gemini-2.5-flash-image';
