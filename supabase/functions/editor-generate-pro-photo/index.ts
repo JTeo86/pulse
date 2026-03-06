@@ -754,9 +754,9 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       }
     }
 
-    // ═══ STEP 6 — Integrity check: final must be .jpg ═══
-    if (!finalUrl.endsWith('.jpg')) {
-      console.error(`[PRO-PHOTO] INTEGRITY FAIL: final_url does not end in .jpg: ${finalUrl}`);
+    // ═══ STEP 6 — Integrity check: final must be a recognised image format ═══
+    if (!/\.(jpg|jpeg|png|webp)$/.test(finalUrl)) {
+      console.error(`[PRO-PHOTO] INTEGRITY FAIL: final_url has unexpected extension: ${finalUrl}`);
       finalUrl = composedUrl;
       finalStoragePath = composedStoragePath;
       geminiUsed = false;
