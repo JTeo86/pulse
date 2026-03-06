@@ -715,7 +715,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
             flattenParams.set('lighting.mode', 'ai.auto');
             flattenParams.set('shadow.mode', 'ai.soft');
             if (backgroundBlob) {
-              recomposeForm.append('background.image', backgroundBlob, 'background.jpg');
+              recomposeForm.append('background.imageFile', backgroundBlob, 'background.jpg');
             } else {
               flattenParams.set('background.color', 'F5F5F0');
             }
