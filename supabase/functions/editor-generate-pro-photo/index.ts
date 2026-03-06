@@ -414,7 +414,7 @@ Deno.serve(async (req) => {
       // KEY FIX: Send background as a FILE in the multipart form data.
       // This bypasses URL reachability issues AND WebP format issues.
       // PhotoRoom receives the raw bytes directly.
-      composeForm.append('background.image', backgroundBlob, 'background.jpg');
+      composeForm.append('background.imageFile', backgroundBlob, 'background.jpg');
       console.log(`[PRO-PHOTO] Step 3: Background attached as FILE (${backgroundBlob.size} bytes, type=${backgroundBlob.type})`);
     } else {
       // Last resort: use PhotoRoom's prompt-based background generation
