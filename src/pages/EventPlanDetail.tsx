@@ -299,7 +299,7 @@ export default function EventPlanDetailPage() {
                 <Label className="text-sm">Offer terms</Label>
                 <Textarea
                   placeholder="e.g., 2-for-1 cocktails 5-7pm, valid Dec 20-24..."
-                  value={decision.offer_terms || ''}
+                  value={localOfferTerms}
                   onChange={e => handleOfferTerms(e.target.value)}
                   rows={3}
                   className="text-sm"
