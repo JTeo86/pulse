@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
@@ -29,6 +29,28 @@ export default function EventPlanDetailPage() {
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [localOfferTerms, setLocalOfferTerms] = useState('');
+  const isEditingRef = useRef(false);
+
+  // Sync local state from DB when not actively editing
+  useEffect(() => {
+    if (!isEditingRef.current) {
+      setLocalOfferTerms(plan?.decision?.offer_terms || '');
+    }
+  }, [plan?.decision?.offer_terms]);
+
+  // Debounced save
+  useEffect(() => {
+    if (!isEditingRef.current) return;
+    const timer = setTimeout(() => {
+      const current = plan?.decision || {};
+      if (localOfferTerms !== (current.offer_terms || '')) {
+        updateDecision({ ...current, offer_terms: localOfferTerms });
+      }
+      isEditingRef.current = false;
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [localOfferTerms]);
 
   if (loading) {
     return (
@@ -51,7 +73,8 @@ export default function EventPlanDetailPage() {
   };
 
   const handleOfferTerms = (val: string) => {
-    updateDecision({ ...decision, offer_terms: val });
+    isEditingRef.current = true;
+    setLocalOfferTerms(val);
   };
 
   const handleGenerate = async () => {
@@ -276,7 +299,7 @@ export default function EventPlanDetailPage() {
                 <Label className="text-sm">Offer terms</Label>
                 <Textarea
                   placeholder="e.g., 2-for-1 cocktails 5-7pm, valid Dec 20-24..."
-                  value={decision.offer_terms || ''}
+                  value={localOfferTerms}
                   onChange={e => handleOfferTerms(e.target.value)}
                   rows={3}
                   className="text-sm"
