@@ -76,14 +76,31 @@ async function resolveSourceImage(
   throw new Error('input_image_url or sourceFileBase64 required');
 }
 
+/** Detect image format from magic bytes and return extension + contentType */
+function sniffImage(buf: ArrayBuffer | Uint8Array): { ext: string; contentType: string } {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) {
+    return { ext: 'png', contentType: 'image/png' };
+  }
+  if (b.length >= 4 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46) {
+    // RIFF header — likely WebP (bytes 8-11 = WEBP)
+    if (b.length >= 12 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+      return { ext: 'webp', contentType: 'image/webp' };
+    }
+  }
+  // Default: JPEG (FFD8)
+  return { ext: 'jpg', contentType: 'image/jpeg' };
+}
+
 async function uploadResultBuffer(
   supabase: any,
   venueId: string,
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | Uint8Array,
   suffix: string,
 ): Promise<{ publicUrl: string; storagePath: string }> {
-  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.jpg`;
-  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType: 'image/jpeg' });
+  const { ext, contentType } = sniffImage(buffer);
+  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
+  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
   const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
   return { publicUrl, storagePath: path };
 }
@@ -397,7 +414,7 @@ Deno.serve(async (req) => {
       // KEY FIX: Send background as a FILE in the multipart form data.
       // This bypasses URL reachability issues AND WebP format issues.
       // PhotoRoom receives the raw bytes directly.
-      composeForm.append('background.image', backgroundBlob, 'background.jpg');
+      composeForm.append('background.imageFile', backgroundBlob, 'background.jpg');
       console.log(`[PRO-PHOTO] Step 3: Background attached as FILE (${backgroundBlob.size} bytes, type=${backgroundBlob.type})`);
     } else {
       // Last resort: use PhotoRoom's prompt-based background generation
@@ -698,7 +715,7 @@ Maximum realism. Zero hallucination. Zero new elements.`;
             flattenParams.set('lighting.mode', 'ai.auto');
             flattenParams.set('shadow.mode', 'ai.soft');
             if (backgroundBlob) {
-              recomposeForm.append('background.image', backgroundBlob, 'background.jpg');
+              recomposeForm.append('background.imageFile', backgroundBlob, 'background.jpg');
             } else {
               flattenParams.set('background.color', 'F5F5F0');
             }
@@ -718,10 +735,9 @@ Maximum realism. Zero hallucination. Zero new elements.`;
               replateSkipReason = `Recompose flattening failed (${recomposeResult.status})`;
             }
           } else {
-            // Verified non-PNG (JPEG) — safe to upload directly
-            const geminiBuffer = imgBytes.buffer;
+            // Verified non-PNG (JPEG/WebP) — safe to upload directly
             const { publicUrl: geminiUrl, storagePath: geminiPath } = await uploadResultBuffer(
-              supabase, venue_id, geminiBuffer, 'final',
+              supabase, venue_id, imgBytes, 'final',
             );
             finalUrl = geminiUrl;
             finalStoragePath = geminiPath;
@@ -738,9 +754,9 @@ Maximum realism. Zero hallucination. Zero new elements.`;
       }
     }
 
-    // ═══ STEP 6 — Integrity check: final must be .jpg ═══
-    if (!finalUrl.endsWith('.jpg')) {
-      console.error(`[PRO-PHOTO] INTEGRITY FAIL: final_url does not end in .jpg: ${finalUrl}`);
+    // ═══ STEP 6 — Integrity check: final must be a recognised image format ═══
+    if (!/\.(jpg|jpeg|png|webp)$/.test(finalUrl)) {
+      console.error(`[PRO-PHOTO] INTEGRITY FAIL: final_url has unexpected extension: ${finalUrl}`);
       finalUrl = composedUrl;
       finalStoragePath = composedStoragePath;
       geminiUsed = false;
