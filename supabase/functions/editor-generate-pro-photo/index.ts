@@ -735,10 +735,9 @@ Maximum realism. Zero hallucination. Zero new elements.`;
               replateSkipReason = `Recompose flattening failed (${recomposeResult.status})`;
             }
           } else {
-            // Verified non-PNG (JPEG) — safe to upload directly
-            const geminiBuffer = imgBytes.buffer;
+            // Verified non-PNG (JPEG/WebP) — safe to upload directly
             const { publicUrl: geminiUrl, storagePath: geminiPath } = await uploadResultBuffer(
-              supabase, venue_id, geminiBuffer, 'final',
+              supabase, venue_id, imgBytes, 'final',
             );
             finalUrl = geminiUrl;
             finalStoragePath = geminiPath;
