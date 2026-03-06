@@ -98,7 +98,11 @@ async function uploadResultBuffer(
   buffer: ArrayBuffer | Uint8Array,
   suffix: string,
 ): Promise<{ publicUrl: string; storagePath: string }> {
-  const { ext, contentType } = sniffImage(buffer);
+  const b = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const isPng = b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47;
+  const ext = isPng ? 'png' : 'jpg';
+  const contentType = isPng ? 'image/png' : 'image/jpeg';
+  console.log(`[PRO-PHOTO] uploadResultBuffer: suffix=${suffix} detected=${isPng ? 'PNG' : 'JPEG'}`);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
   await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
   const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
