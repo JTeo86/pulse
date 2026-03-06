@@ -76,14 +76,31 @@ async function resolveSourceImage(
   throw new Error('input_image_url or sourceFileBase64 required');
 }
 
+/** Detect image format from magic bytes and return extension + contentType */
+function sniffImage(buf: ArrayBuffer | Uint8Array): { ext: string; contentType: string } {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) {
+    return { ext: 'png', contentType: 'image/png' };
+  }
+  if (b.length >= 4 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46) {
+    // RIFF header — likely WebP (bytes 8-11 = WEBP)
+    if (b.length >= 12 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+      return { ext: 'webp', contentType: 'image/webp' };
+    }
+  }
+  // Default: JPEG (FFD8)
+  return { ext: 'jpg', contentType: 'image/jpeg' };
+}
+
 async function uploadResultBuffer(
   supabase: any,
   venueId: string,
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | Uint8Array,
   suffix: string,
 ): Promise<{ publicUrl: string; storagePath: string }> {
-  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.jpg`;
-  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType: 'image/jpeg' });
+  const { ext, contentType } = sniffImage(buffer);
+  const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
+  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
   const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
   return { publicUrl, storagePath: path };
 }
