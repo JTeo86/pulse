@@ -29,6 +29,28 @@ export default function EventPlanDetailPage() {
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [localOfferTerms, setLocalOfferTerms] = useState('');
+  const isEditingRef = useRef(false);
+
+  // Sync local state from DB when not actively editing
+  useEffect(() => {
+    if (!isEditingRef.current) {
+      setLocalOfferTerms(plan?.decision?.offer_terms || '');
+    }
+  }, [plan?.decision?.offer_terms]);
+
+  // Debounced save
+  useEffect(() => {
+    if (!isEditingRef.current) return;
+    const timer = setTimeout(() => {
+      const current = plan?.decision || {};
+      if (localOfferTerms !== (current.offer_terms || '')) {
+        updateDecision({ ...current, offer_terms: localOfferTerms });
+      }
+      isEditingRef.current = false;
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [localOfferTerms]);
 
   if (loading) {
     return (
