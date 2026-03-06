@@ -73,7 +73,8 @@ export default function EventPlanDetailPage() {
   };
 
   const handleOfferTerms = (val: string) => {
-    updateDecision({ ...decision, offer_terms: val });
+    isEditingRef.current = true;
+    setLocalOfferTerms(val);
   };
 
   const handleGenerate = async () => {
