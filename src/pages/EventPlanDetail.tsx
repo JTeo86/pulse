@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2, ExternalLink, AlertTriangle } from 'lucide-react';
