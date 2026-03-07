@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Upload, Camera, Wand2, Film, Download,
+  Upload, Camera, Wand2, Download,
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info, ChevronDown, ChevronRight,
   Eraser, Replace, Sparkles, Crop
@@ -25,8 +25,8 @@ type RealismMode = 'safe' | 'enhanced' | 'editorial';
 
 const REALISM_MODES: { key: RealismMode; label: string; desc: string; warn?: boolean }[] = [
   { key: 'safe', label: 'Safe', desc: 'Cleanup + lighting only. Dish stays very close to original.' },
-  { key: 'enhanced', label: 'Enhanced', desc: 'Mild replating, tidier presentation.' },
-  { key: 'editorial', label: 'Editorial', desc: 'Strongest replating. Most polished.', warn: true },
+  { key: 'enhanced', label: 'Enhanced', desc: 'Professional lighting, subtle depth-of-field.' },
+  { key: 'editorial', label: 'Editorial', desc: 'Cinematic, maximum polish.', warn: true },
 ];
 
 async function fileToBase64(file: File): Promise<string> {
@@ -69,12 +69,10 @@ export default function TheEditorPage() {
   const [generating, setGenerating] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobResult, setJobResult] = useState<{
-    composed_url: string | null;
     final_image_url: string;
     final_image_variants: Record<string, string>;
-    gemini_used: boolean;
+    reference_count: number;
     background_source: string;
-    replate_skip_reason?: string | null;
   } | null>(null);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [manualToolsOpen, setManualToolsOpen] = useState(false);
@@ -148,21 +146,19 @@ export default function TheEditorPage() {
 
       if (data?.final_image_url) {
         setJobResult({
-          composed_url: data.composed_url || null,
           final_image_url: data.final_image_url,
           final_image_variants: (data.final_image_variants as Record<string, string>) || {},
-          gemini_used: data.gemini_used || false,
-          background_source: data.background_source || 'unknown',
-          replate_skip_reason: data.replate_skip_reason || null,
+          reference_count: data.reference_count || 0,
+          background_source: data.background_source || 'ai_generated',
         });
       }
 
       toast({
         title: 'Pro Photo generated',
-        description: `Saved to Content Library. Background: ${data?.background_source === 'atmosphere_ref' ? 'Venue Ref' : 'AI Generated'} ${data?.gemini_used ? '• AI Replated' : ''}`,
+        description: `Saved to Content Library. ${data?.reference_count > 0 ? `${data.reference_count} brand references used.` : 'AI-generated environment.'}`,
       });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Generation failed', description: err.message });
+      toast({ variant: 'destructive', title: 'Generation failed', description: err.message || 'AI photo generation failed. Please try again.' });
     } finally {
       setGenerating(false);
     }
@@ -402,37 +398,14 @@ export default function TheEditorPage() {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                        {jobResult.gemini_used ? 'Final (Pro Replated)' : 'Pro Photo'}
-                      </p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Generated</p>
                       <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">
-                        {jobResult.gemini_used ? 'AI Replated' : 'Composed'}
+                        AI Enhanced
                       </Badge>
                     </div>
                     <img src={jobResult.final_image_url} alt="Pro Photo" className="w-full aspect-square object-cover rounded-lg border border-accent/20" />
                   </div>
                 </div>
-
-                {/* Composed intermediate */}
-                {jobResult.gemini_used && jobResult.composed_url && (
-                  <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      <p className="text-xs text-muted-foreground font-medium">Composed (Background Applied)</p>
-                    </div>
-                    <img src={jobResult.composed_url} alt="Composed" className="w-full max-w-xs aspect-square object-cover rounded-lg border border-border" />
-                  </div>
-                )}
-
-                {/* Gemini skipped note */}
-                {!jobResult.gemini_used && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/30 border border-border">
-                    <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <p className="text-sm text-muted-foreground">
-                      Pro Replate (AI polish) was skipped. {jobResult.replate_skip_reason || 'Gemini API key not found. Add GEMINI_IMAGE_API_KEY in Platform Admin.'}
-                    </p>
-                  </div>
-                )}
 
                 {/* Inputs Used panel */}
                 <div className="rounded-xl border border-border bg-card p-4">
@@ -442,19 +415,23 @@ export default function TheEditorPage() {
                       <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-muted-foreground">Background:</span>
                       <span className="font-medium">
-                        {jobResult.background_source === 'atmosphere_ref' ? 'Venue Atmosphere Ref' :
-                         jobResult.background_source === 'ai_prompt' ? 'AI Generated' : 'Studio Default'}
+                        {jobResult.background_source === 'brand_references' ? 'Brand References' : 'AI Generated'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Wand2 className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-muted-foreground">Provider:</span>
-                      <span className="font-medium">{jobResult.gemini_used ? 'PhotoRoom + Gemini' : 'PhotoRoom'}</span>
+                      <span className="font-medium">Gemini</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Star className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-muted-foreground">Realism:</span>
                       <span className="font-medium capitalize">{realismMode}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">References:</span>
+                      <span className="font-medium">{jobResult.reference_count} images</span>
                     </div>
                   </div>
                 </div>
@@ -486,25 +463,42 @@ export default function TheEditorPage() {
                   </div>
                 )}
 
-                {/* Download + Send to Drafts */}
+                {/* Download + Actions */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Actions</p>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <Button
-                      onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${Date.now()}.jpg`)}
+                      onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-1x1-${Date.now()}.jpg`)}
                       variant="default"
-                      className="gap-2 flex-1 bg-accent hover:bg-accent/90 text-accent-foreground"
+                      className="gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                      size="sm"
                     >
-                      <Download className="w-4 h-4" /> Download Image
+                      <Download className="w-3.5 h-3.5" /> 1:1
                     </Button>
                     <Button
+                      onClick={() => handleDownload(jobResult.final_image_variants?.portrait_4_5 || jobResult.final_image_url, `pro-photo-4x5-${Date.now()}.jpg`)}
                       variant="outline"
-                      className="gap-2 flex-1"
-                      onClick={() => toast({ title: 'Saved to Content Library', description: 'Image is available in Brand → Content Library.' })}
+                      className="gap-1.5 text-xs"
+                      size="sm"
                     >
-                      <ImageIcon className="w-4 h-4" /> Send to Drafts
+                      <Download className="w-3.5 h-3.5" /> 4:5
+                    </Button>
+                    <Button
+                      onClick={() => handleDownload(jobResult.final_image_variants?.vertical_9_16 || jobResult.final_image_url, `pro-photo-9x16-${Date.now()}.jpg`)}
+                      variant="outline"
+                      className="gap-1.5 text-xs"
+                      size="sm"
+                    >
+                      <Download className="w-3.5 h-3.5" /> 9:16
                     </Button>
                   </div>
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => toast({ title: 'Saved to Content Library', description: 'Image is available in Brand → Content Library.' })}
+                  >
+                    <ImageIcon className="w-4 h-4" /> Save to Content Library
+                  </Button>
                   <p className="text-[10px] text-muted-foreground text-center">
                     Pro Photo outputs are automatically saved to your Content Library.
                   </p>
