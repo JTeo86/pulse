@@ -1588,6 +1588,109 @@ export type Database = {
           },
         ]
       }
+      venue_style_feedback: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          edited_asset_id: string
+          feedback_notes: string | null
+          feedback_reason: string | null
+          feedback_type: string
+          id: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          edited_asset_id: string
+          feedback_notes?: string | null
+          feedback_reason?: string | null
+          feedback_type: string
+          id?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          edited_asset_id?: string
+          feedback_notes?: string | null
+          feedback_reason?: string | null
+          feedback_type?: string
+          id?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_style_feedback_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_style_generation_logs: {
+        Row: {
+          created_at: string
+          dish_lock_applied: boolean
+          duration_ms: number | null
+          edited_asset_id: string | null
+          error_json: Json | null
+          id: string
+          model_name: string
+          prompt_text: string | null
+          reference_asset_ids: Json
+          retry_count: number
+          status: string
+          style_sources_used: Json
+          style_summary_used: string | null
+          upload_id: string | null
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          dish_lock_applied?: boolean
+          duration_ms?: number | null
+          edited_asset_id?: string | null
+          error_json?: Json | null
+          id?: string
+          model_name: string
+          prompt_text?: string | null
+          reference_asset_ids?: Json
+          retry_count?: number
+          status?: string
+          style_sources_used?: Json
+          style_summary_used?: string | null
+          upload_id?: string | null
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          dish_lock_applied?: boolean
+          duration_ms?: number | null
+          edited_asset_id?: string | null
+          error_json?: Json | null
+          id?: string
+          model_name?: string
+          prompt_text?: string | null
+          reference_asset_ids?: Json
+          retry_count?: number
+          status?: string
+          style_sources_used?: Json
+          style_summary_used?: string | null
+          upload_id?: string | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_style_generation_logs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_style_profile: {
         Row: {
           atmosphere_profile: Json
@@ -1618,6 +1721,139 @@ export type Database = {
             foreignKeyName: "venue_style_profile_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_style_profiles: {
+        Row: {
+          background_preferences: Json
+          brand_summary: string | null
+          camera_style_preferences: Json
+          colour_palette: Json
+          composition_preferences: Json
+          created_at: string
+          cuisine_type: string | null
+          dish_lock_rules: Json
+          id: string
+          lighting_mood: string | null
+          luxury_level: string | null
+          negative_prompt_rules: Json
+          style_summary: string | null
+          table_surface_preferences: Json
+          updated_at: string
+          venue_id: string
+          venue_tone: string | null
+        }
+        Insert: {
+          background_preferences?: Json
+          brand_summary?: string | null
+          camera_style_preferences?: Json
+          colour_palette?: Json
+          composition_preferences?: Json
+          created_at?: string
+          cuisine_type?: string | null
+          dish_lock_rules?: Json
+          id?: string
+          lighting_mood?: string | null
+          luxury_level?: string | null
+          negative_prompt_rules?: Json
+          style_summary?: string | null
+          table_surface_preferences?: Json
+          updated_at?: string
+          venue_id: string
+          venue_tone?: string | null
+        }
+        Update: {
+          background_preferences?: Json
+          brand_summary?: string | null
+          camera_style_preferences?: Json
+          colour_palette?: Json
+          composition_preferences?: Json
+          created_at?: string
+          cuisine_type?: string | null
+          dish_lock_rules?: Json
+          id?: string
+          lighting_mood?: string | null
+          luxury_level?: string | null
+          negative_prompt_rules?: Json
+          style_summary?: string | null
+          table_surface_preferences?: Json
+          updated_at?: string
+          venue_id?: string
+          venue_tone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_style_profiles_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_style_reference_assets: {
+        Row: {
+          approved: boolean
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          metadata: Json
+          notes: string | null
+          pinned: boolean
+          public_url: string | null
+          sort_order: number
+          source_type: string
+          status: string
+          storage_path: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          approved?: boolean
+          channel: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          metadata?: Json
+          notes?: string | null
+          pinned?: boolean
+          public_url?: string | null
+          sort_order?: number
+          source_type: string
+          status?: string
+          storage_path: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          approved?: boolean
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          metadata?: Json
+          notes?: string | null
+          pinned?: boolean
+          public_url?: string | null
+          sort_order?: number
+          source_type?: string
+          status?: string
+          storage_path?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_style_reference_assets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
             referencedRelation: "venues"
             referencedColumns: ["id"]
           },
