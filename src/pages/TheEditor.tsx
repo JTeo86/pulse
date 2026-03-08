@@ -4,7 +4,7 @@ import {
   Upload, Camera, Wand2, Download,
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info, ChevronDown, ChevronRight,
-  Eraser, Replace, Sparkles, Crop
+  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
@@ -15,11 +15,6 @@ import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 
 type RealismMode = 'safe' | 'enhanced' | 'editorial';
 
@@ -27,6 +22,17 @@ const REALISM_MODES: { key: RealismMode; label: string; desc: string; warn?: boo
   { key: 'safe', label: 'Safe', desc: 'Cleanup + lighting only. Dish stays very close to original.' },
   { key: 'enhanced', label: 'Enhanced', desc: 'Professional lighting, subtle depth-of-field.' },
   { key: 'editorial', label: 'Editorial', desc: 'Cinematic, maximum polish.', warn: true },
+];
+
+const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[] = [
+  { type: 'approved', label: 'Approved', icon: ThumbsUp },
+  { type: 'great_match', label: 'Great Match', icon: Sparkles },
+  { type: 'rejected', label: 'Rejected', icon: ThumbsDown },
+  { type: 'too_dark', label: 'Too Dark', icon: Moon },
+  { type: 'too_bright', label: 'Too Bright', icon: Sun },
+  { type: 'too_generic', label: 'Too Generic', icon: Palette },
+  { type: 'not_our_style', label: 'Not Our Style', icon: Eye },
+  { type: 'dish_changed', label: 'Dish Changed', icon: Utensils },
 ];
 
 async function fileToBase64(file: File): Promise<string> {
@@ -53,6 +59,24 @@ function CreditBar({ used, total, label }: { used: number; total: number; label:
   );
 }
 
+function StyleSourceBadge({ sources, refCount }: { sources: string[]; refCount: number }) {
+  let label = 'Brand profile only';
+  if (sources.includes('reference_images') && sources.includes('venue_style_profiles')) {
+    label = `Style profile + ${refCount} reference${refCount !== 1 ? 's' : ''}`;
+  } else if (sources.includes('reference_images')) {
+    label = `Brand profile + ${refCount} reference${refCount !== 1 ? 's' : ''}`;
+  } else if (sources.includes('venue_style_profiles')) {
+    label = 'Style profile';
+  } else if (sources.includes('style_reference_assets')) {
+    label = `Legacy refs (${refCount})`;
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] gap-1">
+      <Palette className="w-3 h-3" /> {label}
+    </Badge>
+  );
+}
+
 export default function TheEditorPage() {
   const { user } = useAuth();
   const { currentVenue, isAdmin } = useVenue();
@@ -73,9 +97,11 @@ export default function TheEditorPage() {
     final_image_variants: Record<string, string>;
     reference_count: number;
     background_source: string;
+    style_sources: string[];
+    edited_asset_id: string | null;
   } | null>(null);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
-  const [manualToolsOpen, setManualToolsOpen] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
 
   const [usage] = useState({ pro_photo_used: 3, reel_used: 1 });
   const [limits] = useState({ monthly_pro_photo_credits: 50, monthly_reel_credits: 20 });
@@ -91,6 +117,7 @@ export default function TheEditorPage() {
     setJobResult(null);
     setJobId(null);
     setFidelityConfirmed(false);
+    setFeedbackSent(null);
   }, [currentVenue, user, toast]);
 
   const onDropZone = (e: React.DragEvent) => {
@@ -113,6 +140,7 @@ export default function TheEditorPage() {
     }
 
     setGenerating(true);
+    setFeedbackSent(null);
     try {
       const base64 = await fileToBase64(uploadedFile);
 
@@ -139,7 +167,6 @@ export default function TheEditorPage() {
           sourceFileBase64: base64,
           sourceFileName: uploadedFile.name,
           realism_mode: realismMode,
-          style_preset: 'clean_studio',
         },
       });
       if (fnError) throw fnError;
@@ -150,6 +177,8 @@ export default function TheEditorPage() {
           final_image_variants: (data.final_image_variants as Record<string, string>) || {},
           reference_count: data.reference_count || 0,
           background_source: data.background_source || 'ai_generated',
+          style_sources: data.style_sources || [],
+          edited_asset_id: data.edited_asset_id || null,
         });
       }
 
@@ -193,6 +222,38 @@ export default function TheEditorPage() {
     }
   };
 
+  const handleFeedback = async (feedbackType: string) => {
+    if (!currentVenue || !user || !jobResult?.edited_asset_id) return;
+    setFeedbackSent(feedbackType);
+    try {
+      await supabase.from('venue_style_feedback').insert({
+        venue_id: currentVenue.id,
+        edited_asset_id: jobResult.edited_asset_id,
+        feedback_type: feedbackType,
+        created_by: user.id,
+      });
+
+      // If approved, optionally save as style reference for future generations
+      if (feedbackType === 'approved' || feedbackType === 'great_match') {
+        const finalUrl = jobResult.final_image_url;
+        const storagePath = `venues/${currentVenue.id}/style/approved_output/${crypto.randomUUID()}.jpg`;
+        await supabase.from('venue_style_reference_assets').insert({
+          venue_id: currentVenue.id,
+          storage_path: storagePath,
+          public_url: finalUrl,
+          source_type: 'approved_output',
+          channel: 'approved_output',
+          label: `Approved output (${new Date().toLocaleDateString()})`,
+          created_by: user.id,
+        });
+      }
+
+      toast({ title: 'Feedback recorded', description: `Marked as: ${feedbackType.replace(/_/g, ' ')}` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Feedback failed', description: err.message });
+    }
+  };
+
   const handleReset = () => {
     if (uploadedPreview) URL.revokeObjectURL(uploadedPreview);
     setUploadedFile(null);
@@ -200,6 +261,7 @@ export default function TheEditorPage() {
     setJobId(null);
     setJobResult(null);
     setFidelityConfirmed(false);
+    setFeedbackSent(null);
   };
 
   return (
@@ -222,7 +284,7 @@ export default function TheEditorPage() {
             </div>
           </div>
           <p className="text-muted-foreground max-w-xl">
-            Upload a dish photo and generate a professional, on-brand marketing image in one click.
+            Upload a dish photo and generate a professional, on-brand marketing image powered by Gemini.
           </p>
         </div>
         {jobResult && (
@@ -247,7 +309,6 @@ export default function TheEditorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: Upload + Config */}
         <div className="lg:col-span-2 space-y-4">
-
           {/* Upload */}
           <div className="rounded-xl border border-border bg-card p-5 space-y-4">
             <div className="flex items-center gap-2">
@@ -327,40 +388,6 @@ export default function TheEditorPage() {
               )}
             </Button>
           </div>
-
-          {/* Manual tools — collapsed by default */}
-          <Collapsible open={manualToolsOpen} onOpenChange={setManualToolsOpen}>
-            <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Advanced Manual Adjustments</span>
-              {manualToolsOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2">
-              <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-                <p className="text-xs text-muted-foreground mb-3">
-                  These tools operate on the latest generated image. Generate a Pro Photo first for best results.
-                </p>
-                {[
-                  { icon: Eraser, label: 'Remove Background', desc: 'Transparent cutout', disabled: true },
-                  { icon: Replace, label: 'Replace Background', desc: 'Custom background', disabled: true },
-                  { icon: Sparkles, label: 'Enhance', desc: 'Lighting & color', disabled: true },
-                  { icon: Crop, label: 'Crop & Resize', desc: 'Format for social', disabled: true },
-                ].map((tool) => (
-                  <button
-                    key={tool.label}
-                    disabled={tool.disabled}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-accent/30 transition-all text-left opacity-60 cursor-not-allowed"
-                  >
-                    <tool.icon className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-xs font-medium">{tool.label}</p>
-                      <p className="text-[10px] text-muted-foreground">{tool.desc}</p>
-                    </div>
-                    <Badge variant="outline" className="ml-auto text-[9px]">Coming soon</Badge>
-                  </button>
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
         </div>
 
         {/* Right: Results */}
@@ -399,17 +426,18 @@ export default function TheEditorPage() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Generated</p>
-                      <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">
-                        AI Enhanced
-                      </Badge>
+                      <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">Gemini</Badge>
                     </div>
                     <img src={jobResult.final_image_url} alt="Pro Photo" className="w-full aspect-square object-cover rounded-lg border border-accent/20" />
                   </div>
                 </div>
 
-                {/* Inputs Used panel */}
+                {/* Style Source + Inputs Used */}
                 <div className="rounded-xl border border-border bg-card p-4">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3">Inputs Used</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Inputs Used</p>
+                    <StyleSourceBadge sources={jobResult.style_sources} refCount={jobResult.reference_count} />
+                  </div>
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="flex items-center gap-2">
                       <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
@@ -434,6 +462,42 @@ export default function TheEditorPage() {
                       <span className="font-medium">{jobResult.reference_count} images</span>
                     </div>
                   </div>
+                </div>
+
+                {/* Feedback controls */}
+                <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Rate this output</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {FEEDBACK_OPTIONS.map((fb) => {
+                      const Icon = fb.icon;
+                      const isSelected = feedbackSent === fb.type;
+                      return (
+                        <button
+                          key={fb.type}
+                          onClick={() => handleFeedback(fb.type)}
+                          disabled={!!feedbackSent}
+                          className={cn(
+                            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-all',
+                            isSelected
+                              ? 'border-accent bg-accent/10 text-accent font-medium'
+                              : feedbackSent
+                                ? 'border-border text-muted-foreground opacity-40 cursor-not-allowed'
+                                : 'border-border hover:border-accent/30 text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          <Icon className="w-3 h-3" />
+                          {fb.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {feedbackSent && (
+                    <p className="text-[10px] text-muted-foreground">
+                      {(feedbackSent === 'approved' || feedbackSent === 'great_match')
+                        ? 'Saved as style reference for future generations.'
+                        : 'Feedback recorded — this helps improve future results.'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Fidelity */}
