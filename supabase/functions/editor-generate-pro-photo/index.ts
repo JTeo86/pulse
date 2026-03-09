@@ -488,17 +488,19 @@ Deno.serve(async (req) => {
 
     // Content library record
     let uploadId: string | null = null;
-    try {
-      const { data: uploadData } = await supabase.from('uploads').insert({
-        venue_id,
-        storage_path: finalStoragePath,
-        uploaded_by: user.id,
-        status: 'completed',
-        notes: `Pro Photo (Gemini, ${realism_mode || 'safe'}, ${ctx.referenceImages.length} refs)`,
-      }).select('id').single();
+    const { data: uploadData, error: uploadError } = await supabase.from('uploads').insert({
+      venue_id,
+      storage_path: finalStoragePath,
+      uploaded_by: user.id,
+      status: 'completed',
+      notes: `Pro Photo (Gemini, ${realism_mode || 'safe'}, ${ctx.referenceImages.length} refs)`,
+    }).select('id').single();
+    
+    if (uploadError) {
+      console.error('[PRO-PHOTO] uploads insert error:', uploadError.message, uploadError.details);
+    } else {
       uploadId = uploadData?.id || null;
-    } catch (e) {
-      console.warn('[PRO-PHOTO] uploads insert error (non-blocking):', e);
+      console.log(`[PRO-PHOTO] Upload record created: ${uploadId}`);
     }
 
     // Generation log
