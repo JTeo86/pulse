@@ -35,6 +35,10 @@ import EventsPlanner from "./pages/EventsPlanner";
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import ReferralDashboard from "./pages/growth/ReferralDashboard";
+import PartnersPage from "./pages/growth/PartnersPage";
+import OffersPage from "./pages/growth/OffersPage";
+import ReferralsPage from "./pages/growth/ReferralsPage";
+import PayoutsPage from "./pages/growth/PayoutsPage";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
@@ -116,10 +120,10 @@ function AppRoutes() {
 
         {/* Growth Section */}
         <Route path="/growth/performance" element={<BrandPerformance />} />
-        <Route path="/growth/referrals" element={<ReferralDashboard />} />
-        <Route path="/growth/partners" element={<ReferralDashboard />} />
-        <Route path="/growth/payouts" element={<ReferralDashboard />} />
-        <Route path="/growth/offers" element={<ReferralDashboard />} />
+        <Route path="/growth/referrals" element={<ReferralsPage />} />
+        <Route path="/growth/partners" element={<PartnersPage />} />
+        <Route path="/growth/payouts" element={<PayoutsPage />} />
+        <Route path="/growth/offers" element={<OffersPage />} />
 
         {/* Venue Section */}
         <Route path="/venue/brand-basics" element={<BrandBasics />} />

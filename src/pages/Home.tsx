@@ -16,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ActionFeed } from '@/components/home/ActionFeed';
 import { WeeklyMarketingPlan } from '@/components/home/WeeklyMarketingPlan';
+import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
 
 interface SnapshotData {
   reviewsAwaiting: number;
@@ -175,6 +176,9 @@ export default function Home() {
 
       {/* Action Feed */}
       <ActionFeed actions={actions} loading={loading} onActionsChange={setActions} />
+
+      {/* Referral Network Cards */}
+      <ReferralHomeCards />
 
       {/* Weekly Marketing Plan */}
       <WeeklyMarketingPlan />
