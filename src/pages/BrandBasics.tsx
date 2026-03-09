@@ -395,8 +395,30 @@ export default function BrandBasics() {
         </div>
       )}
 
+      {/* Visual Style CTA */}
+      <Card className="bg-accent/5 border-accent/20">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <Eye className="w-5 h-5 text-accent mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Next: Train your visual style</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Upload reference images so the AI learns your venue's visual language across brand, atmosphere, and plating.
+                </p>
+              </div>
+            </div>
+            <Link to="/venue/visual-style">
+              <Button variant="outline" size="sm" className="gap-1 shrink-0">
+                Visual Style <ArrowRight className="w-3 h-3" />
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* AI Context Note */}
-      <div className="bg-accent/5 border border-accent/20 rounded-lg p-4 flex items-start gap-3">
+      <div className="bg-muted/30 border border-border rounded-lg p-4 flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-accent mt-0.5 shrink-0" />
         <div>
           <p className="text-sm font-medium">How this helps the AI</p>
