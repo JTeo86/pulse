@@ -19,13 +19,13 @@ import {
 } from '@/lib/platform-keys';
 
 // ─── Category config ──────────────────────────────────────────────────────────
-const CATEGORY_ORDER: KeyCategory[] = ['Reviews', 'Editor', 'Video', 'Publishing'];
+const CATEGORY_ORDER: KeyCategory[] = ['Reviews', 'Editor', 'Publishing'];
 const CATEGORY_META: Record<KeyCategory, { label: string; description: string }> = {
   Reviews:    { label: 'Reviews & Reputation',  description: 'Keys for ingesting Google, OpenTable and TripAdvisor reviews via SerpAPI.' },
   Editor:     { label: 'AI / Creative',          description: 'Gemini powers Pro Photo image generation and creative AI features.' },
-  Video:      { label: 'Video / Reels',          description: 'Kling AI for video generation from images. Configure when ready.' },
   Publishing: { label: 'Publishing',             description: 'Buffer for future direct social media scheduling.' },
-  Other:      { label: 'Other',                  description: 'Miscellaneous platform credentials.' },
+  Video:      { label: 'Video / Reels',          description: '' },
+  Other:      { label: 'Other',                  description: '' },
 };
 
 // ─── Health badge ─────────────────────────────────────────────────────────────
