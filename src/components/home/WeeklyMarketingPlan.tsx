@@ -155,7 +155,7 @@ export function WeeklyMarketingPlan() {
       const { error } = await supabase
         .from('marketing_plans')
         .update({
-          plan_data: updatedTasks,
+          plan_data: updatedTasks as unknown as Record<string, unknown>[],
           status: 'approved',
           approved_at: new Date().toISOString(),
         })
