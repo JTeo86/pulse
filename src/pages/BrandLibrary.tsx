@@ -221,7 +221,7 @@ export default function BrandLibraryPage() {
                   onDelete={handleDelete}
                   onUpdateStatus={handleUpdateStatus}
                   showVariation={flags.gallery_variations_enabled}
-                  showReel={flags.gallery_reel_enabled || flags.video_enabled}
+                  showReel={reelEnabled}
                   showLineage={flags.gallery_lineage_enabled}
                   isCreatingVariation={variatingId === asset.id}
                   isCreatingReel={reelingId === asset.id}
