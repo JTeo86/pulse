@@ -690,20 +690,19 @@ export default function EditorPage() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Download</p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { label: 'Square', key: 'square_1_1', ratio: '1:1' },
-                        { label: 'Portrait', key: 'portrait_4_5', ratio: '4:5' },
-                        { label: 'Vertical', key: 'vertical_9_16', ratio: '9:16' },
+                        { label: 'Square', ratio: 1, filename: 'pro-photo-1x1.jpg', display: '1:1' },
+                        { label: 'Portrait', ratio: 4 / 5, filename: 'pro-photo-4x5.jpg', display: '4:5' },
+                        { label: 'Vertical', ratio: 9 / 16, filename: 'pro-photo-9x16.jpg', display: '9:16' },
                       ].map((fmt) => (
-                        <a
-                          key={fmt.key}
-                          href={jobResult.final_image_variants[fmt.key] || jobResult.final_image_url}
-                          download={`pro-photo-${fmt.key}.jpg`}
+                        <button
+                          key={fmt.label}
+                          onClick={() => cropAndDownload(jobResult.final_image_url, fmt.ratio, fmt.filename)}
                           className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg border border-border hover:border-accent/40 hover:bg-accent/5 transition-all text-center"
                         >
                           <Download className="w-4 h-4 text-muted-foreground" />
                           <span className="text-xs font-medium">{fmt.label}</span>
-                          <span className="text-[10px] text-muted-foreground">{fmt.ratio}</span>
-                        </a>
+                          <span className="text-[10px] text-muted-foreground">{fmt.display}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
