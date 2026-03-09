@@ -188,6 +188,14 @@ function AppRoutes() {
         <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
       </Route>
 
+      {/* Partner Portal (separate layout, no venue sidebar) */}
+      <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+      <Route path="/partner/offers" element={<PartnerLayout><PartnerOffers /></PartnerLayout>} />
+      <Route path="/partner/links" element={<PartnerLayout><PartnerLinks /></PartnerLayout>} />
+      <Route path="/partner/referrals" element={<PartnerLayout><PartnerReferrals /></PartnerLayout>} />
+      <Route path="/partner/earnings" element={<PartnerLayout><PartnerEarnings /></PartnerLayout>} />
+      <Route path="/partner/profile" element={<PartnerLayout><PartnerProfile /></PartnerLayout>} />
+
       {/* Legal pages */}
       <Route path="/legal/terms" element={<TermsPage />} />
       <Route path="/legal/privacy" element={<PrivacyPage />} />
