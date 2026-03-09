@@ -157,7 +157,60 @@ serve(async (req) => {
         });
       }
 
-      // Upsert actions into action_feed_items
+      // 6. Referral: pending bill verifications
+      const { count: pendingVerifyCount } = await supabaseAdmin
+        .from("referral_bookings")
+        .select("*", { count: "exact", head: true })
+        .eq("venue_id", venueId)
+        .eq("spend_verified", false)
+        .in("booking_status", ["attended", "confirmed"]);
+
+      if (pendingVerifyCount && pendingVerifyCount > 0) {
+        actions.push({
+          action_type: "referral_verify_bills",
+          priority: "high",
+          title: `Verify ${pendingVerifyCount} referral bill${pendingVerifyCount > 1 ? "s" : ""}`,
+          description: "Partner referrals are awaiting spend verification.",
+          cta_label: "Verify Now",
+          cta_route: "/growth/referrals",
+        });
+      }
+
+      // 7. Referral: pending payout approval
+      const { count: pendingPayoutCount } = await supabaseAdmin
+        .from("payout_batches")
+        .select("*", { count: "exact", head: true })
+        .eq("venue_id", venueId)
+        .eq("status", "pending_approval");
+
+      if (pendingPayoutCount && pendingPayoutCount > 0) {
+        actions.push({
+          action_type: "referral_approve_payout",
+          priority: "medium",
+          title: "Approve payout batch",
+          description: "A payout batch is ready for review and approval.",
+          cta_label: "Review Payouts",
+          cta_route: "/growth/payouts",
+        });
+      }
+
+      // 8. Guest UGC submissions pending
+      const { count: pendingUGCCount } = await supabaseAdmin
+        .from("guest_submissions")
+        .select("*", { count: "exact", head: true })
+        .eq("venue_id", venueId)
+        .eq("status", "pending");
+
+      if (pendingUGCCount && pendingUGCCount > 0) {
+        actions.push({
+          action_type: "guest_ugc_review",
+          priority: "low",
+          title: `${pendingUGCCount} guest photo${pendingUGCCount > 1 ? "s" : ""} to review`,
+          description: "Guest-submitted photos are waiting for your approval.",
+          cta_label: "Review Photos",
+          cta_route: "/venue/guest-photos",
+        });
+      }
       for (const action of actions) {
         // Use action_type + venue_id as idempotency key
         const { error } = await supabaseAdmin

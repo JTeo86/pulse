@@ -46,6 +46,8 @@ import PartnerReferrals from "./pages/partner/PartnerReferrals";
 import PartnerEarnings from "./pages/partner/PartnerEarnings";
 import PartnerProfile from "./pages/partner/PartnerProfile";
 import { PartnerLayout } from "./components/partner/PartnerLayout";
+import GuestSubmissions from "./pages/GuestSubmissions";
+import GuestUploadPage from "./pages/GuestUploadPage";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
@@ -105,6 +107,9 @@ function AppRoutes() {
       {/* Redirect any signup attempts to landing */}
       <Route path="/signup" element={<Navigate to="/" replace />} />
 
+      {/* Public guest upload page (no auth required) */}
+      <Route path="/submit/:venueId" element={<GuestUploadPage />} />
+
       {/* All authenticated routes share a single persistent AppLayout */}
       <Route element={<ProtectedLayout />}>
         {/* Home - Default landing page */}
@@ -136,6 +141,7 @@ function AppRoutes() {
         <Route path="/venue/brand-basics" element={<BrandBasics />} />
         <Route path="/venue/integrations" element={<Integrations />} />
         <Route path="/venue/team" element={<Team />} />
+        <Route path="/venue/guest-photos" element={<GuestSubmissions />} />
 
         {/* Admin Section */}
         <Route path="/admin/platform" element={<PlatformAdmin />} />
