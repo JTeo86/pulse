@@ -86,8 +86,15 @@ const reputationNavigation = [
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
 ];
 
-const growthNavigation = [
+const growthBaseNavigation = [
   { name: 'Performance', href: '/growth/performance', icon: TrendingUp },
+];
+
+const growthReferralItems: NavItem[] = [
+  { name: 'Referrals', href: '/growth/referrals', icon: Link2 },
+  { name: 'Partners', href: '/growth/partners', icon: Network },
+  { name: 'Offers', href: '/growth/offers', icon: Gift },
+  { name: 'Payouts', href: '/growth/payouts', icon: Wallet },
 ];
 
 const venueNavigation = [
