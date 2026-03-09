@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Flag, Video, Image, Zap, Package, FlaskConical } from 'lucide-react';
+import { Flag, Video, Image, Zap, Package, FlaskConical, Film } from 'lucide-react';
 
 interface FeatureFlag {
   id: string;
