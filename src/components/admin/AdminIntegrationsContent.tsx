@@ -379,8 +379,6 @@ export default function AdminIntegrationsContent() {
             Video provider credentials (Kling API Key {"&"} Secret) are managed in the <strong>Video Provider</strong> tab.
           </p>
         </div>
-          );
-        })}
       </div>
     </TooltipProvider>
   );
