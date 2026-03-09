@@ -53,7 +53,7 @@ export default function AuthPage() {
   }
 
   if (user) {
-    return <Navigate to="/brand/overview" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   const onSubmit = async (data: AuthFormData) => {
