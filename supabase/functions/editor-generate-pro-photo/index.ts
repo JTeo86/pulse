@@ -526,6 +526,35 @@ Deno.serve(async (req) => {
       console.log(`[PRO-PHOTO] Upload record created: ${uploadId}`);
     }
 
+    // Content assets record (Asset Command Center)
+    try {
+      await supabase.from('content_assets').insert({
+        venue_id,
+        created_by: user.id,
+        asset_type: 'image',
+        source_type: 'generated_image',
+        status: 'draft',
+        title: 'Pro Photo',
+        storage_path: finalStoragePath,
+        public_url: finalUrl,
+        mime_type: 'image/jpeg',
+        source_job_id: editedAssetData?.id || null,
+        derived_from_editor_job_id: job_id || null,
+        prompt_snapshot: { prompt: prompt.substring(0, 2000) },
+        generation_settings: {
+          realism_mode: realism_mode || 'safe',
+          reference_count: ctx.referenceImages.length,
+          model: 'google/gemini-2.5-flash-image',
+          generation_time_ms: generationTimeMs,
+          style_sources: ctx.styleSourcesUsed,
+        },
+        metadata: { edited_asset_id: editedAssetData?.id || null, upload_id: uploadId },
+      });
+      console.log('[PRO-PHOTO] content_assets record created');
+    } catch (e) {
+      console.warn('[PRO-PHOTO] content_assets insert error:', e);
+    }
+
     // Generation log
     try {
       await supabase.from('venue_style_generation_logs').insert({
