@@ -101,6 +101,7 @@ const growthReferralItems: NavItem[] = [
 
 const venueNavigation = [
   { name: 'Brand Basics', href: '/venue/brand-basics', icon: Palette },
+  { name: 'Visual Style', href: '/venue/visual-style', icon: Sparkles },
   { name: 'Integrations', href: '/venue/integrations', icon: Plug },
   { name: 'Team', href: '/venue/team', icon: Users },
 ];
