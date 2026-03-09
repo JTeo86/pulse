@@ -128,8 +128,18 @@ function ChannelSection({
   description,
   venueId,
   channel,
+  canEdit,
   refreshKey,
   onUploadComplete,
+}: {
+  title: string;
+  description: string;
+  venueId: string | undefined;
+  channel: 'atmosphere' | 'plating' | 'brand';
+  canEdit: boolean;
+  refreshKey: number;
+  onUploadComplete: () => void;
+}) {
 }: {
   title: string;
   description: string;
