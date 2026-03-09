@@ -18,10 +18,10 @@ import { cn } from '@/lib/utils';
 
 type RealismMode = 'safe' | 'enhanced' | 'editorial';
 
-const REALISM_MODES: { key: RealismMode; label: string; desc: string; warn?: boolean }[] = [
-  { key: 'safe', label: 'Safe', desc: 'Cleanup + lighting only. Dish stays very close to original.' },
-  { key: 'enhanced', label: 'Enhanced', desc: 'Professional lighting, subtle depth-of-field.' },
-  { key: 'editorial', label: 'Editorial', desc: 'Cinematic, maximum polish.', warn: true },
+const REALISM_MODES: { key: RealismMode; label: string; desc: string; detail: string; warn?: boolean }[] = [
+  { key: 'safe', label: 'Safe', desc: 'Closest to original', detail: 'Professional cleanup with minimal scene change. Same angle, same setting — just sharper and better exposed.' },
+  { key: 'enhanced', label: 'Enhanced', desc: 'Balanced improvement', detail: 'Better lighting, polish, and styling while staying believable. Social-media ready with professional food photography quality.' },
+  { key: 'editorial', label: 'Editorial', desc: 'Premium campaign', detail: 'Most dramatic result. Cinematic lighting, luxury styling, and magazine-quality presentation. Ideal for hero posts and ads.', warn: true },
 ];
 
 const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[] = [
