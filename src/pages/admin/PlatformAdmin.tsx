@@ -56,7 +56,6 @@ export default function PlatformAdmin() {
             <Settings2 className="w-4 h-4" />
             Product Defaults
           </TabsTrigger>
-          </TabsTrigger>
           <TabsTrigger value="flags" className="gap-2">
             <Flag className="w-4 h-4" />
             Feature Flags
