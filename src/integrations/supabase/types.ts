@@ -2705,11 +2705,13 @@ export type Database = {
           cuisine_type: string | null
           dish_lock_rules: Json
           id: string
+          key_selling_points: string | null
           lighting_mood: string | null
           luxury_level: string | null
           negative_prompt_rules: Json
           style_summary: string | null
           table_surface_preferences: Json
+          target_audience: string | null
           updated_at: string
           venue_id: string
           venue_tone: string | null
@@ -2724,11 +2726,13 @@ export type Database = {
           cuisine_type?: string | null
           dish_lock_rules?: Json
           id?: string
+          key_selling_points?: string | null
           lighting_mood?: string | null
           luxury_level?: string | null
           negative_prompt_rules?: Json
           style_summary?: string | null
           table_surface_preferences?: Json
+          target_audience?: string | null
           updated_at?: string
           venue_id: string
           venue_tone?: string | null
@@ -2743,11 +2747,13 @@ export type Database = {
           cuisine_type?: string | null
           dish_lock_rules?: Json
           id?: string
+          key_selling_points?: string | null
           lighting_mood?: string | null
           luxury_level?: string | null
           negative_prompt_rules?: Json
           style_summary?: string | null
           table_surface_preferences?: Json
+          target_audience?: string | null
           updated_at?: string
           venue_id?: string
           venue_tone?: string | null
@@ -2834,12 +2840,14 @@ export type Database = {
           created_at: string
           default_lead_time_days: number
           id: string
+          instagram_handle: string | null
           lat: number | null
           lng: number | null
           name: string
           owner_user_id: string | null
           plan: string | null
           timezone: string
+          website_url: string | null
         }
         Insert: {
           city?: string | null
@@ -2847,12 +2855,14 @@ export type Database = {
           created_at?: string
           default_lead_time_days?: number
           id?: string
+          instagram_handle?: string | null
           lat?: number | null
           lng?: number | null
           name: string
           owner_user_id?: string | null
           plan?: string | null
           timezone?: string
+          website_url?: string | null
         }
         Update: {
           city?: string | null
@@ -2860,12 +2870,14 @@ export type Database = {
           created_at?: string
           default_lead_time_days?: number
           id?: string
+          instagram_handle?: string | null
           lat?: number | null
           lng?: number | null
           name?: string
           owner_user_id?: string | null
           plan?: string | null
           timezone?: string
+          website_url?: string | null
         }
         Relationships: []
       }
