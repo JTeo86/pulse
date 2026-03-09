@@ -45,12 +45,6 @@ const CORE_FLAGS: Record<string, {
     safeDefault: 'off',
     icon: Video,
   },
-  'feature.kling_provider_enabled': {
-    name: 'Kling Provider Active',
-    description: 'Allows reel jobs to be sent to Kling AI for processing. Requires KLING_API_KEY.',
-    safeDefault: 'off',
-    icon: Video,
-  },
   'style_auto_improve_enabled': {
     name: 'Style Auto-Improve',
     description: 'Automatically re-analyse style assets when new uploads are added.',
