@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Image, Palette, Camera, Check } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
@@ -6,12 +6,19 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StyleChannelUploader } from '@/components/style/StyleChannelUploader';
-import { StyleProfileSummary } from '@/components/style/StyleProfileSummary';
 import { StyleIntelligencePanel } from '@/components/style/StyleIntelligencePanel';
+import { StyleAssetCard } from '@/components/style/StyleAssetCard';
+import { useStyleAssets } from '@/hooks/use-style-assets';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export default function StyleEngine() {
   const { currentVenue, isAdmin } = useVenue();
   const [activeTab, setActiveTab] = useState('atmosphere');
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleUploadComplete = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   return (
     <motion.div
@@ -42,9 +49,6 @@ export default function StyleEngine() {
         </CardContent>
       </Card>
 
-      {/* Style Profile Summary */}
-      {currentVenue && <StyleProfileSummary venueId={currentVenue.id} />}
-
       {/* Channel Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
@@ -67,63 +71,36 @@ export default function StyleEngine() {
         </TabsList>
 
         <TabsContent value="atmosphere" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Atmosphere References</CardTitle>
-              <CardDescription>
-                Interior shots, ambience, lighting mood. These help the AI understand your venue's vibe.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {currentVenue && (
-                <StyleChannelUploader 
-                  venueId={currentVenue.id} 
-                  channel="atmosphere" 
-                  canEdit={isAdmin}
-                />
-              )}
-            </CardContent>
-          </Card>
+          <ChannelSection
+            title="Atmosphere References"
+            description="Interior shots, ambience, lighting mood. These help the AI understand your venue's vibe."
+            venueId={currentVenue?.id}
+            channel="atmosphere"
+            refreshKey={refreshKey}
+            onUploadComplete={handleUploadComplete}
+          />
         </TabsContent>
 
         <TabsContent value="plating" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Plating References</CardTitle>
-              <CardDescription>
-                Close-up food shots, plating styles, garnish patterns. Teaches the AI your presentation standards.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {currentVenue && (
-                <StyleChannelUploader 
-                  venueId={currentVenue.id} 
-                  channel="plating" 
-                  canEdit={isAdmin}
-                />
-              )}
-            </CardContent>
-          </Card>
+          <ChannelSection
+            title="Plating References"
+            description="Close-up food shots, plating styles, garnish patterns. Teaches the AI your presentation standards."
+            venueId={currentVenue?.id}
+            channel="plating"
+            refreshKey={refreshKey}
+            onUploadComplete={handleUploadComplete}
+          />
         </TabsContent>
 
         <TabsContent value="brand" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Brand Inspiration</CardTitle>
-              <CardDescription>
-                Logo applications, marketing materials, competitor examples you admire. Defines your visual identity.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {currentVenue && (
-                <StyleChannelUploader 
-                  venueId={currentVenue.id} 
-                  channel="brand" 
-                  canEdit={isAdmin}
-                />
-              )}
-            </CardContent>
-          </Card>
+          <ChannelSection
+            title="Brand Inspiration"
+            description="Logo applications, marketing materials, competitor examples you admire. Defines your visual identity."
+            venueId={currentVenue?.id}
+            channel="brand"
+            refreshKey={refreshKey}
+            onUploadComplete={handleUploadComplete}
+          />
         </TabsContent>
 
         <TabsContent value="approved" className="mt-6">
@@ -136,12 +113,77 @@ export default function StyleEngine() {
             </CardHeader>
             <CardContent>
               {currentVenue && (
-                <StyleIntelligencePanel venueId={currentVenue.id} />
+                <StyleIntelligencePanel venueId={currentVenue.id} canEdit={isAdmin} />
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
     </motion.div>
+  );
+}
+
+function ChannelSection({
+  title,
+  description,
+  venueId,
+  channel,
+  refreshKey,
+  onUploadComplete,
+}: {
+  title: string;
+  description: string;
+  venueId: string | undefined;
+  channel: 'atmosphere' | 'plating' | 'brand';
+  refreshKey: number;
+  onUploadComplete: () => void;
+}) {
+  const { assets, loading, refetch } = useStyleAssets(venueId, channel);
+
+  const handleComplete = () => {
+    refetch();
+    onUploadComplete();
+  };
+
+  if (!venueId) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <StyleChannelUploader
+          venueId={venueId}
+          channel={channel}
+          onComplete={handleComplete}
+        />
+        
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : assets.length === 0 ? (
+          <EmptyState
+            icon={Image}
+            title="No references yet"
+            description={`Upload ${channel} images to train the AI.`}
+          />
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {assets.map((asset) => (
+              <StyleAssetCard
+                key={asset.id}
+                asset={asset}
+                onRefetch={refetch}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
