@@ -233,7 +233,7 @@ export default function BrandLibraryPage() {
         </TabsContent>
 
         {/* Reels Tab */}
-        {(flags.video_enabled || flags.gallery_reel_enabled) && (
+        {reelEnabled && (
           <TabsContent value="reels" className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Video reels generated from your images.
