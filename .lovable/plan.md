@@ -1,46 +1,60 @@
 
-## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
+## Problem
 
-### What's Happening
+The download buttons for different aspect ratios (1:1, 4:5, 9:16) all download the **same image**. Looking at the edge function:
 
-The database constraint `copy_projects_module_check` currently only allows:
-
-```
-'email', 'blog', 'ad_copy', 'sms_push'
-```
-
-This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
-
-There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
-
-### Fix
-
-One new migration file will be created:
-
-```sql
--- Drop the old constraint
-ALTER TABLE public.copy_projects
-  DROP CONSTRAINT copy_projects_module_check;
-
--- Recreate it with 'campaign' included
-ALTER TABLE public.copy_projects
-  ADD CONSTRAINT copy_projects_module_check
-  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
-
--- Notify PostgREST to reload its schema cache immediately
-NOTIFY pgrst, 'reload schema';
+```typescript
+const finalImageVariants = {
+  square_1_1: finalUrl,
+  portrait_4_5: finalUrl,
+  vertical_9_16: finalUrl,
+};
 ```
 
-The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
+All three variants point to the identical URL — no actual cropping happens.
 
-### No Frontend Changes Needed
+---
 
-The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
+## Solution: Client-Side Canvas Cropping
 
-### What Changes
+Implement canvas-based cropping on download click. When user clicks a ratio button:
+1. Load the image into a canvas
+2. Crop to the selected aspect ratio (center crop)
+3. Trigger download of the cropped version
 
-- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
+This approach is:
+- Instant (no server round-trip)
+- Free (no additional API credits)
+- Works offline
 
-### Verification
+---
 
-After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
+## Implementation
+
+### File: `src/pages/Editor.tsx`
+
+**1. Add crop utility function:**
+```typescript
+async function cropAndDownload(
+  imageUrl: string, 
+  aspectRatio: number, 
+  filename: string
+): Promise<void> {
+  // Load image, calculate center crop, render to canvas, download blob
+}
+```
+
+**2. Update download buttons:**
+Replace the `<a>` anchor tags with `<button>` elements that call `cropAndDownload()` with the appropriate ratio:
+- 1:1 → ratio `1`
+- 4:5 → ratio `0.8`  
+- 9:16 → ratio `0.5625`
+
+---
+
+## Expected Result
+
+Each download button produces a differently-cropped image:
+- **Square (1:1)**: Center-cropped square
+- **Portrait (4:5)**: Taller crop for Instagram feed
+- **Vertical (9:16)**: Full-height crop for Stories/Reels
