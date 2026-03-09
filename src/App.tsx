@@ -120,10 +120,10 @@ function AppRoutes() {
 
         {/* Growth Section */}
         <Route path="/growth/performance" element={<BrandPerformance />} />
-        <Route path="/growth/referrals" element={<ReferralDashboard />} />
-        <Route path="/growth/partners" element={<ReferralDashboard />} />
-        <Route path="/growth/payouts" element={<ReferralDashboard />} />
-        <Route path="/growth/offers" element={<ReferralDashboard />} />
+        <Route path="/growth/referrals" element={<ReferralsPage />} />
+        <Route path="/growth/partners" element={<PartnersPage />} />
+        <Route path="/growth/payouts" element={<PayoutsPage />} />
+        <Route path="/growth/offers" element={<OffersPage />} />
 
         {/* Venue Section */}
         <Route path="/venue/brand-basics" element={<BrandBasics />} />
