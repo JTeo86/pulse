@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   KeyRound, Eye, EyeOff, Save, CheckCircle2,
   XCircle, AlertCircle, Clock, RefreshCw,
-  Activity, FlaskConical,
+  Activity, FlaskConical, Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
