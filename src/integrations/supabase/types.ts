@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_feed_items: {
+        Row: {
+          action_type: string
+          completed_at: string | null
+          created_at: string
+          cta_label: string
+          cta_route: string
+          description: string
+          expires_at: string | null
+          id: string
+          priority: string
+          source_data: Json | null
+          status: string
+          title: string
+          venue_id: string
+        }
+        Insert: {
+          action_type: string
+          completed_at?: string | null
+          created_at?: string
+          cta_label: string
+          cta_route: string
+          description: string
+          expires_at?: string | null
+          id?: string
+          priority: string
+          source_data?: Json | null
+          status?: string
+          title: string
+          venue_id: string
+        }
+        Update: {
+          action_type?: string
+          completed_at?: string | null
+          created_at?: string
+          cta_label?: string
+          cta_route?: string
+          description?: string
+          expires_at?: string | null
+          id?: string
+          priority?: string
+          source_data?: Json | null
+          status?: string
+          title?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_feed_items_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_models: {
         Row: {
           allow_in_production: boolean
