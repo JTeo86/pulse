@@ -1,46 +1,63 @@
 
-## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
 
-### What's Happening
+## Problem Analysis
 
-The database constraint `copy_projects_module_check` currently only allows:
-
+The realism mode (`safe`, `enhanced`, `editorial`) is currently injected as a single line near the end of the prompt:
 ```
-'email', 'blog', 'ad_copy', 'sms_push'
+MODE: Minimal changes. Only improve lighting and white balance...
 ```
 
-This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
-
-There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
-
-### Fix
-
-One new migration file will be created:
-
-```sql
--- Drop the old constraint
-ALTER TABLE public.copy_projects
-  DROP CONSTRAINT copy_projects_module_check;
-
--- Recreate it with 'campaign' included
-ALTER TABLE public.copy_projects
-  ADD CONSTRAINT copy_projects_module_check
-  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
-
--- Notify PostgREST to reload its schema cache immediately
-NOTIFY pgrst, 'reload schema';
+Meanwhile, the main **LIGHTING** instruction is static for all modes:
+```
+LIGHTING:
+Soft cinematic lighting, shallow depth of field, premium professional food photography.
 ```
 
-The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
+This creates conflicting signals — the static lighting block overrides the mode-specific instruction, causing the AI to produce similar outputs regardless of mode selection.
 
-### No Frontend Changes Needed
+---
 
-The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
+## Solution: Integrate Mode Into Core Prompt Sections
 
-### What Changes
+Refactor `buildPrompt()` to make the realism mode influence multiple sections of the prompt directly:
 
-- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
+### 1. Dynamic LIGHTING Section
+Replace the static lighting block with mode-aware instructions:
 
-### Verification
+| Mode | Lighting Instruction |
+|------|---------------------|
+| **safe** | "Preserve original lighting characteristics. Only correct white balance and minor exposure issues. Shallow depth-of-field optional." |
+| **enhanced** | "Professional soft lighting with gentle shadows. Moderate depth-of-field to separate dish from background. Natural restaurant ambiance." |
+| **editorial** | "Cinematic dramatic lighting with pronounced shadows and highlights. Strong shallow depth-of-field with creamy bokeh. Magazine-quality polish." |
 
-After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
+### 2. Dynamic BACKGROUND Section  
+Add mode-specific intensity to background generation:
+
+| Mode | Background Behavior |
+|------|---------------------|
+| **safe** | "Keep background minimal and neutral. Avoid dramatic changes." |
+| **enhanced** | "Refine background with natural restaurant details. Subtle enhancement." |
+| **editorial** | "Create a rich, cinematic restaurant scene with atmospheric depth and premium textures." |
+
+### 3. Remove Conflicting Static Text
+Remove the standalone `MODE:` line and instead embed mode context throughout the prompt naturally.
+
+---
+
+## Files to Change
+
+| File | Change |
+|------|--------|
+| `supabase/functions/editor-generate-pro-photo/index.ts` | Refactor `buildPrompt()` to use mode-specific lighting/background/polish sections |
+
+---
+
+## Expected Outcome
+
+After this change:
+- **Safe mode**: Subtle touch-ups, original scene largely preserved
+- **Enhanced mode**: Noticeable professional polish, refined background
+- **Editorial mode**: Dramatic cinematic look with strong styling
+
+Each mode will produce visibly different outputs when tested with the same source image.
+
