@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Plug, Settings2, Flag } from 'lucide-react';
+import { Shield, Plug, Settings2, Flag, Network } from 'lucide-react';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
 import PlatformConfigTab from '@/components/admin/PlatformConfigTab';
+import ReferralNetworkTab from '@/components/admin/ReferralNetworkTab';
 
 // Integrations & API Keys tab — lifted directly from AdminIntegrations page
 import AdminIntegrationsContent from '@/components/admin/AdminIntegrationsContent';
