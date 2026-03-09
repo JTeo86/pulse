@@ -39,6 +39,13 @@ import PartnersPage from "./pages/growth/PartnersPage";
 import OffersPage from "./pages/growth/OffersPage";
 import ReferralsPage from "./pages/growth/ReferralsPage";
 import PayoutsPage from "./pages/growth/PayoutsPage";
+import PartnerDashboard from "./pages/partner/PartnerDashboard";
+import PartnerOffers from "./pages/partner/PartnerOffers";
+import PartnerLinks from "./pages/partner/PartnerLinks";
+import PartnerReferrals from "./pages/partner/PartnerReferrals";
+import PartnerEarnings from "./pages/partner/PartnerEarnings";
+import PartnerProfile from "./pages/partner/PartnerProfile";
+import { PartnerLayout } from "./components/partner/PartnerLayout";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
@@ -180,6 +187,14 @@ function AppRoutes() {
         <Route path="/integrations" element={<Navigate to="/venue/integrations" replace />} />
         <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
       </Route>
+
+      {/* Partner Portal (separate layout, no venue sidebar) */}
+      <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+      <Route path="/partner/offers" element={<PartnerLayout><PartnerOffers /></PartnerLayout>} />
+      <Route path="/partner/links" element={<PartnerLayout><PartnerLinks /></PartnerLayout>} />
+      <Route path="/partner/referrals" element={<PartnerLayout><PartnerReferrals /></PartnerLayout>} />
+      <Route path="/partner/earnings" element={<PartnerLayout><PartnerEarnings /></PartnerLayout>} />
+      <Route path="/partner/profile" element={<PartnerLayout><PartnerProfile /></PartnerLayout>} />
 
       {/* Legal pages */}
       <Route path="/legal/terms" element={<TermsPage />} />
