@@ -59,6 +59,10 @@ export default function PlatformAdmin() {
             <Flag className="w-4 h-4" />
             Feature Flags
           </TabsTrigger>
+          <TabsTrigger value="referral" className="gap-2">
+            <Network className="w-4 h-4" />
+            Referral Network
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="integrations" className="mt-6">
