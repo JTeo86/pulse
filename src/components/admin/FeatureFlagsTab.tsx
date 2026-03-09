@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Flag, Video, Image, Zap, Package, FlaskConical } from 'lucide-react';
+import { Flag, Video, Image, Zap, Package, FlaskConical, Film } from 'lucide-react';
 
 interface FeatureFlag {
   id: string;
@@ -40,11 +40,25 @@ const FLAG_INFO: Record<string, {
     impact: 'Unlocks Reel tab in Editor for all users (requires phase_2).',
     icon: Video,
   },
+  'feature.reel_creator_enabled': {
+    name: 'Reel Creator Visible',
+    description: 'Shows Reel Creator in Studio nav and "Create Reel" buttons in gallery. Requires video_enabled.',
+    safeDefault: 'off',
+    impact: 'Users can see Reel Creator page and gallery actions.',
+    icon: Film,
+  },
   'feature.kling_enabled': {
     name: 'Kling Cinematic AI Reels',
     description: 'Enable Kling-powered AI video generation. Requires video_enabled + phase_2.',
     safeDefault: 'off',
     impact: 'Unlocks Cinematic AI Reel option in Editor (requires KLING_API_KEY configured).',
+    icon: Zap,
+  },
+  'feature.kling_provider_enabled': {
+    name: 'Kling Provider Active',
+    description: 'Allow reel jobs to be sent to Kling for processing. Requires KLING_API_KEY.',
+    safeDefault: 'off',
+    impact: 'Reel jobs will call Kling API when enabled.',
     icon: Zap,
   },
   'style_auto_improve_enabled': {
@@ -60,7 +74,9 @@ const FLAG_INFO: Record<string, {
 const FLAG_ORDER = [
   'product_phase',
   'feature.video_enabled',
+  'feature.reel_creator_enabled',
   'feature.kling_enabled',
+  'feature.kling_provider_enabled',
   'style_auto_improve_enabled',
   'experimental_features',
 ];

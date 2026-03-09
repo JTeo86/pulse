@@ -57,6 +57,7 @@ export default function BrandLibraryPage() {
 
   // Feature flags
   const flags = useGalleryFlags();
+  const reelEnabled = flags.video_enabled && flags.reel_creator_enabled;
 
   // Content assets
   const { data: imageAssets = [], isLoading: imagesLoading } = useContentAssets('image');
@@ -178,7 +179,7 @@ export default function BrandLibraryPage() {
             <Sparkles className="w-4 h-4" />
             Generated Images ({imageAssets.length})
           </TabsTrigger>
-          {(flags.video_enabled || flags.gallery_reel_enabled) && (
+          {reelEnabled && (
             <TabsTrigger value="reels" className="gap-2">
               <Film className="w-4 h-4" />
               Reels ({videoAssets.length})
@@ -221,7 +222,7 @@ export default function BrandLibraryPage() {
                   onDelete={handleDelete}
                   onUpdateStatus={handleUpdateStatus}
                   showVariation={flags.gallery_variations_enabled}
-                  showReel={flags.gallery_reel_enabled || flags.video_enabled}
+                  showReel={reelEnabled}
                   showLineage={flags.gallery_lineage_enabled}
                   isCreatingVariation={variatingId === asset.id}
                   isCreatingReel={reelingId === asset.id}
@@ -233,7 +234,7 @@ export default function BrandLibraryPage() {
         </TabsContent>
 
         {/* Reels Tab */}
-        {(flags.video_enabled || flags.gallery_reel_enabled) && (
+        {reelEnabled && (
           <TabsContent value="reels" className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Video reels generated from your images.

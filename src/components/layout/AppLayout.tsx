@@ -30,6 +30,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
 import { useReferralAccess } from '@/hooks/use-referral-access';
+import { useGalleryFlags } from '@/hooks/use-gallery-flags';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
@@ -70,11 +71,12 @@ interface AppLayoutProps {
 // New simplified navigation structure
 const homeItem = { name: 'Home', href: '/home', icon: Home };
 
-const studioNavigation = [
+const studioBaseNavigation = [
   { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
-  { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film, badge: 'Soon' },
   { name: 'Style Engine', href: '/studio/style-engine', icon: Sparkles },
 ];
+
+const reelCreatorItem: NavItem = { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film };
 
 const contentNavigation = [
   { name: 'Library', href: '/content/library', icon: FolderOpen },
@@ -157,6 +159,13 @@ function AppSidebar() {
   const isCollapsed = state === 'collapsed';
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+  const galleryFlags = useGalleryFlags();
+
+  const studioNavigation = [
+    studioBaseNavigation[0], // Pro Photo
+    ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
+    studioBaseNavigation[1], // Style Engine
+  ];
 
   const growthNavigation = [
     ...growthBaseNavigation,
@@ -368,6 +377,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { isAdmin } = useVenue();
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+  const galleryFlags = useGalleryFlags();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -375,10 +385,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
+  const mobileStudioNav = [
+    studioBaseNavigation[0],
+    ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
+    studioBaseNavigation[1],
+  ];
+
   // Build mobile nav with same ordering
   const allNavItems: NavItem[] = [
     homeItem,
-    ...studioNavigation,
+    ...mobileStudioNav,
     ...contentNavigation,
     ...reputationNavigation,
     ...(hasReferralAccess ? [...growthBaseNavigation, ...growthReferralItems] : growthBaseNavigation),

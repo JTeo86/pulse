@@ -762,8 +762,13 @@ export type Database = {
           input_image_url: string | null
           input_image_width: number | null
           mode: string
+          output_asset_id: string | null
+          provider: string | null
+          provider_job_id: string | null
+          provider_settings: Json | null
           realism_mode: string
           replated_url: string | null
+          source_asset_id: string | null
           status: string
           style_preset: string
           updated_at: string
@@ -785,8 +790,13 @@ export type Database = {
           input_image_url?: string | null
           input_image_width?: number | null
           mode?: string
+          output_asset_id?: string | null
+          provider?: string | null
+          provider_job_id?: string | null
+          provider_settings?: Json | null
           realism_mode?: string
           replated_url?: string | null
+          source_asset_id?: string | null
           status?: string
           style_preset?: string
           updated_at?: string
@@ -808,14 +818,33 @@ export type Database = {
           input_image_url?: string | null
           input_image_width?: number | null
           mode?: string
+          output_asset_id?: string | null
+          provider?: string | null
+          provider_job_id?: string | null
+          provider_settings?: Json | null
           realism_mode?: string
           replated_url?: string | null
+          source_asset_id?: string | null
           status?: string
           style_preset?: string
           updated_at?: string
           venue_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "editor_jobs_output_asset_id_fkey"
+            columns: ["output_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "editor_jobs_source_asset_id_fkey"
+            columns: ["source_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "editor_jobs_venue_id_fkey"
             columns: ["venue_id"]
