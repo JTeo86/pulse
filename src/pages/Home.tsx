@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ActionFeed } from '@/components/home/ActionFeed';
+import { WeeklyMarketingPlan } from '@/components/home/WeeklyMarketingPlan';
 
 interface SnapshotData {
   reviewsAwaiting: number;
