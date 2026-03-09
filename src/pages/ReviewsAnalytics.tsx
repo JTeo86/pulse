@@ -607,6 +607,7 @@ function IngestionPanel({ venueId }: { venueId: string }) {
       setResult(data);
       queryClient.invalidateQueries({ queryKey: ['reviews', venueId] });
       queryClient.invalidateQueries({ queryKey: ['ingestion-runs', venueId] });
+      queryClient.invalidateQueries({ queryKey: ['review-sources', venueId] });
       if (data.success) {
         toast({ title: `Fetched ${data.fetched_count} reviews` });
       } else {
@@ -615,8 +616,6 @@ function IngestionPanel({ venueId }: { venueId: string }) {
     },
     onError: (e) => toast({ title: 'Ingestion failed', description: e.message, variant: 'destructive' }),
   });
-
-  const latestRun = lastRuns?.[0];
 
   const statusIcon = (status: string) => {
     if (status === 'success') return <CheckCircle2 className="w-3.5 h-3.5 text-accent" />;
@@ -633,76 +632,58 @@ function IngestionPanel({ venueId }: { venueId: string }) {
         </Button>
       </div>
 
+      {/* Per-source results breakdown */}
       {result && (
-        <Card className={result.success ? 'border-accent/30' : 'border-destructive/30'}>
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              {result.success ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <XCircle className="w-4 h-4 text-destructive" />}
-              <span className="text-sm font-medium">
-                Fetched: {result.fetched_count} reviews
-              </span>
-            </div>
-            {result.warnings.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-yellow-500">Warnings:</p>
-                {result.warnings.map((w, i) => <p key={i} className="text-xs text-muted-foreground">• {w}</p>)}
+        <div className="space-y-3">
+          <Card className={result.success ? 'border-accent/30' : 'border-destructive/30'}>
+            <CardContent className="p-4 space-y-1">
+              <div className="flex items-center gap-2">
+                {result.success ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <XCircle className="w-4 h-4 text-destructive" />}
+                <span className="text-sm font-medium">
+                  Total: {result.fetched_count} reviews fetched
+                </span>
               </div>
-            )}
-            {result.errors.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-destructive">Errors:</p>
-                {result.errors.map((e, i) => (
-                  <div key={i}>
-                   <p className="text-xs text-muted-foreground">• {e}</p>
-                    {e.toLowerCase().includes('401') && (
-                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
-                        💡 This usually means the runtime is not using the same key you saved in Platform Admin. Go to Platform Admin → Integrations and use "Test SerpAPI Key" to confirm the key the runtime actually reads.
-                      </p>
+            </CardContent>
+          </Card>
+
+          {result.source_results?.length > 0 && (
+            <div className="grid gap-2 md:grid-cols-2">
+              {result.source_results.map((sr, i) => (
+                <Card key={i} className={sr.status === 'success' ? 'border-accent/20' : sr.status === 'warning' ? 'border-yellow-500/20' : 'border-destructive/20'}>
+                  <CardContent className="p-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <SourceBadge source={sr.source_type} />
+                      <SourceStatusBadge status={sr.status} />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {sr.fetched_count} reviews fetched
+                    </div>
+                    {sr.error_message && (
+                      <div className="text-xs text-destructive bg-destructive/5 rounded p-2">
+                        {sr.error_code && <span className="font-mono text-[10px] mr-1">[{sr.error_code}]</span>}
+                        {sr.error_message}
+                      </div>
                     )}
-                     {e.toLowerCase().includes('missing rid') && (
-                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
-                         💡 Go to Sources Setup → OpenTable, paste your OpenTable restaurant URL (e.g. opentable.co.uk/r/your-restaurant), and save to extract the rid.
-                       </p>
-                     )}
-                     {(e.toLowerCase().includes("hasn't returned any results") || e.toLowerCase().includes('no results')) && (
-                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
-                         💡 Check you're using the correct OpenTable domain (e.g., .co.uk vs .com). Re-paste your full OpenTable URL in Sources Setup.
-                       </p>
-                     )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {latestRun && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Last run</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              {statusIcon(latestRun.status)}
-              <span className="capitalize">{latestRun.status}</span>
-              <span className="text-muted-foreground">•</span>
-              <span className="text-muted-foreground">{latestRun.fetched_count} fetched</span>
-              <span className="text-muted-foreground">•</span>
-              <span className="text-xs text-muted-foreground">{format(new Date(latestRun.created_at), 'MMM d, HH:mm')}</span>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-            {latestRun.error_message && (
-              <p className="text-xs text-destructive bg-destructive/5 rounded p-2">{latestRun.error_message}</p>
-            )}
-          </CardContent>
-        </Card>
+          )}
+
+          {/* Sources not in results = not configured */}
+          {result.source_results?.length === 0 && result.warnings.length > 0 && (
+            <div className="space-y-1">
+              {result.warnings.map((w, i) => <p key={i} className="text-xs text-muted-foreground">• {w}</p>)}
+            </div>
+          )}
+        </div>
       )}
 
-      {lastRuns && lastRuns.length > 1 && (
+      {lastRuns && lastRuns.length > 0 && (
         <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
           <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             <Clock className="w-3 h-3" />
-            View history ({lastRuns.length} runs)
+            Run history ({lastRuns.length} runs)
             {historyOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2 space-y-1.5">
@@ -710,6 +691,9 @@ function IngestionPanel({ venueId }: { venueId: string }) {
               <div key={run.id} className="flex items-center gap-2 text-xs py-1 border-b border-border last:border-0">
                 {statusIcon(run.status)}
                 <span className="capitalize min-w-[50px]">{run.status}</span>
+                {run.raw_meta && (run.raw_meta as any).engine && (
+                  <SourceBadge source={(run.raw_meta as any).engine === 'google_maps_reviews' ? 'google' : 'opentable'} />
+                )}
                 <span className="text-muted-foreground">{run.fetched_count} fetched</span>
                 <span className="text-muted-foreground ml-auto">{format(new Date(run.created_at), 'MMM d, HH:mm')}</span>
               </div>
