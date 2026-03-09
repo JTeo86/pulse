@@ -366,6 +366,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin } = useVenue();
   const isPlatformAdmin = usePlatformAdmin();
+  const { venueHasAccess: hasReferralAccess } = useReferralAccess();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
