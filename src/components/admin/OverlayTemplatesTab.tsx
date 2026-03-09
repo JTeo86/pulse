@@ -365,6 +365,7 @@ export default function OverlayTemplatesTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -254,6 +254,7 @@ export default function ReferralNetworkTab() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

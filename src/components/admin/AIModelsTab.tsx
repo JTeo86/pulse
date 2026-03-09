@@ -372,6 +372,7 @@ export default function AIModelsTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>

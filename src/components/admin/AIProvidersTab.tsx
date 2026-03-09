@@ -284,6 +284,7 @@ export default function AIProvidersTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>

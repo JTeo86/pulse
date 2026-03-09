@@ -477,6 +477,7 @@ function PayoutsTab() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
     </div>
   );

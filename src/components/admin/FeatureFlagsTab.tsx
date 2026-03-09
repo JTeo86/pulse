@@ -205,6 +205,7 @@ export default function FeatureFlagsTab() {
                 {orderedFlags.map(renderRow)}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

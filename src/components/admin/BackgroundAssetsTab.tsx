@@ -406,6 +406,7 @@ export default function BackgroundAssetsTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>
