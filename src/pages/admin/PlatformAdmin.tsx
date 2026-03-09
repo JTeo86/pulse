@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Plug, Settings2, Flag } from 'lucide-react';
+import { Shield, Plug, Settings2, Flag, Network } from 'lucide-react';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
 import PlatformConfigTab from '@/components/admin/PlatformConfigTab';
+import ReferralNetworkTab from '@/components/admin/ReferralNetworkTab';
 
 // Integrations & API Keys tab — lifted directly from AdminIntegrations page
 import AdminIntegrationsContent from '@/components/admin/AdminIntegrationsContent';
@@ -58,6 +59,10 @@ export default function PlatformAdmin() {
             <Flag className="w-4 h-4" />
             Feature Flags
           </TabsTrigger>
+          <TabsTrigger value="referral" className="gap-2">
+            <Network className="w-4 h-4" />
+            Referral Network
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="integrations" className="mt-6">
@@ -70,6 +75,10 @@ export default function PlatformAdmin() {
 
         <TabsContent value="flags" className="mt-6">
           <FeatureFlagsTab />
+        </TabsContent>
+
+        <TabsContent value="referral" className="mt-6">
+          <ReferralNetworkTab />
         </TabsContent>
       </Tabs>
     </motion.div>

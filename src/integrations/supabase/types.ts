@@ -1059,6 +1059,124 @@ export type Database = {
           },
         ]
       }
+      payout_batches: {
+        Row: {
+          approved_at: string | null
+          batch_month: string
+          created_at: string
+          id: string
+          net_payout: number
+          paid_at: string | null
+          pulse_fee: number
+          status: string
+          stripe_transfer_batch_id: string | null
+          total_commission: number
+          venue_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          batch_month: string
+          created_at?: string
+          id?: string
+          net_payout?: number
+          paid_at?: string | null
+          pulse_fee?: number
+          status?: string
+          stripe_transfer_batch_id?: string | null
+          total_commission?: number
+          venue_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          batch_month?: string
+          created_at?: string
+          id?: string
+          net_payout?: number
+          paid_at?: string | null
+          pulse_fee?: number
+          status?: string
+          stripe_transfer_batch_id?: string | null
+          total_commission?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_batches_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_items: {
+        Row: {
+          batch_id: string
+          commission_amount: number
+          created_at: string
+          id: string
+          net_amount: number
+          pulse_fee: number
+          referral_booking_id: string
+          referrer_id: string
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          batch_id: string
+          commission_amount?: number
+          created_at?: string
+          id?: string
+          net_amount?: number
+          pulse_fee?: number
+          referral_booking_id: string
+          referrer_id: string
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          batch_id?: string
+          commission_amount?: number
+          created_at?: string
+          id?: string
+          net_amount?: number
+          pulse_fee?: number
+          referral_booking_id?: string
+          referrer_id?: string
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "payout_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_items_referral_booking_id_fkey"
+            columns: ["referral_booking_id"]
+            isOneToOne: false
+            referencedRelation: "referral_bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_items_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_items_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_admins: {
         Row: {
           created_at: string
@@ -1142,6 +1260,332 @@ export type Database = {
           value?: string
         }
         Relationships: []
+      }
+      referral_audit_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          event_payload: Json
+          event_type: string
+          id: string
+          venue_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_payload?: Json
+          event_type: string
+          id?: string
+          venue_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_payload?: Json
+          event_type?: string
+          id?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_audit_events_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_beta_access: {
+        Row: {
+          access_type: string
+          created_at: string
+          email: string | null
+          id: string
+          invited_by: string | null
+          status: string
+          venue_id: string | null
+        }
+        Insert: {
+          access_type: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          invited_by?: string | null
+          status?: string
+          venue_id?: string | null
+        }
+        Update: {
+          access_type?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          invited_by?: string | null
+          status?: string
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_beta_access_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_bookings: {
+        Row: {
+          bill_image_url: string | null
+          booking_datetime: string | null
+          booking_source: string
+          booking_status: string
+          commission_amount: number | null
+          commission_status: string
+          created_at: string
+          guest_name: string | null
+          id: string
+          offer_id: string | null
+          party_size: number | null
+          referral_link_id: string | null
+          referrer_id: string
+          spend_verified: boolean
+          venue_id: string
+          verified_at: string | null
+          verified_spend: number | null
+        }
+        Insert: {
+          bill_image_url?: string | null
+          booking_datetime?: string | null
+          booking_source?: string
+          booking_status?: string
+          commission_amount?: number | null
+          commission_status?: string
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          offer_id?: string | null
+          party_size?: number | null
+          referral_link_id?: string | null
+          referrer_id: string
+          spend_verified?: boolean
+          venue_id: string
+          verified_at?: string | null
+          verified_spend?: number | null
+        }
+        Update: {
+          bill_image_url?: string | null
+          booking_datetime?: string | null
+          booking_source?: string
+          booking_status?: string
+          commission_amount?: number | null
+          commission_status?: string
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          offer_id?: string | null
+          party_size?: number | null
+          referral_link_id?: string | null
+          referrer_id?: string
+          spend_verified?: boolean
+          venue_id?: string
+          verified_at?: string | null
+          verified_spend?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_bookings_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "venue_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_bookings_referral_link_id_fkey"
+            columns: ["referral_link_id"]
+            isOneToOne: false
+            referencedRelation: "referral_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_bookings_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_bookings_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_clicks: {
+        Row: {
+          created_at: string
+          id: string
+          offer_id: string
+          referral_link_id: string
+          referrer_id: string
+          source_type: string
+          utm_data: Json | null
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          offer_id: string
+          referral_link_id: string
+          referrer_id: string
+          source_type?: string
+          utm_data?: Json | null
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          offer_id?: string
+          referral_link_id?: string
+          referrer_id?: string
+          source_type?: string
+          utm_data?: Json | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_clicks_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "venue_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_clicks_referral_link_id_fkey"
+            columns: ["referral_link_id"]
+            isOneToOne: false
+            referencedRelation: "referral_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_clicks_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_clicks_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_links: {
+        Row: {
+          code: string
+          created_at: string
+          destination_url: string
+          id: string
+          offer_id: string
+          qr_code_url: string | null
+          referrer_id: string
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          destination_url?: string
+          id?: string
+          offer_id: string
+          qr_code_url?: string | null
+          referrer_id: string
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          destination_url?: string
+          id?: string
+          offer_id?: string
+          qr_code_url?: string | null
+          referrer_id?: string
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_links_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "venue_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_links_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_links_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrers: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          instagram_handle: string | null
+          notes: string | null
+          role_type: string
+          status: string
+          venue_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          instagram_handle?: string | null
+          notes?: string | null
+          role_type?: string
+          status?: string
+          venue_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          instagram_handle?: string | null
+          notes?: string | null
+          role_type?: string
+          status?: string
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrers_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       revenue_signals: {
         Row: {
@@ -1902,6 +2346,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "venue_members_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_offers: {
+        Row: {
+          commission_type: string
+          commission_value: number
+          created_at: string
+          description: string
+          end_date: string | null
+          id: string
+          start_date: string | null
+          status: string
+          title: string
+          venue_id: string
+        }
+        Insert: {
+          commission_type?: string
+          commission_value?: number
+          created_at?: string
+          description?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+          status?: string
+          title: string
+          venue_id: string
+        }
+        Update: {
+          commission_type?: string
+          commission_value?: number
+          created_at?: string
+          description?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+          status?: string
+          title?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_offers_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"

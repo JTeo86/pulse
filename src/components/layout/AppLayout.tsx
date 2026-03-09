@@ -21,10 +21,15 @@ import {
   X,
   PanelLeft,
   Shield,
-  Plus
+  Plus,
+  Network,
+  Gift,
+  Wallet,
+  Link2
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
+import { useReferralAccess } from '@/hooks/use-referral-access';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
@@ -81,8 +86,15 @@ const reputationNavigation = [
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
 ];
 
-const growthNavigation = [
+const growthBaseNavigation = [
   { name: 'Performance', href: '/growth/performance', icon: TrendingUp },
+];
+
+const growthReferralItems: NavItem[] = [
+  { name: 'Referrals', href: '/growth/referrals', icon: Link2 },
+  { name: 'Partners', href: '/growth/partners', icon: Network },
+  { name: 'Offers', href: '/growth/offers', icon: Gift },
+  { name: 'Payouts', href: '/growth/payouts', icon: Wallet },
 ];
 
 const venueNavigation = [
@@ -143,6 +155,12 @@ function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
   const isPlatformAdmin = usePlatformAdmin();
+  const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+
+  const growthNavigation = [
+    ...growthBaseNavigation,
+    ...(hasReferralAccess ? growthReferralItems : []),
+  ];
 
   const handleSignOut = async () => {
     await signOut();
@@ -348,6 +366,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin } = useVenue();
   const isPlatformAdmin = usePlatformAdmin();
+  const { venueHasAccess: hasReferralAccess } = useReferralAccess();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -361,7 +380,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     ...studioNavigation,
     ...contentNavigation,
     ...reputationNavigation,
-    ...growthNavigation,
+    ...(hasReferralAccess ? [...growthBaseNavigation, ...growthReferralItems] : growthBaseNavigation),
     ...venueNavigation,
     ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
