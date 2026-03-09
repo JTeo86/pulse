@@ -308,6 +308,7 @@ export default function AIModelsTab() {
         ) : models?.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">No models configured</div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

@@ -454,6 +454,7 @@ function PayoutsTab() {
       ) : !batches?.length ? (
         <Card className="border-dashed"><CardContent className="py-8 text-center text-muted-foreground">No payout batches yet. Commissions will accumulate as referral bookings are verified.</CardContent></Card>
       ) : (
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

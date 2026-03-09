@@ -210,6 +210,7 @@ export default function ReferralNetworkTab() {
           ) : !betaList?.length ? (
             <p className="text-sm text-muted-foreground text-center py-4">No beta participants yet.</p>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
