@@ -155,6 +155,12 @@ function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
   const isPlatformAdmin = usePlatformAdmin();
+  const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+
+  const growthNavigation = [
+    ...growthBaseNavigation,
+    ...(hasReferralAccess ? growthReferralItems : []),
+  ];
 
   const handleSignOut = async () => {
     await signOut();
