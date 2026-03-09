@@ -387,7 +387,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const mobileStudioNav = [
     studioBaseNavigation[0],
     ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
-    studioBaseNavigation[1],
   ];
 
   // Build mobile nav with same ordering
