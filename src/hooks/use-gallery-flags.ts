@@ -6,6 +6,8 @@ export interface GalleryFlags {
   gallery_reel_enabled: boolean;
   gallery_lineage_enabled: boolean;
   video_enabled: boolean;
+  reel_creator_enabled: boolean;
+  kling_provider_enabled: boolean;
   isLoading: boolean;
 }
 
@@ -22,6 +24,8 @@ export function useGalleryFlags(): GalleryFlags {
           'feature.gallery_reel_enabled',
           'feature.gallery_lineage_enabled',
           'feature.video_enabled',
+          'feature.reel_creator_enabled',
+          'feature.kling_provider_enabled',
         ]);
       if (error) throw error;
       return data || [];
@@ -35,6 +39,8 @@ export function useGalleryFlags(): GalleryFlags {
       gallery_reel_enabled: false,
       gallery_lineage_enabled: false,
       video_enabled: false,
+      reel_creator_enabled: false,
+      kling_provider_enabled: false,
       isLoading: true,
     };
   }
@@ -46,6 +52,8 @@ export function useGalleryFlags(): GalleryFlags {
     gallery_reel_enabled: get('feature.gallery_reel_enabled'),
     gallery_lineage_enabled: get('feature.gallery_lineage_enabled'),
     video_enabled: get('feature.video_enabled'),
+    reel_creator_enabled: get('feature.reel_creator_enabled'),
+    kling_provider_enabled: get('feature.kling_provider_enabled'),
     isLoading: false,
   };
 }
