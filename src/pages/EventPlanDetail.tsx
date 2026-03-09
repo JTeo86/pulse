@@ -130,7 +130,7 @@ export default function EventPlanDetailPage() {
       {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
-            <Link to="/studio/events">
+            <Link to="/content/planner">
               <Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
             </Link>
             <div>
