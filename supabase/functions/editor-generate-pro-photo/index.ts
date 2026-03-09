@@ -502,20 +502,24 @@ Deno.serve(async (req) => {
     }
 
     // Generation log
-    await supabase.from('venue_style_generation_logs').insert({
-      venue_id,
-      upload_id: uploadId,
-      edited_asset_id: editedAssetData?.id || null,
-      model_name: 'google/gemini-2.5-flash-image',
-      prompt_text: prompt.substring(0, 2000),
-      style_summary_used: ctx.styleSummary || null,
-      reference_asset_ids: ctx.referenceImages.map(r => r.assetId),
-      style_sources_used: ctx.styleSourcesUsed,
-      dish_lock_applied: true,
-      retry_count: 0,
-      status: 'completed',
-      duration_ms: generationTimeMs,
-    }).catch(e => console.warn('[PRO-PHOTO] generation log insert error:', e));
+    try {
+      await supabase.from('venue_style_generation_logs').insert({
+        venue_id,
+        upload_id: uploadId,
+        edited_asset_id: editedAssetData?.id || null,
+        model_name: 'google/gemini-2.5-flash-image',
+        prompt_text: prompt.substring(0, 2000),
+        style_summary_used: ctx.styleSummary || null,
+        reference_asset_ids: ctx.referenceImages.map(r => r.assetId),
+        style_sources_used: ctx.styleSourcesUsed,
+        dish_lock_applied: true,
+        retry_count: 0,
+        status: 'completed',
+        duration_ms: generationTimeMs,
+      });
+    } catch (e) {
+      console.warn('[PRO-PHOTO] generation log insert error:', e);
+    }
 
     // Diagnostic log
     console.log(JSON.stringify({
