@@ -47,13 +47,6 @@ const FLAG_INFO: Record<string, {
     impact: 'Unlocks Cinematic AI Reel option in Editor (requires KLING_API_KEY configured).',
     icon: Zap,
   },
-  'experimental_features': {
-    name: 'Experimental Features',
-    description: 'Enable experimental UI features for internal testing. Not shown to regular users.',
-    safeDefault: 'off',
-    impact: 'May expose unstable features. Internal admin testing only.',
-    icon: FlaskConical,
-  },
   'style_auto_improve_enabled': {
     name: 'Style Auto-Improve',
     description: 'Automatically re-analyse style assets when new uploads are added.',
