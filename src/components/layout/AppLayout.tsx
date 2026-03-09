@@ -86,7 +86,7 @@ const growthNavigation = [
 ];
 
 const venueNavigation = [
-  { name: 'Brand Profile', href: '/venue/profile', icon: Palette },
+  { name: 'Brand Basics', href: '/venue/brand-basics', icon: Palette },
   { name: 'Integrations', href: '/venue/integrations', icon: Plug },
   { name: 'Team', href: '/venue/team', icon: Users },
 ];
