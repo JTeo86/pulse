@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ActionFeed } from '@/components/home/ActionFeed';
+import { WeeklyMarketingPlan } from '@/components/home/WeeklyMarketingPlan';
 
 interface SnapshotData {
   reviewsAwaiting: number;
@@ -174,6 +175,9 @@ export default function Home() {
 
       {/* Action Feed */}
       <ActionFeed actions={actions} loading={loading} onActionsChange={setActions} />
+
+      {/* Weekly Marketing Plan */}
+      <WeeklyMarketingPlan />
 
       {/* Recent Activity */}
       <section className="space-y-4">

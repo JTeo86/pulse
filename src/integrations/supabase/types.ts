@@ -924,6 +924,94 @@ export type Database = {
           },
         ]
       }
+      guest_submissions: {
+        Row: {
+          created_at: string
+          generated_caption: string | null
+          guest_name: string | null
+          id: string
+          image_url: string
+          processed_image_url: string | null
+          status: string
+          suggested_hashtags: string[] | null
+          suggested_post_time: string | null
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          generated_caption?: string | null
+          guest_name?: string | null
+          id?: string
+          image_url: string
+          processed_image_url?: string | null
+          status?: string
+          suggested_hashtags?: string[] | null
+          suggested_post_time?: string | null
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          generated_caption?: string | null
+          guest_name?: string | null
+          id?: string
+          image_url?: string
+          processed_image_url?: string | null
+          status?: string
+          suggested_hashtags?: string[] | null
+          suggested_post_time?: string | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_submissions_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_plans: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          id: string
+          plan_data: Json
+          status: string
+          venue_id: string
+          week_start: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          plan_data?: Json
+          status?: string
+          venue_id: string
+          week_start: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          plan_data?: Json
+          status?: string
+          venue_id?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_plans_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       overlay_templates: {
         Row: {
           allow_in_production: boolean
@@ -1054,6 +1142,47 @@ export type Database = {
           value?: string
         }
         Relationships: []
+      }
+      revenue_signals: {
+        Row: {
+          booking_signals: Json
+          created_at: string
+          engagement_metrics: Json
+          id: string
+          revenue_estimate: number | null
+          source_id: string | null
+          source_type: string
+          venue_id: string
+        }
+        Insert: {
+          booking_signals?: Json
+          created_at?: string
+          engagement_metrics?: Json
+          id?: string
+          revenue_estimate?: number | null
+          source_id?: string | null
+          source_type: string
+          venue_id: string
+        }
+        Update: {
+          booking_signals?: Json
+          created_at?: string
+          engagement_metrics?: Json
+          id?: string
+          revenue_estimate?: number | null
+          source_id?: string | null
+          source_type?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_signals_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       review_automation_runs: {
         Row: {
@@ -1423,6 +1552,94 @@ export type Database = {
           },
         ]
       }
+      system_events: {
+        Row: {
+          created_at: string
+          event_payload: Json
+          event_type: string
+          id: string
+          processed_at: string | null
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_payload?: Json
+          event_type: string
+          id?: string
+          processed_at?: string | null
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          event_payload?: Json
+          event_type?: string
+          id?: string
+          processed_at?: string | null
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_events_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          job_payload: Json
+          job_type: string
+          max_attempts: number
+          started_at: string | null
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_payload?: Json
+          job_type: string
+          max_attempts?: number
+          started_at?: string | null
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_payload?: Json
+          job_type?: string
+          max_attempts?: number
+          started_at?: string | null
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_jobs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uploads: {
         Row: {
           created_at: string
@@ -1553,6 +1770,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      venue_insights: {
+        Row: {
+          city: string | null
+          confidence_score: number
+          cuisine_category: string | null
+          generated_at: string
+          id: string
+          insight_data: Json
+          insight_type: string
+        }
+        Insert: {
+          city?: string | null
+          confidence_score?: number
+          cuisine_category?: string | null
+          generated_at?: string
+          id?: string
+          insight_data?: Json
+          insight_type: string
+        }
+        Update: {
+          city?: string | null
+          confidence_score?: number
+          cuisine_category?: string | null
+          generated_at?: string
+          id?: string
+          insight_data?: Json
+          insight_type?: string
+        }
+        Relationships: []
       }
       venue_invites: {
         Row: {
