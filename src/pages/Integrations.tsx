@@ -74,34 +74,6 @@ export default function IntegrationsPage() {
           </div>
         </div>
 
-        {/* Make.com — coming soon */}
-        <div className="card-elevated p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex gap-4">
-              <div className="w-12 h-12 rounded-lg bg-[#6c4ed9] flex items-center justify-center">
-                <span className="text-white font-bold text-lg">M</span>
-              </div>
-              <div>
-                <h3 className="font-medium">Make.com</h3>
-                <p className="text-sm text-muted-foreground">
-                  Automation workflows for content publishing
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <a href="https://make.com" target="_blank" rel="noopener noreferrer">
-                Learn more
-                <ExternalLink className="w-3 h-3 ml-2" />
-              </a>
-            </Button>
-          </div>
-          <div className="mt-4 p-4 bg-muted/50 rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              Make.com can automate your publishing workflow via webhooks.
-              Contact your administrator to configure the webhook URL.
-            </p>
-          </div>
-        </div>
 
         {/* Info note */}
         <p className="text-xs text-muted-foreground">

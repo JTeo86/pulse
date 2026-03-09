@@ -217,16 +217,6 @@ Deno.serve(async (req) => {
           status = 'invalid'; message = `HTTP ${r.status}`;
         }
         await r.text();
-      } else if (key_name === 'MAKE_WEBHOOK_URL') {
-        // Validate URL format
-        try {
-          const url = new URL(value);
-          if (!url.hostname.includes('make.com') && !url.hostname.includes('hook.eu') && !url.hostname.includes('hook.us')) {
-            message = 'URL format valid (domain not recognised as Make.com — verify manually)';
-          }
-        } catch {
-          status = 'invalid'; message = 'Invalid URL format';
-        }
       } else {
         // Unknown key — just mark healthy if it has a value
         message = 'Value present (no specific test available)';
