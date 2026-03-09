@@ -380,7 +380,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     ...studioNavigation,
     ...contentNavigation,
     ...reputationNavigation,
-    ...growthNavigation,
+    ...(hasReferralAccess ? [...growthBaseNavigation, ...growthReferralItems] : growthBaseNavigation),
     ...venueNavigation,
     ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
