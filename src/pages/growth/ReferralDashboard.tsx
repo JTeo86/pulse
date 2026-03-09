@@ -245,6 +245,7 @@ function PartnersTab() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
     </div>
   );
