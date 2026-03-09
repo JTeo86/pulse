@@ -88,7 +88,14 @@ export function WeeklyMarketingPlan() {
         .maybeSingle();
 
       if (error) throw error;
-      setPlan(data as MarketingPlan | null);
+      if (data) {
+        setPlan({
+          ...data,
+          plan_data: (data.plan_data as unknown as MarketingTask[]) || [],
+        } as MarketingPlan);
+      } else {
+        setPlan(null);
+      }
     } catch (err) {
       console.error('Error fetching marketing plan:', err);
     } finally {
