@@ -415,6 +415,7 @@ function ReferralsTab() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
     </div>
   );

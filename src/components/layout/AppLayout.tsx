@@ -494,7 +494,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <div className="flex-1 p-6 lg:p-8">{children}</div>
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">{children}</div>
         </main>
       </div>
     </SidebarProvider>
