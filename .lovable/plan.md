@@ -1,10 +1,46 @@
 
+## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
 
-## Remove Non-functional PanelLeft Button
+### What's Happening
 
-The desktop top bar (lines 491-494) has a `PanelLeft` icon button that does nothing — it's wrapped in `asChild` with a plain `<span>`, so it has no click handler or sidebar toggle logic.
+The database constraint `copy_projects_module_check` currently only allows:
 
-### Change
+```
+'email', 'blog', 'ad_copy', 'sms_push'
+```
 
-**`src/components/layout/AppLayout.tsx`** — Remove the non-functional button entirely from the desktop top bar. Keep the top bar itself (it hosts the "Create" dropdown on the right). Replace the button with an empty `<div />` spacer to maintain the `justify-between` layout, or simply remove the left side.
+This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
 
+There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
+
+### Fix
+
+One new migration file will be created:
+
+```sql
+-- Drop the old constraint
+ALTER TABLE public.copy_projects
+  DROP CONSTRAINT copy_projects_module_check;
+
+-- Recreate it with 'campaign' included
+ALTER TABLE public.copy_projects
+  ADD CONSTRAINT copy_projects_module_check
+  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
+
+-- Notify PostgREST to reload its schema cache immediately
+NOTIFY pgrst, 'reload schema';
+```
+
+The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
+
+### No Frontend Changes Needed
+
+The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
+
+### What Changes
+
+- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
+
+### Verification
+
+After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
