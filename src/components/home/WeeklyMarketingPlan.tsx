@@ -134,7 +134,7 @@ export function WeeklyMarketingPlan() {
     try {
       const { error } = await supabase
         .from('marketing_plans')
-        .update({ plan_data: updatedTasks as unknown as Record<string, unknown>[] })
+        .update({ plan_data: updatedTasks as any })
         .eq('id', plan.id);
 
       if (error) throw error;
