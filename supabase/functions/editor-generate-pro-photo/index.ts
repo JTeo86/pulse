@@ -222,12 +222,29 @@ async function buildVenueStyleContext(
 // ── Prompt Construction ──────────────────────────────────────────────
 
 function buildPrompt(ctx: VenueStyleContext, realismMode: string): string {
-  const modeMap: Record<string, string> = {
-    safe: 'Minimal changes. Only improve lighting and white balance. Keep the scene as close to original as possible.',
-    enhanced: 'Professional lighting refinement. Subtle depth-of-field. Natural restaurant ambiance. Moderate improvements.',
-    editorial: 'Cinematic food photography lighting. Strong depth-of-field. Dramatic but realistic restaurant setting. Maximum polish.',
+  // Mode-specific lighting instructions
+  const lightingMap: Record<string, string> = {
+    safe: 'Preserve original lighting characteristics. Only correct white balance and minor exposure issues. Keep natural shadows and highlights. Shallow depth-of-field is optional.',
+    enhanced: 'Professional soft lighting with gentle, natural shadows. Moderate depth-of-field to gently separate the dish from background. Warm restaurant ambiance with balanced highlights.',
+    editorial: 'Cinematic dramatic lighting with pronounced shadows and rich highlights. Strong shallow depth-of-field with creamy bokeh. Magazine-quality polish with deliberate light direction.',
   };
-  const modeInstruction = modeMap[realismMode] || modeMap.safe;
+  const lightingInstruction = lightingMap[realismMode] || lightingMap.safe;
+
+  // Mode-specific background behavior
+  const backgroundModeMap: Record<string, string> = {
+    safe: 'Keep the background minimal and neutral. Preserve original scene characteristics where possible. Avoid dramatic environmental changes.',
+    enhanced: 'Refine the background with natural restaurant details. Add subtle environmental texture and depth. Create a polished but realistic setting.',
+    editorial: 'Create a rich, cinematic restaurant scene with atmospheric depth and premium textures. Use dramatic environmental storytelling with luxurious details.',
+  };
+  const backgroundBehavior = backgroundModeMap[realismMode] || backgroundModeMap.safe;
+
+  // Mode-specific polish level
+  const polishMap: Record<string, string> = {
+    safe: 'Authentic look — minimal retouching, preserving the original photograph feel.',
+    enhanced: 'Elevated look — professional retouching with enhanced micro-contrast and clarity.',
+    editorial: 'Editorial look — high-end magazine finish with cinematic tone and enhanced highlight control.',
+  };
+  const polishLevel = polishMap[realismMode] || polishMap.safe;
 
   const toneMap: Record<string, string> = {
     casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
@@ -240,8 +257,8 @@ function buildPrompt(ctx: VenueStyleContext, realismMode: string): string {
 
   const hasRefs = ctx.referenceImages.length > 0;
   const backgroundInstruction = hasRefs
-    ? `Match the lighting, table surfaces, interior mood and color palette of the provided reference images.`
-    : `Generate a realistic restaurant table environment matching this style: ${venueTone}.${ctx.venueCity ? ` The venue is located in ${ctx.venueCity}.` : ''}`;
+    ? `Match the lighting, table surfaces, interior mood and color palette of the provided reference images. ${backgroundBehavior}`
+    : `Generate a realistic restaurant table environment matching this style: ${venueTone}.${ctx.venueCity ? ` The venue is located in ${ctx.venueCity}.` : ''} ${backgroundBehavior}`;
 
   // Build dish lock section
   const dishLockExtra = ctx.dishLockRules.length > 0
@@ -293,9 +310,10 @@ BACKGROUND:
 ${backgroundInstruction}
 
 LIGHTING:
-Soft cinematic lighting, shallow depth of field, premium professional food photography.
+${lightingInstruction}
 
-MODE: ${modeInstruction}
+POLISH LEVEL:
+${polishLevel}
 
 ${ctx.brandSummary ? `BRAND NOTES: ${ctx.brandSummary.substring(0, 400)}` : ''}
 
