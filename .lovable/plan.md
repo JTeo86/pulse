@@ -1,46 +1,62 @@
 
-## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
+## Root Cause: Two Conflicting Unique Constraints + Silent Error Swallowing
 
-### What's Happening
+### What's actually happening
 
-The database constraint `copy_projects_module_check` currently only allows:
+1. **The `reviews` table has TWO overlapping unique constraints:**
+   - Original (from initial migration): `UNIQUE (source, external_review_id)` — composite
+   - Added later (migration `20260217001839`): `UNIQUE (external_review_id)` — single column
 
-```
-'email', 'blog', 'ad_copy', 'sms_push'
-```
+2. **The `ingest-reviews` edge function upserts with `onConflict: "external_review_id"`** — this targets the single-column constraint. When PostgREST tries to execute this against a table with two competing unique indexes involving the same column, the upsert fails.
 
-This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
+3. **The failure is completely silent.** The Supabase JS client `.upsert()` never throws — it returns `{ data, error }`. The code ignores the error entirely:
+   ```typescript
+   await supabaseAdmin.from("reviews").upsert({...}, { onConflict: "external_review_id" });
+   result.fetched_count++; // Always increments, even on failure
+   ```
+   So the function logs "Ingested 18 reviews" and the UI shows "success" — but OpenTable rows never land in the DB.
 
-There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
+4. **Google works by accident** — Google reviews were written before the second unique constraint was added, so they got in. Subsequent Google upserts "succeed" silently because the upsert finds a conflict on the single-column index and updates in place.
 
-### Fix
+---
 
-One new migration file will be created:
+## The Fix — Two changes only
 
+### 1. Database migration
+Drop the redundant single-column unique constraint:
 ```sql
--- Drop the old constraint
-ALTER TABLE public.copy_projects
-  DROP CONSTRAINT copy_projects_module_check;
-
--- Recreate it with 'campaign' included
-ALTER TABLE public.copy_projects
-  ADD CONSTRAINT copy_projects_module_check
-  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
-
--- Notify PostgREST to reload its schema cache immediately
-NOTIFY pgrst, 'reload schema';
+ALTER TABLE public.reviews DROP CONSTRAINT reviews_external_review_id_unique;
 ```
 
-The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
+The composite `(source, external_review_id)` is the correct and original constraint. The single-column one was incorrectly added later and conflicts with the upsert logic.
 
-### No Frontend Changes Needed
+### 2. Fix the edge function upsert
 
-The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
+**A. Change `onConflict` to match the composite constraint:**
+```typescript
+{ onConflict: "source,external_review_id" }
+```
 
-### What Changes
+**B. Add proper error checking so failures are never silent:**
+```typescript
+const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({...}, { onConflict: "source,external_review_id" });
+if (upsertErr) {
+  console.error("OpenTable upsert error:", upsertErr.message);
+  // don't increment fetched_count
+} else {
+  result.fetched_count++;
+}
+```
 
-- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
+Apply the same error-check fix to the Google upsert loop too.
 
-### Verification
+---
 
-After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
+## Files to change
+
+| File | Change |
+|---|---|
+| New migration SQL | `DROP CONSTRAINT reviews_external_review_id_unique` |
+| `supabase/functions/ingest-reviews/index.ts` | Fix `onConflict` + add error checking in both Google and OpenTable loops |
+
+No UI changes needed. Once the constraint is dropped and the function redeployed, re-running "Fetch latest reviews" will correctly persist the OpenTable reviews and they will appear in the feed.
