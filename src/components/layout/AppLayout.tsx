@@ -73,7 +73,6 @@ const homeItem = { name: 'Home', href: '/home', icon: Home };
 
 const studioBaseNavigation = [
   { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
-  { name: 'Style Engine', href: '/studio/style-engine', icon: Sparkles },
 ];
 
 const reelCreatorItem: NavItem = { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film };
