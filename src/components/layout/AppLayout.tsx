@@ -21,10 +21,15 @@ import {
   X,
   PanelLeft,
   Shield,
-  Plus
+  Plus,
+  Network,
+  Gift,
+  Wallet,
+  Link2
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
+import { useReferralAccess } from '@/hooks/use-referral-access';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
