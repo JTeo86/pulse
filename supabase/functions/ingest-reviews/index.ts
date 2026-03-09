@@ -123,7 +123,7 @@ async function ingestGoogle(
     for (const r of reviews) {
       try {
         const externalId = `google_${source.external_id}_${r.review_id || r.user?.name || ""}`;
-        await supabaseAdmin.from("reviews").upsert({
+        const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({
           venue_id: venueId,
           source: "google",
           external_review_id: externalId,
@@ -132,10 +132,14 @@ async function ingestGoogle(
           review_text: r.snippet || r.text || null,
           review_date: safeDateToISO(r.iso_date) || safeDateToISO(r.iso_date_of_last_edit) || safeDateToISO(r.date),
           raw_payload: r,
-        }, { onConflict: "external_review_id" });
-        result.fetched_count++;
+        }, { onConflict: "source,external_review_id" });
+        if (upsertErr) {
+          console.error("Google review upsert error:", upsertErr.message);
+        } else {
+          result.fetched_count++;
+        }
       } catch (rowErr) {
-        // individual row error, continue
+        console.error("Google review row error:", rowErr);
       }
     }
   } catch (e) {
