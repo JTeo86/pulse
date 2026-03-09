@@ -70,7 +70,6 @@ const CORE_FLAG_ORDER = [
   'product_phase',
   'feature.video_enabled',
   'feature.reel_creator_enabled',
-  'feature.kling_provider_enabled',
   'style_auto_improve_enabled',
 ];
 
