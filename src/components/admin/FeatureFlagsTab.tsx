@@ -213,7 +213,7 @@ export default function FeatureFlagsTab() {
             <div>
               <h4 className="font-medium text-sm text-muted-foreground">Phase 2 — Video & Reels</h4>
               <p className="text-sm text-muted-foreground mt-1">
-                Kling AI video generation from Pro Photos. Flip product_phase to phase_2 and enable Kling in Video Provider tab.
+                Kling AI video generation from Pro Photos. Flip product_phase to phase_2 and configure Kling in the Video Provider tab.
               </p>
             </div>
           </div>

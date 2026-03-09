@@ -26,8 +26,6 @@ export interface PlatformApiKey {
 const ADMIN_VISIBLE_KEYS = new Set([
   'SERPAPI_API_KEY',
   'GEMINI_IMAGE_API_KEY',
-  'KLING_API_KEY',
-  'KLING_API_SECRET',
   'BUFFER_API_KEY',
 ]);
 
