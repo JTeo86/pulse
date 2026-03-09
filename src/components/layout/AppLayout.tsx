@@ -80,8 +80,8 @@ const reelCreatorItem: NavItem = { name: 'Reel Creator', href: '/studio/reel-cre
 
 const contentNavigation = [
   { name: 'Library', href: '/content/library', icon: FolderOpen },
+  { name: 'Planner', href: '/content/planner', icon: Megaphone },
   { name: 'Scheduler', href: '/content/scheduler', icon: Calendar },
-  { name: 'Campaigns', href: '/content/campaigns', icon: Megaphone },
 ];
 
 const reputationNavigation = [

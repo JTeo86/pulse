@@ -24,6 +24,8 @@ import StyleEngine from "./pages/StyleEngine";
 import ReelCreator from "./pages/ReelCreator";
 import ContentScheduler from "./pages/ContentScheduler";
 import Copywriter from "./pages/Copywriter";
+import Planner from "./pages/Planner";
+import EventPlanDetail from "./pages/EventPlanDetail";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
 import IndustryInsights from "./pages/growth/IndustryInsights";
