@@ -107,6 +107,9 @@ function AppRoutes() {
       {/* Redirect any signup attempts to landing */}
       <Route path="/signup" element={<Navigate to="/" replace />} />
 
+      {/* Public guest upload page (no auth required) */}
+      <Route path="/submit/:venueId" element={<GuestUploadPage />} />
+
       {/* All authenticated routes share a single persistent AppLayout */}
       <Route element={<ProtectedLayout />}>
         {/* Home - Default landing page */}
