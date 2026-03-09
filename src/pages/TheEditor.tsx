@@ -369,7 +369,8 @@ export default function TheEditorPage() {
                     {m.label}
                     {m.warn && <AlertTriangle className="w-3 h-3 text-amber-500" />}
                   </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{m.desc}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight font-medium">{m.desc}</p>
+                  <p className="text-[9px] text-muted-foreground/70 mt-0.5 leading-tight">{m.detail}</p>
                 </button>
               ))}
             </div>
