@@ -376,7 +376,7 @@ export default function AdminIntegrationsContent() {
         <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-start gap-3">
           <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
-            Video provider credentials (Kling API Key &amp; Secret) are managed in the <strong>Video Provider</strong> tab.
+            Video provider credentials (Kling API Key {"&"} Secret) are managed in the <strong>Video Provider</strong> tab.
           </p>
         </div>
           );
