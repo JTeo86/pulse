@@ -98,9 +98,11 @@ function AppRoutes() {
         {/* Home - Default landing page */}
         <Route path="/home" element={<Home />} />
         
-        {/* Studio Section - Creative tools */}
+        {/* Studio Section - Creative workspace hub */}
+        <Route path="/studio" element={<Studio />} />
         <Route path="/studio/pro-photo" element={<TheEditor />} />
         <Route path="/studio/reel-creator" element={<ReelCreator />} />
+        <Route path="/studio/reels" element={<ReelCreator />} />
         <Route path="/studio/style-engine" element={<StyleEngine />} />
         
         {/* Content Section */}
@@ -115,7 +117,7 @@ function AppRoutes() {
         <Route path="/growth/performance" element={<BrandPerformance />} />
 
         {/* Venue Section */}
-        <Route path="/venue/profile" element={<BrandKit />} />
+        <Route path="/venue/brand-basics" element={<BrandBasics />} />
         <Route path="/venue/integrations" element={<Integrations />} />
         <Route path="/venue/team" element={<Team />} />
 
@@ -133,9 +135,13 @@ function AppRoutes() {
 
         {/* ============ LEGACY REDIRECTS ============ */}
         {/* Old Brand routes → New routes */}
+        <Route path="/brand" element={<Navigate to="/home" replace />} />
+        <Route path="/brand-overview" element={<Navigate to="/home" replace />} />
         <Route path="/brand/overview" element={<Navigate to="/home" replace />} />
-        <Route path="/brand/identity" element={<Navigate to="/venue/profile" replace />} />
+        <Route path="/brand/identity" element={<Navigate to="/venue/brand-basics" replace />} />
         <Route path="/brand/library" element={<Navigate to="/content/library" replace />} />
+        <Route path="/brand-kit" element={<Navigate to="/venue/brand-basics" replace />} />
+        <Route path="/venue/profile" element={<Navigate to="/venue/brand-basics" replace />} />
         
         {/* Old Studio routes → New routes */}
         <Route path="/studio/editor" element={<Navigate to="/studio/pro-photo" replace />} />
@@ -147,14 +153,13 @@ function AppRoutes() {
         <Route path="/analytics/performance" element={<Navigate to="/growth/performance" replace />} />
         
         {/* Old Settings routes → New Venue routes */}
-        <Route path="/settings/brand" element={<BrandSettings />} />
+        <Route path="/settings/brand" element={<Navigate to="/venue/brand-basics" replace />} />
         <Route path="/settings/team" element={<Navigate to="/venue/team" replace />} />
         <Route path="/settings/integrations" element={<Navigate to="/venue/integrations" replace />} />
         <Route path="/settings/billing" element={<Billing />} />
 
         {/* Very old legacy redirects */}
         <Route path="/dashboard" element={<Navigate to="/home" replace />} />
-        <Route path="/brand-kit" element={<Navigate to="/venue/profile" replace />} />
         <Route path="/modules/editor" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/upload" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/drafts" element={<Navigate to="/studio/pro-photo" replace />} />
