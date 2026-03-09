@@ -60,10 +60,24 @@ export default function BrandLibraryPage() {
     fetchUploads();
   }, [currentBrand]);
 
-  const getPublicUrl = (path: string) => {
-    const { data } = supabase.storage.from('venue-assets').getPublicUrl(path);
-    return data.publicUrl;
-  };
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+
+  // Load signed URLs for all uploads (bucket is private)
+  useEffect(() => {
+    const loadSignedUrls = async () => {
+      const urls: Record<string, string> = {};
+      for (const upload of uploads) {
+        const { data } = await supabase.storage
+          .from('venue-assets')
+          .createSignedUrl(upload.storage_path, 3600); // 1 hour TTL
+        if (data?.signedUrl) {
+          urls[upload.id] = data.signedUrl;
+        }
+      }
+      setImageUrls(urls);
+    };
+    if (uploads.length > 0) loadSignedUrls();
+  }, [uploads]);
 
   const handleDeleteUpload = async (upload: UploadItem) => {
     setDeletingId(upload.id);
