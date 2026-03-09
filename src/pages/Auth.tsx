@@ -36,7 +36,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/brand/overview', { replace: true });
+      navigate('/home', { replace: true });
     }
   }, [user, loading, navigate]);
 
