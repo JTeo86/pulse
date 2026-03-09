@@ -67,7 +67,7 @@ export default function AuthPage() {
           description: error.message,
         });
       } else {
-        navigate('/brand/overview');
+        navigate('/home');
       }
     } finally {
       setIsLoading(false);

@@ -101,7 +101,7 @@ export default function AuthReset() {
       if (error) throw error;
       setStage('done');
       toast({ title: 'Password updated!', description: 'You can now sign in with your new password.' });
-      setTimeout(() => navigate('/brand/overview', { replace: true }), 1500);
+      setTimeout(() => navigate('/home', { replace: true }), 1500);
     } catch (err: any) {
       toast({
         variant: 'destructive',
