@@ -302,7 +302,8 @@ export default function VideoProviderTab() {
               Setup Guide
             </h5>
             <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside">
-              <li>Reel Creator is currently hidden from venue users until both <strong>Video Features</strong> and <strong>Reel Creator Visible</strong> are enabled.</li>
+              <li>Kling credentials are configured only here — they do not appear in the Integrations tab.</li>
+              <li>Reel Creator is hidden from venue users until both <strong>Video Features</strong> and <strong>Reel Creator Visible</strong> are enabled above.</li>
               <li>Kling API credentials can be added at any time. Jobs queued before provider setup will be held in pending state.</li>
               <li>If provider config is missing when a user tries to create a reel, they'll see a clean "provider not configured" message.</li>
               <li>Enable <strong>Kling Provider</strong> only after API credentials are saved and tested.</li>
