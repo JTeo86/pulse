@@ -11,8 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { ChevronDown, Settings2, Cpu, BookOpen } from 'lucide-react';
 
-// Known platform_settings keys with metadata
-const PRODUCT_CONTROLS: Array<{
+const REVIEW_DEFAULTS: Array<{
   key: string;
   label: string;
   description: string;
@@ -33,17 +32,26 @@ const PRODUCT_CONTROLS: Array<{
     ],
     defaultValue: 'weekly',
   },
+];
+
+const CREDIT_DEFAULTS: Array<{
+  key: string;
+  label: string;
+  description: string;
+  type: 'number';
+  defaultValue: string;
+}> = [
   {
     key: 'monthly_pro_photo_default',
-    label: 'Default Pro Photo Credits / Month',
-    description: 'Number of Pro Photo credits allocated to new venues by default.',
+    label: 'Pro Photo Credits / Month',
+    description: 'Default credits for new venues.',
     type: 'number',
     defaultValue: '50',
   },
   {
     key: 'monthly_reel_default',
-    label: 'Default Reel Credits / Month',
-    description: 'Number of video reel credits allocated to new venues by default.',
+    label: 'Reel Credits / Month',
+    description: 'Default video reel credits for new venues.',
     type: 'number',
     defaultValue: '20',
   },
@@ -57,9 +65,16 @@ const AI_DEFAULTS: Array<{
   defaultValue: string;
 }> = [
   {
+    key: 'gemini_replate_model',
+    label: 'Gemini Model',
+    description: 'Model ID for Pro Photo generation. Must be image-capable (e.g. gemini-2.5-flash-image).',
+    type: 'text',
+    defaultValue: 'gemini-2.5-flash-image',
+  },
+  {
     key: 'ai_default_temperature',
-    label: 'Default Temperature',
-    description: 'LLM sampling temperature (0.0 – 1.0). Lower = more deterministic.',
+    label: 'Temperature',
+    description: 'LLM sampling temperature (0.0–1.0).',
     type: 'number',
     defaultValue: '0.7',
   },
@@ -73,37 +88,23 @@ const AI_DEFAULTS: Array<{
   {
     key: 'image_default_resolution',
     label: 'Image Resolution',
-    description: 'Default output resolution for generated images (e.g. 1024x1024).',
+    description: 'Default output resolution (e.g. 1024x1024).',
     type: 'text',
     defaultValue: '1024x1024',
   },
   {
     key: 'style_strength_default',
-    label: 'Style Strength Default',
-    description: 'Default style-strength slider value (0–100).',
+    label: 'Style Strength',
+    description: 'Default style-strength value (0–100).',
     type: 'number',
     defaultValue: '70',
-  },
-  {
-    key: 'gemini_replate_model',
-    label: 'Gemini Replate Model',
-    description: 'Model ID for Pro Replate (AI polish). Must be image-capable (e.g. gemini-2.5-flash-image). Do not use google/ prefix.',
-    type: 'text',
-    defaultValue: 'gemini-2.5-flash-image',
   },
 ];
 
 type SettingsMap = Record<string, string>;
+type FieldDef = { key: string; label: string; description: string; type: string; options?: { value: string; label: string }[]; defaultValue: string };
 
-function SettingField({
-  field,
-  value,
-  onChange,
-}: {
-  field: (typeof PRODUCT_CONTROLS)[0];
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function SettingField({ field, value, onChange }: { field: FieldDef; value: string; onChange: (v: string) => void }) {
   if (field.type === 'select' && field.options) {
     return (
       <Select value={value || field.defaultValue} onValueChange={onChange}>
@@ -129,6 +130,44 @@ function SettingField({
   );
 }
 
+function FieldGroup({ title, icon: Icon, description, fields, merged, onChange }: {
+  title: string;
+  icon: typeof Settings2;
+  description: string;
+  fields: FieldDef[];
+  merged: SettingsMap;
+  onChange: (key: string, value: string) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Icon className="w-4 h-4 text-muted-foreground" />
+          <CardTitle className="text-base">{title}</CardTitle>
+        </div>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {fields.map(field => (
+          <div key={field.key} className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <Label className="text-sm font-medium">{field.label}</Label>
+              <p className="text-xs text-muted-foreground">{field.description}</p>
+            </div>
+            <div className="shrink-0">
+              <SettingField
+                field={field}
+                value={merged[field.key] ?? field.defaultValue}
+                onChange={v => onChange(field.key, v)}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PlatformConfigTab() {
   const queryClient = useQueryClient();
   const [aiOpen, setAiOpen] = useState(false);
@@ -147,8 +186,6 @@ export default function PlatformConfigTab() {
   });
 
   const [local, setLocal] = useState<SettingsMap>({});
-
-  // Merge db values with local edits
   const merged: SettingsMap = { ...(settings ?? {}), ...local };
 
   const saveMutation = useMutation({
@@ -164,9 +201,9 @@ export default function PlatformConfigTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-settings'] });
       setLocal({});
-      toast.success('Platform configuration saved');
+      toast.success('Product defaults saved');
     },
-    onError: (err) => toast.error('Failed to save: ' + (err as Error).message),
+    onError: (err) => toast.error('Failed: ' + (err as Error).message),
   });
 
   const handleChange = (key: string, value: string) => {
@@ -176,40 +213,28 @@ export default function PlatformConfigTab() {
   const isDirty = Object.keys(local).length > 0;
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-16 text-muted-foreground">Loading configuration…</div>;
+    return <div className="flex items-center justify-center py-16 text-muted-foreground">Loading…</div>;
   }
 
   return (
-    <div className="space-y-6">
-      {/* Product Controls */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Settings2 className="w-4 h-4 text-muted-foreground" />
-            <CardTitle className="text-base">Core Product Controls</CardTitle>
-          </div>
-          <CardDescription>
-            Operational defaults that affect all workspaces. Changes take effect immediately.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {PRODUCT_CONTROLS.map(field => (
-            <div key={field.key} className="flex items-start justify-between gap-4">
-              <div className="space-y-0.5 min-w-0">
-                <Label className="text-sm font-medium">{field.label}</Label>
-                <p className="text-xs text-muted-foreground">{field.description}</p>
-              </div>
-              <div className="shrink-0">
-                <SettingField
-                  field={field}
-                  value={merged[field.key] ?? field.defaultValue}
-                  onChange={v => handleChange(field.key, v)}
-                />
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+    <div className="space-y-6 max-w-3xl">
+      <FieldGroup
+        title="Review Defaults"
+        icon={BookOpen}
+        description="Settings for automated review ingestion and reporting."
+        fields={REVIEW_DEFAULTS}
+        merged={merged}
+        onChange={handleChange}
+      />
+
+      <FieldGroup
+        title="Credit Defaults"
+        icon={Settings2}
+        description="Default monthly credits for new venues."
+        fields={CREDIT_DEFAULTS}
+        merged={merged}
+        onChange={handleChange}
+      />
 
       {/* AI Defaults — collapsible */}
       <Collapsible open={aiOpen} onOpenChange={setAiOpen}>
@@ -220,17 +245,17 @@ export default function PlatformConfigTab() {
                 <div className="flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-muted-foreground" />
                   <CardTitle className="text-base">AI Defaults</CardTitle>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">Internal only</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">Internal</span>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${aiOpen ? 'rotate-180' : ''}`} />
               </div>
               <CardDescription>
-                Platform-level generation defaults. Not visible to users. Model selection is hardcoded in backend.
+                Gemini model selection and generation parameters. Not visible to users.
               </CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-6 pt-0">
+            <CardContent className="space-y-5 pt-0">
               <Separator />
               {AI_DEFAULTS.map(field => (
                 <div key={field.key} className="flex items-start justify-between gap-4">
@@ -242,7 +267,7 @@ export default function PlatformConfigTab() {
                     type={field.type === 'number' ? 'number' : 'text'}
                     value={merged[field.key] ?? field.defaultValue}
                     onChange={e => handleChange(field.key, e.target.value)}
-                    className="w-36 shrink-0"
+                    className="w-52 shrink-0"
                     placeholder={field.defaultValue}
                   />
                 </div>
@@ -251,22 +276,6 @@ export default function PlatformConfigTab() {
           </CollapsibleContent>
         </Card>
       </Collapsible>
-
-      {/* Content Engine note */}
-      <Card className="border-dashed border-border bg-muted/20">
-        <CardContent className="pt-6">
-          <div className="flex items-start gap-3">
-            <BookOpen className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-medium">Background Assets & Overlay Templates</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Background assets and overlay templates are managed directly in the database and read at render time by edge functions. 
-                No UI configuration needed at this stage — assets are stored in Lovable Cloud storage and referenced by URL.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Save bar */}
       {isDirty && (

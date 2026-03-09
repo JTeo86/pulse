@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   KeyRound, Eye, EyeOff, Save, CheckCircle2,
-  XCircle, AlertCircle, Clock, RefreshCw, ShieldAlert,
+  XCircle, AlertCircle, Clock, RefreshCw,
   Activity, FlaskConical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,12 +19,13 @@ import {
 } from '@/lib/platform-keys';
 
 // ─── Category config ──────────────────────────────────────────────────────────
-const CATEGORY_ORDER: KeyCategory[] = ['Reviews', 'Editor', 'Publishing', 'Other'];
+const CATEGORY_ORDER: KeyCategory[] = ['Reviews', 'Editor', 'Video', 'Publishing'];
 const CATEGORY_META: Record<KeyCategory, { label: string; description: string }> = {
-  Reviews:    { label: 'Reviews & Reputation',    description: 'Keys for ingesting Google, OpenTable and TripAdvisor reviews' },
-  Editor:     { label: 'Editor & AI Processing',  description: 'Keys for image enhancement, background removal and AI generation' },
-  Publishing: { label: 'Publishing & Automation', description: 'Keys for Buffer scheduling and Make.com automation' },
-  Other:      { label: 'Other',                   description: 'Miscellaneous platform credentials' },
+  Reviews:    { label: 'Reviews & Reputation',  description: 'Keys for ingesting Google, OpenTable and TripAdvisor reviews via SerpAPI.' },
+  Editor:     { label: 'AI / Creative',          description: 'Gemini powers Pro Photo image generation and creative AI features.' },
+  Video:      { label: 'Video / Reels',          description: 'Kling AI for video generation from images. Configure when ready.' },
+  Publishing: { label: 'Publishing',             description: 'Buffer for future direct social media scheduling.' },
+  Other:      { label: 'Other',                  description: 'Miscellaneous platform credentials.' },
 };
 
 // ─── Health badge ─────────────────────────────────────────────────────────────
@@ -76,7 +77,7 @@ function CategorySummary({ keys }: { keys: PlatformApiKey[] }) {
   return <Badge variant="outline" className="bg-muted text-muted-foreground border-border gap-1 text-[10px]"><Clock className="w-2.5 h-2.5" />Not set</Badge>;
 }
 
-// ─── SerpAPI Test Result ──────────────────────────────────────────────────────
+// ─── SerpAPI Test ─────────────────────────────────────────────────────────────
 function SerpApiTestButton() {
   const { toast } = useToast();
   const [testing, setTesting] = useState(false);
@@ -123,7 +124,7 @@ function SerpApiTestButton() {
   );
 }
 
-// ─── Gemini Test Button ───────────────────────────────────────────────────────
+// ─── Gemini Test ──────────────────────────────────────────────────────────────
 function GeminiTestButton() {
   const { toast } = useToast();
   const [testing, setTesting] = useState(false);
@@ -134,23 +135,18 @@ function GeminiTestButton() {
     setResult(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-
-      // Fetch the model name from platform_settings
       const { data: modelSetting } = await supabase
         .from('platform_settings')
         .select('value')
         .eq('key', 'gemini_replate_model')
         .single();
-      // Strip google/ prefix — direct API uses bare model names
       const model = (modelSetting?.value || 'gemini-2.5-flash-image').replace(/^google\//, '');
-
       const resp = await supabase.functions.invoke('check-key-health', {
         body: { key_name: 'GEMINI_IMAGE_API_KEY', test_gemini_replate: true, gemini_model: model },
         headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
       });
       if (resp.error) throw new Error(resp.error.message);
-      const data = resp.data as Record<string, unknown>;
-      setResult(data);
+      setResult(resp.data as Record<string, unknown>);
     } catch (err) {
       toast({ title: 'Test failed', description: (err as Error).message, variant: 'destructive' });
     } finally {
@@ -162,7 +158,7 @@ function GeminiTestButton() {
     <div className="space-y-2">
       <Button size="sm" variant="outline" onClick={handleTest} disabled={testing} className="gap-1.5">
         <FlaskConical className={`w-3.5 h-3.5 ${testing ? 'animate-spin' : ''}`} />
-        {testing ? 'Testing Gemini Image…' : 'Test Gemini (Image)'}
+        {testing ? 'Testing Gemini…' : 'Test Gemini (Image)'}
       </Button>
       {result && (
         <div className="text-xs bg-muted rounded-lg p-3 space-y-1 font-mono">
@@ -230,22 +226,12 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
             {apiKey.is_required && (
               <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-accent/40 text-accent">Required</Badge>
             )}
-            {!apiKey.is_secret && (
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0">Public</Badge>
-            )}
           </div>
           {apiKey.description && (
             <p className="text-xs text-muted-foreground mt-0.5">{apiKey.description}</p>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <HealthBadge status={apiKey.health_status as HealthStatus} lastChecked={apiKey.last_checked_at} lastError={apiKey.last_error} />
-          {apiKey.last_checked_at && (
-            <span className="text-[10px] text-muted-foreground hidden sm:block">
-              {new Date(apiKey.last_checked_at).toLocaleDateString()}
-            </span>
-          )}
-        </div>
+        <HealthBadge status={apiKey.health_status as HealthStatus} lastChecked={apiKey.last_checked_at} lastError={apiKey.last_error} />
       </div>
       <div className="flex gap-2">
         <div className="flex-1 relative">
@@ -283,7 +269,7 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
   );
 }
 
-// ─── Exported content component (used inside PlatformAdmin tabs) ──────────────
+// ─── Exported content component ───────────────────────────────────────────────
 export default function AdminIntegrationsContent() {
   const { toast } = useToast();
   const [keys,    setKeys]    = useState<PlatformApiKey[]>([]);
@@ -308,7 +294,6 @@ export default function AdminIntegrationsContent() {
   }, {} as Record<KeyCategory, PlatformApiKey[]>);
 
   const totalHealthy  = keys.filter(k => k.health_status === 'healthy').length;
-  const totalInvalid  = keys.filter(k => k.health_status === 'invalid').length;
   const totalMissing  = keys.filter(k => k.is_required && (!k.is_configured || k.health_status === 'missing')).length;
 
   if (loading) {
@@ -327,22 +312,18 @@ export default function AdminIntegrationsContent() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-accent" />
-              <CardTitle className="text-base">Integrations Health Overview</CardTitle>
+              <CardTitle className="text-base">Integrations Health</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-foreground">{keys.length}</div>
-                <div className="text-xs text-muted-foreground mt-1">Total Keys</div>
+                <div className="text-xs text-muted-foreground mt-1">Active Keys</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-success">{totalHealthy}</div>
                 <div className="text-xs text-muted-foreground mt-1">Healthy</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-destructive">{totalInvalid}</div>
-                <div className="text-xs text-muted-foreground mt-1">Invalid</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-warning">{totalMissing}</div>
@@ -373,18 +354,16 @@ export default function AdminIntegrationsContent() {
           return (
             <Card key={cat} className="border-border">
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <KeyRound className="w-4 h-4 text-muted-foreground" />
-                      <CardTitle className="text-base">{meta.label}</CardTitle>
-                    </div>
-                    <CardDescription className="text-xs mt-1">{meta.description}</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-muted-foreground" />
+                    <CardTitle className="text-base">{meta.label}</CardTitle>
                   </div>
                   <CategorySummary keys={catKeys} />
                 </div>
+                <CardDescription className="text-xs">{meta.description}</CardDescription>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent>
                 {catKeys.map(k => (
                   <KeyRow key={k.id} apiKey={k} onSaved={fetchKeys} />
                 ))}
@@ -392,12 +371,6 @@ export default function AdminIntegrationsContent() {
             </Card>
           );
         })}
-
-        {/* Admin warning */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <ShieldAlert className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          Key values are never exposed to non-admin users. Edge functions read exclusively from the <code className="px-1 py-0.5 rounded bg-muted font-mono">platform_api_keys</code> table.
-        </div>
       </div>
     </TooltipProvider>
   );

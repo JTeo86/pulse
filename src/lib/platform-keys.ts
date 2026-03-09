@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export type HealthStatus = 'healthy' | 'invalid' | 'missing' | 'untested';
-export type KeyCategory = 'Reviews' | 'Editor' | 'Publishing' | 'Other';
+export type KeyCategory = 'Reviews' | 'Editor' | 'Publishing' | 'Video' | 'Other';
 
 export interface PlatformApiKey {
   id: string;
@@ -19,7 +19,19 @@ export interface PlatformApiKey {
   updated_at: string;
 }
 
-/** Fetch all platform API keys (admin only) */
+/**
+ * Canonical allowlist of keys to show in admin UI.
+ * Legacy keys remain in DB for audit but are hidden from the main admin panel.
+ */
+const ADMIN_VISIBLE_KEYS = new Set([
+  'SERPAPI_API_KEY',
+  'GEMINI_IMAGE_API_KEY',
+  'KLING_API_KEY',
+  'KLING_API_SECRET',
+  'BUFFER_API_KEY',
+]);
+
+/** Fetch platform API keys visible in admin */
 export async function getPlatformKeys(): Promise<PlatformApiKey[]> {
   const { data, error } = await supabase
     .from('platform_api_keys')
@@ -27,7 +39,8 @@ export async function getPlatformKeys(): Promise<PlatformApiKey[]> {
     .order('category')
     .order('key_name');
   if (error) throw error;
-  return (data ?? []) as PlatformApiKey[];
+  // Filter to canonical allowlist
+  return ((data ?? []) as PlatformApiKey[]).filter(k => ADMIN_VISIBLE_KEYS.has(k.key_name));
 }
 
 /** Fetch keys grouped by category */
