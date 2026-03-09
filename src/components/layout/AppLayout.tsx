@@ -99,6 +99,7 @@ const quickActions = [
   { name: 'Create Reel', href: '/studio/reel-creator', icon: Film },
   { name: 'Schedule Post', href: '/content/scheduler', icon: Calendar },
   { name: 'Respond to Reviews', href: '/reputation/reviews', icon: MessageSquareText },
+  { name: 'Upload Dish', href: '/studio/pro-photo', icon: Plus },
 ];
 
 // localStorage key for collapsible section state
