@@ -377,6 +377,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { isAdmin } = useVenue();
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+  const galleryFlags = useGalleryFlags();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -384,10 +385,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
+  const mobileStudioNav = [
+    studioBaseNavigation[0],
+    ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
+    studioBaseNavigation[1],
+  ];
+
   // Build mobile nav with same ordering
   const allNavItems: NavItem[] = [
     homeItem,
-    ...studioNavigation,
+    ...mobileStudioNav,
     ...contentNavigation,
     ...reputationNavigation,
     ...(hasReferralAccess ? [...growthBaseNavigation, ...growthReferralItems] : growthBaseNavigation),
