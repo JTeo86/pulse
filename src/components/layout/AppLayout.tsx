@@ -86,7 +86,7 @@ const growthNavigation = [
 ];
 
 const venueNavigation = [
-  { name: 'Brand Profile', href: '/venue/profile', icon: Palette },
+  { name: 'Brand Basics', href: '/venue/brand-basics', icon: Palette },
   { name: 'Integrations', href: '/venue/integrations', icon: Plug },
   { name: 'Team', href: '/venue/team', icon: Users },
 ];
@@ -99,6 +99,7 @@ const quickActions = [
   { name: 'Create Reel', href: '/studio/reel-creator', icon: Film },
   { name: 'Schedule Post', href: '/content/scheduler', icon: Calendar },
   { name: 'Respond to Reviews', href: '/reputation/reviews', icon: MessageSquareText },
+  { name: 'Upload Dish', href: '/studio/pro-photo', icon: Plus },
 ];
 
 // localStorage key for collapsible section state

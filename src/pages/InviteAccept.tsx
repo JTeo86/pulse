@@ -110,7 +110,7 @@ export default function InviteAccept() {
 
       setStage('done');
       toast({ title: 'Welcome to Pulse!', description: 'Your account is ready.' });
-      setTimeout(() => navigate('/brand/overview', { replace: true }), 1500);
+      setTimeout(() => navigate('/home', { replace: true }), 1500);
     } catch (err: any) {
       toast({
         variant: 'destructive',

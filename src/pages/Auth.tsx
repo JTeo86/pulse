@@ -36,7 +36,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/brand/overview', { replace: true });
+      navigate('/home', { replace: true });
     }
   }, [user, loading, navigate]);
 
@@ -53,7 +53,7 @@ export default function AuthPage() {
   }
 
   if (user) {
-    return <Navigate to="/brand/overview" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   const onSubmit = async (data: AuthFormData) => {
@@ -67,7 +67,7 @@ export default function AuthPage() {
           description: error.message,
         });
       } else {
-        navigate('/brand/overview');
+        navigate('/home');
       }
     } finally {
       setIsLoading(false);
