@@ -255,7 +255,7 @@ function SnapshotCard({
           {loading ? (
             <Skeleton className="h-8 w-16" />
           ) : (
-            <p className={`text-2xl font-bold ${isLink ? 'text-accent text-base' : ''}`}>
+            <p className={`text-2xl font-bold ${isLink ? 'text-accent' : ''}`}>
               {value}
             </p>
           )}
