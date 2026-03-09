@@ -130,7 +130,7 @@ export default function EventPlanDetailPage() {
       {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
-            <Link to="/studio/events">
+            <Link to="/content/planner">
               <Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
             </Link>
             <div>
@@ -260,7 +260,7 @@ export default function EventPlanDetailPage() {
                         </span>
                       </div>
                       <Link
-                        to={link.content_item_id ? '/studio/editor' : '/studio/content'}
+                        to={link.content_item_id ? '/studio/pro-photo' : '/content/planner'}
                         className="text-accent hover:underline text-sm flex items-center gap-1"
                       >
                         Open in Studio <ExternalLink className="w-3 h-3" />
