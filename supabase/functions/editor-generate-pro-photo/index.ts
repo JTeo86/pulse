@@ -32,8 +32,10 @@ async function uploadResultBuffer(
   console.log(`[PRO-PHOTO] uploadResultBuffer: suffix=${suffix} detected=${ext.toUpperCase()}`);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
   await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
-  const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
-  return { publicUrl, storagePath: path };
+  // Use signed URL since bucket is private (24 hour TTL)
+  const { data: signedData } = await supabase.storage.from('venue-assets').createSignedUrl(path, 86400);
+  const signedUrl = signedData?.signedUrl || '';
+  return { publicUrl: signedUrl, storagePath: path };
 }
 
 async function resolveSourceImage(
