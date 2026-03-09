@@ -3,10 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Flag, Video, Image, Zap, Package, FlaskConical, Film } from 'lucide-react';
+import { Flag, Video, Image, Package, ChevronDown, Sparkles, Link2 } from 'lucide-react';
+import { useState } from 'react';
 
 interface FeatureFlag {
   id: string;
@@ -16,73 +18,71 @@ interface FeatureFlag {
   config_json: Record<string, unknown>;
 }
 
-// Only operational flags — no duplication of product_phase logic or unused keys
-const FLAG_INFO: Record<string, {
+// Core operational flags shown in main view
+const CORE_FLAGS: Record<string, {
   name: string;
   description: string;
   safeDefault: string;
-  impact: string;
   icon: typeof Flag;
   isPhaseControl?: boolean;
 }> = {
   product_phase: {
     name: 'Product Phase',
-    description: 'Controls which features are available platform-wide. Phase 1 = copy + images only. Phase 2 = video unlocked.',
+    description: 'Controls which features are available platform-wide. Phase 1 = copy + images. Phase 2 = video unlocked.',
     safeDefault: 'phase_1',
-    impact: 'Flipping to phase_2 enables video/reel output for all users.',
     icon: Package,
     isPhaseControl: true,
   },
   'feature.video_enabled': {
     name: 'Video / Reels',
-    description: 'Enable video reel output mode. Only active when product_phase = phase_2.',
+    description: 'Master switch for all video capabilities. Only active when product_phase = phase_2.',
     safeDefault: 'off',
-    impact: 'Unlocks Reel tab in Editor for all users (requires phase_2).',
     icon: Video,
   },
   'feature.reel_creator_enabled': {
     name: 'Reel Creator Visible',
-    description: 'Shows Reel Creator in Studio nav and "Create Reel" buttons in gallery. Requires video_enabled.',
+    description: 'Shows Reel Creator in Studio nav and "Create Reel" actions in gallery.',
     safeDefault: 'off',
-    impact: 'Users can see Reel Creator page and gallery actions.',
-    icon: Film,
-  },
-  'feature.kling_enabled': {
-    name: 'Kling Cinematic AI Reels',
-    description: 'Enable Kling-powered AI video generation. Requires video_enabled + phase_2.',
-    safeDefault: 'off',
-    impact: 'Unlocks Cinematic AI Reel option in Editor (requires KLING_API_KEY configured).',
-    icon: Zap,
+    icon: Video,
   },
   'feature.kling_provider_enabled': {
     name: 'Kling Provider Active',
-    description: 'Allow reel jobs to be sent to Kling for processing. Requires KLING_API_KEY.',
+    description: 'Allows reel jobs to be sent to Kling AI for processing. Requires KLING_API_KEY.',
     safeDefault: 'off',
-    impact: 'Reel jobs will call Kling API when enabled.',
-    icon: Zap,
+    icon: Video,
   },
   'style_auto_improve_enabled': {
     name: 'Style Auto-Improve',
     description: 'Automatically re-analyse style assets when new uploads are added.',
     safeDefault: 'on',
-    impact: 'Disabling stops automatic style profile updates.',
-    icon: Image,
+    icon: Sparkles,
   },
 };
 
-// Flags to show, in order
-const FLAG_ORDER = [
+// Secondary flags shown in collapsed Advanced section
+const ADVANCED_FLAGS: Record<string, {
+  name: string;
+  description: string;
+}> = {
+  'feature.gallery_variations_enabled': { name: 'Gallery Variations', description: 'Create Variation action on gallery assets.' },
+  'feature.gallery_lineage_enabled': { name: 'Gallery Lineage', description: 'Version History panel on gallery assets.' },
+  'feature.referral_network_enabled': { name: 'Referral Network', description: 'Master toggle for Referral Network module.' },
+  'feature.referral_network_private_beta': { name: 'Referral Private Beta', description: 'Limits access to invited beta venues.' },
+  'feature.referral_network_public_launch': { name: 'Referral Public Launch', description: 'Makes Referral Network available to all.' },
+  'feature.referral_network_stripe_enabled': { name: 'Referral Stripe Payouts', description: 'Enables Stripe Connect automated payouts.' },
+};
+
+const CORE_FLAG_ORDER = [
   'product_phase',
   'feature.video_enabled',
   'feature.reel_creator_enabled',
-  'feature.kling_enabled',
   'feature.kling_provider_enabled',
   'style_auto_improve_enabled',
-  'experimental_features',
 ];
 
 export default function FeatureFlagsTab() {
   const queryClient = useQueryClient();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const { data: flags, isLoading } = useQuery({
     queryKey: ['feature-flags-admin'],
@@ -105,6 +105,7 @@ export default function FeatureFlagsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-flags-admin'] });
       queryClient.invalidateQueries({ queryKey: ['phase-flags'] });
+      queryClient.invalidateQueries({ queryKey: ['gallery-flags'] });
       toast.success('Feature flag updated');
     },
     onError: (err) => toast.error('Failed to update flag: ' + err.message),
@@ -121,52 +122,41 @@ export default function FeatureFlagsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-flags-admin'] });
       queryClient.invalidateQueries({ queryKey: ['phase-flags'] });
-      toast.success('Product phase updated — refresh any open tabs');
+      toast.success('Product phase updated');
     },
-    onError: (err) => toast.error('Failed to update phase: ' + err.message),
+    onError: (err) => toast.error('Failed: ' + err.message),
   });
 
-  // Order flags: known ones first, unknowns appended
-  const knownFlags = FLAG_ORDER
+  // Split flags into core and advanced
+  const coreFlags = CORE_FLAG_ORDER
     .map(key => flags?.find(f => f.flag_key === key))
     .filter(Boolean) as FeatureFlag[];
-  const unknownFlags = (flags ?? []).filter(f => !FLAG_ORDER.includes(f.flag_key));
-  const orderedFlags = [...knownFlags, ...unknownFlags];
 
-  const renderRow = (flag: FeatureFlag) => {
-    const info = FLAG_INFO[flag.flag_key] ?? {
-      name: flag.flag_key,
-      description: (flag.config_json as { description?: string })?.description ?? 'No description',
-      safeDefault: '—',
-      impact: 'Unknown impact.',
-      icon: Flag,
-    };
+  const advancedFlags = (flags ?? []).filter(f => 
+    f.flag_key in ADVANCED_FLAGS
+  );
+
+  const renderCoreRow = (flag: FeatureFlag) => {
+    const info = CORE_FLAGS[flag.flag_key];
+    if (!info) return null;
     const Icon = info.icon;
-    const isPhaseControl = (info as { isPhaseControl?: boolean }).isPhaseControl;
+    const isPhaseControl = info.isPhaseControl;
     const currentPhase = (flag.config_json as { value?: string })?.value ?? 'phase_1';
 
     return (
-      <TableRow key={flag.id}>
-        <TableCell>
-          <div className="flex items-center gap-2">
-            <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
-            <div>
-              <span className="font-medium block text-sm">{info.name}</span>
-              <span className="text-[10px] text-muted-foreground font-mono">{flag.flag_key}</span>
-            </div>
+      <div key={flag.id} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{info.name}</p>
+            <p className="text-xs text-muted-foreground">{info.description}</p>
           </div>
-        </TableCell>
-        <TableCell className="text-muted-foreground text-xs max-w-xs">{info.description}</TableCell>
-        <TableCell>
-          <span className="text-[10px] font-mono text-muted-foreground">{(info as any).safeDefault}</span>
-        </TableCell>
-        <TableCell>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
           {flag.is_enabled
             ? <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-[10px]">Active</Badge>
             : <Badge variant="outline" className="bg-muted text-muted-foreground text-[10px]">Off</Badge>
           }
-        </TableCell>
-        <TableCell className="text-right">
           {isPhaseControl ? (
             <Select
               value={currentPhase}
@@ -188,40 +178,25 @@ export default function FeatureFlagsTab() {
               disabled={toggleMutation.isPending}
             />
           )}
-        </TableCell>
-      </TableRow>
+        </div>
+      </div>
     );
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-3xl">
       <Card>
         <CardHeader>
           <CardTitle>Feature Flags</CardTitle>
           <CardDescription>
-            Operational toggles that gate product capabilities. Phase 1 hard-gates all video features regardless of individual flags.
+            Core operational toggles. Phase 1 hard-gates all video features regardless of individual flags.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground text-sm">Loading flags…</div>
           ) : (
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Flag</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Safe Default</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Control</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orderedFlags.map(renderRow)}
-              </TableBody>
-            </Table>
-            </div>
+            <div>{coreFlags.map(renderCoreRow)}</div>
           )}
         </CardContent>
       </Card>
@@ -234,8 +209,7 @@ export default function FeatureFlagsTab() {
             <div>
               <h4 className="font-medium text-sm">Phase 1 — Active Now</h4>
               <p className="text-sm text-muted-foreground mt-1">
-                Copywriting + Pro Photo (AI image generation). Style Intelligence Engine included.
-                Export as images for use in any scheduler.
+                Copywriting + Pro Photo (Gemini image generation). Style Intelligence Engine. Export-first publishing.
               </p>
             </div>
           </div>
@@ -246,13 +220,54 @@ export default function FeatureFlagsTab() {
             <div>
               <h4 className="font-medium text-sm text-muted-foreground">Phase 2 — Video & Reels</h4>
               <p className="text-sm text-muted-foreground mt-1">
-                Template Reel (Ken Burns) + Cinematic AI Reel (Kling). Flip <code className="text-xs bg-muted px-1 rounded">product_phase</code> to phase_2 to unlock.
-                Requires <code className="text-xs bg-muted px-1 rounded">KLING_API_KEY</code> configured in Integrations & API Keys.
+                Kling AI video generation from Pro Photos. Flip product_phase to phase_2 and enable Kling in Video Provider tab.
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Advanced / Internal flags */}
+      {advancedFlags.length > 0 && (
+        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors rounded-t-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Flag className="w-4 h-4 text-muted-foreground" />
+                    <CardTitle className="text-base">Advanced / Internal</CardTitle>
+                    <Badge variant="outline" className="text-[10px]">{advancedFlags.length}</Badge>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+                </div>
+                <CardDescription>Gallery, referral, and other secondary flags.</CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                <Separator className="mb-3" />
+                {advancedFlags.map(flag => {
+                  const info = ADVANCED_FLAGS[flag.flag_key] || { name: flag.flag_key, description: '' };
+                  return (
+                    <div key={flag.id} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{info.name}</p>
+                        <p className="text-xs text-muted-foreground">{info.description}</p>
+                      </div>
+                      <Switch
+                        checked={flag.is_enabled}
+                        onCheckedChange={checked => toggleMutation.mutate({ id: flag.id, isEnabled: checked })}
+                        disabled={toggleMutation.isPending}
+                      />
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
     </div>
   );
 }
