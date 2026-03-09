@@ -186,6 +186,33 @@ export function useDeleteAsset() {
   });
 }
 
+export function useBulkDeleteAssets() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (assets: ContentAsset[]) => {
+      if (assets.length === 0) return;
+      const storagePaths = assets
+        .map((a) => a.storage_path)
+        .filter((p): p is string => !!p);
+      if (storagePaths.length > 0) {
+        await supabase.storage.from('venue-assets').remove(storagePaths);
+      }
+      const ids = assets.map((a) => a.id);
+      const { error } = await supabase.from('content_assets').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: (_, assets) => {
+      queryClient.invalidateQueries({ queryKey: ['content-assets'] });
+      toast({ title: `${assets.length} asset${assets.length > 1 ? 's' : ''} deleted` });
+    },
+    onError: () => {
+      toast({ title: 'Bulk delete failed', variant: 'destructive' });
+    },
+  });
+}
+
 export function useCreateVariation() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

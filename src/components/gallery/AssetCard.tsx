@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +55,9 @@ interface AssetCardProps {
   isCreatingVariation?: boolean;
   isCreatingReel?: boolean;
   canEdit?: boolean;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onSelect?: (asset: ContentAsset) => void;
 }
 
 const sourceLabels: Record<string, { label: string; className: string }> = {
