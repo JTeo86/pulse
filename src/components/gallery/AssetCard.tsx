@@ -129,11 +129,23 @@ export function AssetCard({
           </div>
         )}
 
-        {/* Top badges */}
+        {/* Top badges — show real generation info */}
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between">
-          <Badge variant="outline" className={`text-[10px] ${source.className} border-0`}>
-            {source.label}
-          </Badge>
+          <div className="flex flex-col gap-1">
+            <Badge variant="outline" className={`text-[10px] ${source.className} border-0`}>
+              {asset.source_type === 'variation'
+                ? `Variation${(asset.metadata as any)?.variation_label ? ` · ${(asset.metadata as any).variation_label}` : ''}`
+                : source.label}
+            </Badge>
+            {(asset.metadata as any)?.generation_mode && (
+              <Badge variant="outline" className="text-[9px] bg-card/80 text-foreground/70 border-0">
+                {(asset.metadata as any).generation_mode === 'safe' ? 'Safe' :
+                 (asset.metadata as any).generation_mode === 'enhanced' ? 'Enhanced' :
+                 (asset.metadata as any).generation_mode === 'editorial' ? 'Editorial' :
+                 (asset.metadata as any).generation_mode}
+              </Badge>
+            )}
+          </div>
           {asset.is_favorite && (
             <Heart className="w-4 h-4 text-accent fill-accent" />
           )}

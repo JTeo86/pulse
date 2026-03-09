@@ -531,32 +531,17 @@ export default function TheEditorPage() {
                 {/* Download + Actions */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Actions</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button
-                      onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-1x1-${Date.now()}.jpg`)}
-                      variant="default"
-                      className="gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
-                      size="sm"
-                    >
-                      <Download className="w-3.5 h-3.5" /> 1:1
-                    </Button>
-                    <Button
-                      onClick={() => handleDownload(jobResult.final_image_variants?.portrait_4_5 || jobResult.final_image_url, `pro-photo-4x5-${Date.now()}.jpg`)}
-                      variant="outline"
-                      className="gap-1.5 text-xs"
-                      size="sm"
-                    >
-                      <Download className="w-3.5 h-3.5" /> 4:5
-                    </Button>
-                    <Button
-                      onClick={() => handleDownload(jobResult.final_image_variants?.vertical_9_16 || jobResult.final_image_url, `pro-photo-9x16-${Date.now()}.jpg`)}
-                      variant="outline"
-                      className="gap-1.5 text-xs"
-                      size="sm"
-                    >
-                      <Download className="w-3.5 h-3.5" /> 9:16
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${realismMode}-${Date.now()}.jpg`)}
+                    variant="default"
+                    className="w-full gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                    size="sm"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Image
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">
+                    Per-format crops (4:5, 9:16) coming soon. Current output is the full generated image.
+                  </p>
                   <Button
                     variant="outline"
                     className="w-full gap-2"
