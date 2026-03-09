@@ -76,7 +76,7 @@ export default function StyleEngine() {
             description="Interior shots, ambience, lighting mood. These help the AI understand your venue's vibe."
             venueId={currentVenue?.id}
             channel="atmosphere"
-            refreshKey={refreshKey}
+            canEdit={isAdmin}
             onUploadComplete={handleUploadComplete}
           />
         </TabsContent>
@@ -87,7 +87,7 @@ export default function StyleEngine() {
             description="Close-up food shots, plating styles, garnish patterns. Teaches the AI your presentation standards."
             venueId={currentVenue?.id}
             channel="plating"
-            refreshKey={refreshKey}
+            canEdit={isAdmin}
             onUploadComplete={handleUploadComplete}
           />
         </TabsContent>
@@ -98,7 +98,7 @@ export default function StyleEngine() {
             description="Logo applications, marketing materials, competitor examples you admire. Defines your visual identity."
             venueId={currentVenue?.id}
             channel="brand"
-            refreshKey={refreshKey}
+            canEdit={isAdmin}
             onUploadComplete={handleUploadComplete}
           />
         </TabsContent>
@@ -129,7 +129,6 @@ function ChannelSection({
   venueId,
   channel,
   canEdit,
-  refreshKey,
   onUploadComplete,
 }: {
   title: string;
@@ -137,15 +136,6 @@ function ChannelSection({
   venueId: string | undefined;
   channel: 'atmosphere' | 'plating' | 'brand';
   canEdit: boolean;
-  refreshKey: number;
-  onUploadComplete: () => void;
-}) {
-}: {
-  title: string;
-  description: string;
-  venueId: string | undefined;
-  channel: 'atmosphere' | 'plating' | 'brand';
-  refreshKey: number;
   onUploadComplete: () => void;
 }) {
   const { assets, loading, refetch } = useStyleAssets(venueId, channel);
@@ -188,7 +178,8 @@ function ChannelSection({
               <StyleAssetCard
                 key={asset.id}
                 asset={asset}
-                onRefetch={refetch}
+                canEdit={canEdit}
+                onUpdate={refetch}
               />
             ))}
           </div>
