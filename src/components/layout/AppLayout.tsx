@@ -470,7 +470,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 pt-14 lg:pt-0 min-h-screen flex flex-col">
+        <main className="flex-1 pt-14 lg:pt-0 min-h-screen flex flex-col min-w-0">
           <div className="hidden lg:flex items-center justify-between h-12 px-4 border-b border-border">
             <Button variant="ghost" size="icon" asChild>
               <span><PanelLeft className="w-4 h-4" /></span>
