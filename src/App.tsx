@@ -15,10 +15,13 @@ import AuthReset from "./pages/AuthReset";
 import InviteAccept from "./pages/InviteAccept";
 import Landing from "./pages/Landing";
 import CreateVenue from "./pages/CreateVenue";
-import BrandOverview from "./pages/BrandOverview";
+import Home from "./pages/Home";
 import BrandKit from "./pages/BrandKit";
 import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
+import StyleEngine from "./pages/StyleEngine";
+import ReelCreator from "./pages/ReelCreator";
+import ContentScheduler from "./pages/ContentScheduler";
 import Copywriter from "./pages/Copywriter";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
@@ -29,7 +32,6 @@ import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
 import EventsPlanner from "./pages/EventsPlanner";
-// EditorPage removed — /editor now redirects to /studio/editor
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import NotFound from "./pages/NotFound";
@@ -93,48 +95,75 @@ function AppRoutes() {
 
       {/* All authenticated routes share a single persistent AppLayout */}
       <Route element={<ProtectedLayout />}>
-        {/* Brand Section */}
-        <Route path="/brand/overview" element={<BrandOverview />} />
-        <Route path="/brand/identity" element={<BrandKit />} />
-        <Route path="/brand/library" element={<BrandLibrary />} />
+        {/* Home - Default landing page */}
+        <Route path="/home" element={<Home />} />
+        
+        {/* Studio Section - Creative tools */}
+        <Route path="/studio/pro-photo" element={<TheEditor />} />
+        <Route path="/studio/reel-creator" element={<ReelCreator />} />
+        <Route path="/studio/style-engine" element={<StyleEngine />} />
+        
+        {/* Content Section */}
+        <Route path="/content/library" element={<BrandLibrary />} />
+        <Route path="/content/scheduler" element={<ContentScheduler />} />
+        <Route path="/content/campaigns" element={<Copywriter />} />
 
-        {/* Studio Section */}
-        <Route path="/studio/editor" element={<TheEditor />} />
-        <Route path="/studio/content" element={<Copywriter />} />
-        <Route path="/studio/events" element={<EventsPlanner />} />
-        <Route path="/studio/events/:planId" element={<EventPlanDetail />} />
+        {/* Reputation Section */}
+        <Route path="/reputation/reviews" element={<ReviewsAnalytics />} />
 
-        {/* Analytics Section */}
-        <Route path="/analytics/performance" element={<BrandPerformance />} />
-        <Route path="/analytics/competitors" element={<CompetitorIntel />} />
-        <Route path="/analytics/insights" element={<AIInsights />} />
-        <Route path="/analytics/reviews" element={<ReviewsAnalytics />} />
+        {/* Growth Section */}
+        <Route path="/growth/performance" element={<BrandPerformance />} />
 
-        {/* Settings Section */}
-        <Route path="/settings/brand" element={<BrandSettings />} />
-        <Route path="/settings/team" element={<Team />} />
-        <Route path="/settings/integrations" element={<Integrations />} />
-        <Route path="/settings/billing" element={<Billing />} />
+        {/* Venue Section */}
+        <Route path="/venue/profile" element={<BrandKit />} />
+        <Route path="/venue/integrations" element={<Integrations />} />
+        <Route path="/venue/team" element={<Team />} />
 
         {/* Admin Section */}
         <Route path="/admin/platform" element={<PlatformAdmin />} />
         <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
-        {/* Legacy editor redirect */}
-        <Route path="/editor" element={<Navigate to="/studio/editor" replace />} />
+        {/* Event Planning (keeping for backward compat but not in nav) */}
+        <Route path="/studio/events" element={<EventsPlanner />} />
+        <Route path="/studio/events/:planId" element={<EventPlanDetail />} />
+        
+        {/* Legacy analytics routes kept for deep links */}
+        <Route path="/analytics/competitors" element={<CompetitorIntel />} />
+        <Route path="/analytics/insights" element={<AIInsights />} />
 
-        {/* Legacy redirects */}
-        <Route path="/dashboard" element={<Navigate to="/brand/overview" replace />} />
-        <Route path="/brand-kit" element={<Navigate to="/brand/identity" replace />} />
-        <Route path="/modules/editor" element={<Navigate to="/studio/editor" replace />} />
-        <Route path="/upload" element={<Navigate to="/studio/editor" replace />} />
-        <Route path="/drafts" element={<Navigate to="/studio/editor" replace />} />
-        <Route path="/publishing" element={<Navigate to="/studio/editor" replace />} />
-        <Route path="/studio/planner" element={<Navigate to="/settings/integrations" replace />} />
-        <Route path="/studio/email" element={<Navigate to="/studio/content" replace />} />
+        {/* ============ LEGACY REDIRECTS ============ */}
+        {/* Old Brand routes → New routes */}
+        <Route path="/brand/overview" element={<Navigate to="/home" replace />} />
+        <Route path="/brand/identity" element={<Navigate to="/venue/profile" replace />} />
+        <Route path="/brand/library" element={<Navigate to="/content/library" replace />} />
+        
+        {/* Old Studio routes → New routes */}
+        <Route path="/studio/editor" element={<Navigate to="/studio/pro-photo" replace />} />
+        <Route path="/studio/content" element={<Navigate to="/content/campaigns" replace />} />
+        <Route path="/editor" element={<Navigate to="/studio/pro-photo" replace />} />
+        
+        {/* Old Analytics routes → New routes */}
+        <Route path="/analytics/reviews" element={<Navigate to="/reputation/reviews" replace />} />
+        <Route path="/analytics/performance" element={<Navigate to="/growth/performance" replace />} />
+        
+        {/* Old Settings routes → New Venue routes */}
+        <Route path="/settings/brand" element={<BrandSettings />} />
+        <Route path="/settings/team" element={<Navigate to="/venue/team" replace />} />
+        <Route path="/settings/integrations" element={<Navigate to="/venue/integrations" replace />} />
+        <Route path="/settings/billing" element={<Billing />} />
+
+        {/* Very old legacy redirects */}
+        <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+        <Route path="/brand-kit" element={<Navigate to="/venue/profile" replace />} />
+        <Route path="/modules/editor" element={<Navigate to="/studio/pro-photo" replace />} />
+        <Route path="/upload" element={<Navigate to="/studio/pro-photo" replace />} />
+        <Route path="/drafts" element={<Navigate to="/studio/pro-photo" replace />} />
+        <Route path="/publishing" element={<Navigate to="/studio/pro-photo" replace />} />
+        <Route path="/studio/planner" element={<Navigate to="/venue/integrations" replace />} />
+        <Route path="/studio/email" element={<Navigate to="/content/campaigns" replace />} />
         <Route path="/studio/competitors" element={<Navigate to="/analytics/competitors" replace />} />
-        <Route path="/team" element={<Navigate to="/settings/team" replace />} />
-        <Route path="/integrations" element={<Navigate to="/settings/integrations" replace />} />
+        <Route path="/team" element={<Navigate to="/venue/team" replace />} />
+        <Route path="/integrations" element={<Navigate to="/venue/integrations" replace />} />
         <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
       </Route>
 

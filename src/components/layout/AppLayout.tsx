@@ -2,27 +2,26 @@ import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  LayoutDashboard, 
-  Palette, 
-  FolderOpen,
-  PenTool,
-  CalendarDays,
-  Target,
+  Home,
   Camera,
-  BarChart3,
-  Brain,
+  Film,
+  Sparkles,
+  FolderOpen,
+  Calendar,
+  Megaphone,
   MessageSquareText,
-  Settings,
-  Users, 
-  Plug, 
-  CreditCard,
+  TrendingUp,
+  Palette,
+  Plug,
+  Users,
   ChevronDown,
   ChevronRight,
   LogOut,
   Menu,
   X,
   PanelLeft,
-  Shield
+  Shield,
+  Plus
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -63,34 +62,44 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
+// New simplified navigation structure
+const homeItem = { name: 'Home', href: '/home', icon: Home };
+
 const studioNavigation = [
-  { name: 'AI Marketing Assistant', href: '/studio/events', icon: CalendarDays },
-  { name: 'Campaign Engine', href: '/studio/content', icon: PenTool },
-  { name: 'Editor', href: '/studio/editor', icon: Camera },
+  { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
+  { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film, badge: 'Soon' },
+  { name: 'Style Engine', href: '/studio/style-engine', icon: Sparkles },
 ];
 
-const analyticsNavigation = [
-  { name: 'Reviews', href: '/analytics/reviews', icon: MessageSquareText },
-  { name: 'Brand Performance', href: '/analytics/performance', icon: BarChart3 },
-  { name: 'Competitors', href: '/analytics/competitors', icon: Target },
-  { name: 'AI Insights', href: '/analytics/insights', icon: Brain },
+const contentNavigation = [
+  { name: 'Library', href: '/content/library', icon: FolderOpen },
+  { name: 'Scheduler', href: '/content/scheduler', icon: Calendar },
+  { name: 'Campaigns', href: '/content/campaigns', icon: Megaphone },
 ];
 
-const brandNavigation = [
-  { name: 'Brand Overview', href: '/brand/overview', icon: LayoutDashboard },
-  { name: 'Brand Identity', href: '/brand/identity', icon: Palette },
-  { name: 'Content Library', href: '/brand/library', icon: FolderOpen },
+const reputationNavigation = [
+  { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
 ];
 
-// Settings items split by access level
-const settingsTeamItem = { name: 'Team', href: '/settings/team', icon: Users };
-const settingsAdminItems = [
-  { name: 'Brand Settings', href: '/settings/brand', icon: Settings },
-  { name: 'Integrations', href: '/settings/integrations', icon: Plug },
-  { name: 'Billing', href: '/settings/billing', icon: CreditCard },
+const growthNavigation = [
+  { name: 'Performance', href: '/growth/performance', icon: TrendingUp },
+];
+
+const venueNavigation = [
+  { name: 'Brand Profile', href: '/venue/profile', icon: Palette },
+  { name: 'Integrations', href: '/venue/integrations', icon: Plug },
+  { name: 'Team', href: '/venue/team', icon: Users },
 ];
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
+
+// Quick action items for Create dropdown
+const quickActions = [
+  { name: 'Generate Photo', href: '/studio/pro-photo', icon: Camera },
+  { name: 'Create Reel', href: '/studio/reel-creator', icon: Film },
+  { name: 'Schedule Post', href: '/content/scheduler', icon: Calendar },
+  { name: 'Respond to Reviews', href: '/reputation/reviews', icon: MessageSquareText },
+];
 
 // localStorage key for collapsible section state
 const SECTION_STATE_KEY = 'sidebar-sections-state';
@@ -138,10 +147,6 @@ function AppSidebar() {
     await signOut();
     navigate('/auth');
   };
-
-  // Build settings items based on role
-  const settingsItems: NavItem[] = [settingsTeamItem];
-  if (isAdmin) settingsItems.push(...settingsAdminItems);
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
     const isActive = location.pathname === item.href;
@@ -231,7 +236,7 @@ function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar-background">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className={`flex items-center h-14 ${isCollapsed ? 'justify-center px-2' : 'px-4'}`}>
-          <Link to="/brand/overview" className="font-serif text-lg font-medium text-sidebar-foreground">
+          <Link to="/home" className="font-serif text-lg font-medium text-sidebar-foreground">
             {isCollapsed ? (
               <span className="text-accent text-xl font-bold">P</span>
             ) : (
@@ -248,7 +253,7 @@ function AppSidebar() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="w-full justify-between text-left font-normal h-auto py-2 hover:bg-sidebar-accent">
                 <div className="flex flex-col items-start">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Current Brand</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Current Venue</span>
                   <span className="font-medium truncate max-w-[140px]">{currentBrand.name}</span>
                 </div>
                 <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -266,7 +271,7 @@ function AppSidebar() {
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate('/create-brand')}>
-                + Create new brand
+                + Create new venue
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -274,10 +279,23 @@ function AppSidebar() {
       )}
 
       <SidebarContent className="py-2">
+        {/* Home - Top level item */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-0.5">
+              <SidebarMenuItem>
+                <NavItemComponent item={homeItem} />
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <CollapsibleSection label="Studio" items={studioNavigation} sectionKey="studio" />
-        <CollapsibleSection label="Analytics" items={analyticsNavigation} sectionKey="analytics" />
-        <CollapsibleSection label="Brand" items={brandNavigation} sectionKey="brand" />
-        <CollapsibleSection label="Settings" items={settingsItems} sectionKey="settings" />
+        <CollapsibleSection label="Content" items={contentNavigation} sectionKey="content" />
+        <CollapsibleSection label="Reputation" items={reputationNavigation} sectionKey="reputation" />
+        <CollapsibleSection label="Growth" items={growthNavigation} sectionKey="growth" />
+        <CollapsibleSection label="Venue" items={venueNavigation} sectionKey="venue" />
+        
         {isPlatformAdmin && (
           <CollapsibleSection label="Platform" items={[platformAdminItem]} sectionKey="platform" />
         )}
@@ -336,14 +354,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  // Build mobile nav with same ordering and gating
-  const settingsItems: NavItem[] = [settingsTeamItem];
-  if (isAdmin) settingsItems.push(...settingsAdminItems);
+  // Build mobile nav with same ordering
   const allNavItems: NavItem[] = [
+    homeItem,
     ...studioNavigation,
-    ...analyticsNavigation,
-    ...brandNavigation,
-    ...settingsItems,
+    ...contentNavigation,
+    ...reputationNavigation,
+    ...growthNavigation,
+    ...venueNavigation,
     ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
 
@@ -353,12 +371,30 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Mobile Header */}
         <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
           <div className="flex items-center justify-between px-4 h-14">
-            <Link to="/brand/overview" className="font-serif text-lg font-medium">
+            <Link to="/home" className="font-serif text-lg font-medium">
               Pulse<span className="text-accent">.</span>
             </Link>
-            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* Quick Create Button - Mobile */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="outline" className="h-9 w-9">
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {quickActions.map((action) => (
+                    <DropdownMenuItem key={action.name} onClick={() => navigate(action.href)}>
+                      <action.icon className="w-4 h-4 mr-2" />
+                      {action.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </Button>
+            </div>
           </div>
         </header>
 
@@ -386,6 +422,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                     >
                       <item.icon className="w-4 h-4" />
                       {item.name}
+                      {item.badge && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent ml-auto">{item.badge}</span>
+                      )}
                     </Link>
                   ))}
                 </div>
@@ -412,10 +451,28 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Main Content */}
         <main className="flex-1 pt-14 lg:pt-0 min-h-screen flex flex-col">
-          <div className="hidden lg:flex items-center h-12 px-4 border-b border-border">
+          <div className="hidden lg:flex items-center justify-between h-12 px-4 border-b border-border">
             <Button variant="ghost" size="icon" asChild>
               <span><PanelLeft className="w-4 h-4" /></span>
             </Button>
+            
+            {/* Quick Create Button - Desktop */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Create
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {quickActions.map((action) => (
+                  <DropdownMenuItem key={action.name} onClick={() => navigate(action.href)}>
+                    <action.icon className="w-4 h-4 mr-2" />
+                    {action.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="flex-1 p-6 lg:p-8">{children}</div>
         </main>
