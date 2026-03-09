@@ -57,3 +57,9 @@ verify_jwt = false
 [functions.generate-marketing-plan]
 verify_jwt = false
 
+[functions.create-image-variation]
+verify_jwt = false
+
+[functions.create-reel-from-image]
+verify_jwt = false
+
