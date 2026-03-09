@@ -177,6 +177,9 @@ export default function Home() {
       {/* Action Feed */}
       <ActionFeed actions={actions} loading={loading} onActionsChange={setActions} />
 
+      {/* Referral Network Cards */}
+      <ReferralHomeCards />
+
       {/* Weekly Marketing Plan */}
       <WeeklyMarketingPlan />
 
