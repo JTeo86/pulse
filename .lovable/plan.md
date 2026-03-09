@@ -1,46 +1,17 @@
 
-## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
 
-### What's Happening
+## The Platform Admin Sidebar Tab Already Exists — Your Users Just Need Admin Access
 
-The database constraint `copy_projects_module_check` currently only allows:
+The sidebar already has a "Platform Admin" nav item under a collapsible "Platform" section. It only renders when the logged-in user passes the `is_platform_admin()` check — which queries the `platform_admins` table. That table is currently **empty**, so no one can see it.
 
-```
-'email', 'blog', 'ad_copy', 'sms_push'
-```
+### What needs to happen
 
-This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
+Insert your two selected accounts into the `platform_admins` table:
 
-There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
+| email | user_id |
+|---|---|
+| jeanyves_teo@yahoo.com | `87600c90-a94b-4cd1-be80-dc7a24357c74` |
+| j.teo@tribeholding.com | `78cfec4f-2cad-4162-b6fe-43ec24e2dfdd` |
 
-### Fix
+This is a single data insert — no code or schema changes required. Once inserted, the "Platform" section with the "Platform Admin" link will appear at the bottom of the sidebar for these users.
 
-One new migration file will be created:
-
-```sql
--- Drop the old constraint
-ALTER TABLE public.copy_projects
-  DROP CONSTRAINT copy_projects_module_check;
-
--- Recreate it with 'campaign' included
-ALTER TABLE public.copy_projects
-  ADD CONSTRAINT copy_projects_module_check
-  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
-
--- Notify PostgREST to reload its schema cache immediately
-NOTIFY pgrst, 'reload schema';
-```
-
-The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
-
-### No Frontend Changes Needed
-
-The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
-
-### What Changes
-
-- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
-
-### Verification
-
-After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
