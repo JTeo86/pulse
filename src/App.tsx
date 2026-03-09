@@ -26,6 +26,7 @@ import ContentScheduler from "./pages/ContentScheduler";
 import Copywriter from "./pages/Copywriter";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
+import IndustryInsights from "./pages/growth/IndustryInsights";
 import AIInsights from "./pages/AIInsights";
 import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
@@ -132,6 +133,7 @@ function AppRoutes() {
 
         {/* Growth Section */}
         <Route path="/growth/performance" element={<BrandPerformance />} />
+        <Route path="/growth/industry-insights" element={<IndustryInsights />} />
         <Route path="/growth/referrals" element={<ReferralsPage />} />
         <Route path="/growth/partners" element={<PartnersPage />} />
         <Route path="/growth/payouts" element={<PayoutsPage />} />

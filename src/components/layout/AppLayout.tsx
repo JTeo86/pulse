@@ -88,6 +88,7 @@ const reputationNavigation = [
 
 const growthBaseNavigation = [
   { name: 'Performance', href: '/growth/performance', icon: TrendingUp },
+  { name: 'Industry Insights', href: '/growth/industry-insights', icon: Sparkles },
 ];
 
 const growthReferralItems: NavItem[] = [
