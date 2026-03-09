@@ -159,6 +159,13 @@ function AppSidebar() {
   const isCollapsed = state === 'collapsed';
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+  const galleryFlags = useGalleryFlags();
+
+  const studioNavigation = [
+    studioBaseNavigation[0], // Pro Photo
+    ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
+    studioBaseNavigation[1], // Style Engine
+  ];
 
   const growthNavigation = [
     ...growthBaseNavigation,
