@@ -18,10 +18,10 @@ import { cn } from '@/lib/utils';
 
 type RealismMode = 'safe' | 'enhanced' | 'editorial';
 
-const REALISM_MODES: { key: RealismMode; label: string; desc: string; warn?: boolean }[] = [
-  { key: 'safe', label: 'Safe', desc: 'Cleanup + lighting only. Dish stays very close to original.' },
-  { key: 'enhanced', label: 'Enhanced', desc: 'Professional lighting, subtle depth-of-field.' },
-  { key: 'editorial', label: 'Editorial', desc: 'Cinematic, maximum polish.', warn: true },
+const REALISM_MODES: { key: RealismMode; label: string; desc: string; detail: string; warn?: boolean }[] = [
+  { key: 'safe', label: 'Safe', desc: 'Closest to original', detail: 'Professional cleanup with minimal scene change. Same angle, same setting — just sharper and better exposed.' },
+  { key: 'enhanced', label: 'Enhanced', desc: 'Balanced improvement', detail: 'Better lighting, polish, and styling while staying believable. Social-media ready with professional food photography quality.' },
+  { key: 'editorial', label: 'Editorial', desc: 'Premium campaign', detail: 'Most dramatic result. Cinematic lighting, luxury styling, and magazine-quality presentation. Ideal for hero posts and ads.', warn: true },
 ];
 
 const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[] = [
@@ -369,7 +369,8 @@ export default function TheEditorPage() {
                     {m.label}
                     {m.warn && <AlertTriangle className="w-3 h-3 text-amber-500" />}
                   </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{m.desc}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight font-medium">{m.desc}</p>
+                  <p className="text-[9px] text-muted-foreground/70 mt-0.5 leading-tight">{m.detail}</p>
                 </button>
               ))}
             </div>
@@ -530,32 +531,17 @@ export default function TheEditorPage() {
                 {/* Download + Actions */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Actions</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button
-                      onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-1x1-${Date.now()}.jpg`)}
-                      variant="default"
-                      className="gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
-                      size="sm"
-                    >
-                      <Download className="w-3.5 h-3.5" /> 1:1
-                    </Button>
-                    <Button
-                      onClick={() => handleDownload(jobResult.final_image_variants?.portrait_4_5 || jobResult.final_image_url, `pro-photo-4x5-${Date.now()}.jpg`)}
-                      variant="outline"
-                      className="gap-1.5 text-xs"
-                      size="sm"
-                    >
-                      <Download className="w-3.5 h-3.5" /> 4:5
-                    </Button>
-                    <Button
-                      onClick={() => handleDownload(jobResult.final_image_variants?.vertical_9_16 || jobResult.final_image_url, `pro-photo-9x16-${Date.now()}.jpg`)}
-                      variant="outline"
-                      className="gap-1.5 text-xs"
-                      size="sm"
-                    >
-                      <Download className="w-3.5 h-3.5" /> 9:16
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${realismMode}-${Date.now()}.jpg`)}
+                    variant="default"
+                    className="w-full gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                    size="sm"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Image
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">
+                    Per-format crops (4:5, 9:16) coming soon. Current output is the full generated image.
+                  </p>
                   <Button
                     variant="outline"
                     className="w-full gap-2"

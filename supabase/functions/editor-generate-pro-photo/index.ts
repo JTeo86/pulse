@@ -29,10 +29,8 @@ async function uploadResultBuffer(
   suffix: string,
 ): Promise<{ publicUrl: string; storagePath: string }> {
   const { ext, contentType } = sniffImage(buffer);
-  console.log(`[PRO-PHOTO] uploadResultBuffer: suffix=${suffix} detected=${ext.toUpperCase()}`);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
   await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
-  // Use signed URL since bucket is private (24 hour TTL)
   const { data: signedData } = await supabase.storage.from('venue-assets').createSignedUrl(path, 86400);
   const signedUrl = signedData?.signedUrl || '';
   return { publicUrl: signedUrl, storagePath: path };
@@ -94,29 +92,19 @@ async function buildVenueStyleContext(
 ): Promise<VenueStyleContext> {
   const styleSourcesUsed: string[] = [];
 
-  // Load venue basics + brand kit + style profile in parallel
   const [venueResult, brandKitResult, styleProfileResult, refAssetsResult, legacyRefResult] = await Promise.all([
     supabase.from('venues').select('name, city').eq('id', venueId).single(),
     supabase.from('brand_kits').select('preset, rules_text').eq('venue_id', venueId).single(),
     supabase.from('venue_style_profiles').select('*').eq('venue_id', venueId).maybeSingle(),
-    // New style reference assets
     supabase.from('venue_style_reference_assets')
       .select('id, storage_path, public_url, channel, pinned, source_type')
-      .eq('venue_id', venueId)
-      .eq('approved', true)
-      .eq('status', 'active')
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(6),
-    // Legacy style_reference_assets (backward compat)
+      .eq('venue_id', venueId).eq('approved', true).eq('status', 'active')
+      .order('pinned', { ascending: false }).order('created_at', { ascending: false }).limit(6),
     supabase.from('style_reference_assets')
       .select('id, storage_path, channel, pinned')
-      .eq('venue_id', venueId)
-      .eq('status', 'analyzed')
+      .eq('venue_id', venueId).eq('status', 'analyzed')
       .in('channel', ['atmosphere', 'brand', 'plating'])
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(6),
+      .order('pinned', { ascending: false }).order('created_at', { ascending: false }).limit(6),
   ]);
 
   const venueName = venueResult.data?.name || 'restaurant';
@@ -149,10 +137,8 @@ async function buildVenueStyleContext(
     if (!brandSummary) brandSummary = brandRules;
   }
 
-  // Resolve reference images — prefer new table, fall back to legacy
   const referenceImages: { url: string; channel: string; assetId: string }[] = [];
 
-  // Try new venue_style_reference_assets first
   const newAssets = refAssetsResult.data || [];
   if (newAssets.length > 0) {
     styleSourcesUsed.push('venue_style_reference_assets');
@@ -166,7 +152,6 @@ async function buildVenueStyleContext(
           }
         } catch { /* fall through */ }
       }
-      // Try storage URL (signed since bucket is private)
       const { data: signedRef } = await supabase.storage.from('venue-assets').createSignedUrl(asset.storage_path, 300);
       if (signedRef?.signedUrl) {
         referenceImages.push({ url: signedRef.signedUrl, channel: asset.channel, assetId: asset.id });
@@ -174,16 +159,11 @@ async function buildVenueStyleContext(
     }
   }
 
-  // Fall back to legacy style_reference_assets if needed
   if (referenceImages.length === 0) {
     const legacyAssets = legacyRefResult.data || [];
     if (legacyAssets.length > 0) {
       styleSourcesUsed.push('style_reference_assets');
-      const bucketMap: Record<string, string> = {
-        atmosphere: 'venue_atmosphere',
-        brand: 'brand_inspiration',
-        plating: 'plating_style',
-      };
+      const bucketMap: Record<string, string> = { atmosphere: 'venue_atmosphere', brand: 'brand_inspiration', plating: 'plating_style' };
       for (const asset of legacyAssets.slice(0, 3)) {
         const bucket = bucketMap[asset.channel] || 'venue_atmosphere';
         const isPublic = bucket === 'venue_atmosphere';
@@ -204,53 +184,71 @@ async function buildVenueStyleContext(
     }
   }
 
-  if (referenceImages.length > 0) {
-    styleSourcesUsed.push('reference_images');
-  }
+  if (referenceImages.length > 0) styleSourcesUsed.push('reference_images');
 
   return {
-    brandSummary,
-    styleSummary,
-    lightingMood,
-    luxuryLevel,
-    cuisineType,
-    venueTone: brandPreset,
-    negativeRules,
-    dishLockRules,
-    referenceImages,
-    styleSourcesUsed,
-    venueName,
-    venueCity,
+    brandSummary, styleSummary, lightingMood, luxuryLevel, cuisineType,
+    venueTone: brandPreset, negativeRules, dishLockRules, referenceImages,
+    styleSourcesUsed, venueName, venueCity,
   };
 }
 
-// ── Prompt Construction ──────────────────────────────────────────────
+// ── Structured Generation Plan ───────────────────────────────────────
 
-function buildPrompt(ctx: VenueStyleContext, realismMode: string): string {
-  // Mode-specific lighting instructions
-  const lightingMap: Record<string, string> = {
-    safe: 'Preserve original lighting characteristics. Only correct white balance and minor exposure issues. Keep natural shadows and highlights. Shallow depth-of-field is optional.',
-    enhanced: 'Professional soft lighting with gentle, natural shadows. Moderate depth-of-field to gently separate the dish from background. Warm restaurant ambiance with balanced highlights.',
-    editorial: 'Cinematic dramatic lighting with pronounced shadows and rich highlights. Strong shallow depth-of-field with creamy bokeh. Magazine-quality polish with deliberate light direction.',
-  };
-  const lightingInstruction = lightingMap[realismMode] || lightingMap.safe;
+interface GenerationPlan {
+  mode: string;
+  preservation_level: number;       // 0.0–1.0, higher = more faithful to original
+  composition_flexibility: number;  // 0.0–1.0, higher = more freedom to reframe
+  background_flexibility: number;   // 0.0–1.0, higher = more background change allowed
+  plating_refinement: number;       // 0.0–1.0, higher = more plating enhancement
+  lighting_drama: number;           // 0.0–1.0, higher = more dramatic lighting
+  styling_intensity: number;        // 0.0–1.0, higher = more environmental styling
+  realism_guardrails: string;
+}
 
-  // Mode-specific background behavior
-  const backgroundModeMap: Record<string, string> = {
-    safe: 'Keep the background minimal and neutral. Preserve original scene characteristics where possible. Avoid dramatic environmental changes.',
-    enhanced: 'Refine the background with natural restaurant details. Add subtle environmental texture and depth. Create a polished but realistic setting.',
-    editorial: 'Create a rich, cinematic restaurant scene with atmospheric depth and premium textures. Use dramatic environmental storytelling with luxurious details.',
-  };
-  const backgroundBehavior = backgroundModeMap[realismMode] || backgroundModeMap.safe;
+function buildGenerationPlan(realismMode: string): GenerationPlan {
+  switch (realismMode) {
+    case 'safe':
+      return {
+        mode: 'safe',
+        preservation_level: 0.95,
+        composition_flexibility: 0.05,
+        background_flexibility: 0.15,
+        plating_refinement: 0.05,
+        lighting_drama: 0.1,
+        styling_intensity: 0.1,
+        realism_guardrails: 'strict',
+      };
+    case 'enhanced':
+      return {
+        mode: 'enhanced',
+        preservation_level: 0.7,
+        composition_flexibility: 0.3,
+        background_flexibility: 0.5,
+        plating_refinement: 0.3,
+        lighting_drama: 0.45,
+        styling_intensity: 0.5,
+        realism_guardrails: 'moderate',
+      };
+    case 'editorial':
+      return {
+        mode: 'editorial',
+        preservation_level: 0.4,
+        composition_flexibility: 0.7,
+        background_flexibility: 0.85,
+        plating_refinement: 0.5,
+        lighting_drama: 0.85,
+        styling_intensity: 0.9,
+        realism_guardrails: 'relaxed',
+      };
+    default:
+      return buildGenerationPlan('safe');
+  }
+}
 
-  // Mode-specific polish level
-  const polishMap: Record<string, string> = {
-    safe: 'Authentic look — minimal retouching, preserving the original photograph feel.',
-    enhanced: 'Elevated look — professional retouching with enhanced micro-contrast and clarity.',
-    editorial: 'Editorial look — high-end magazine finish with cinematic tone and enhanced highlight control.',
-  };
-  const polishLevel = polishMap[realismMode] || polishMap.safe;
+// ── Prompt Construction from Generation Plan ─────────────────────────
 
+function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
   const toneMap: Record<string, string> = {
     casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
     premium: 'upscale fine dining restaurant with dark wood, candlelight, and luxury tableware',
@@ -259,23 +257,17 @@ function buildPrompt(ctx: VenueStyleContext, realismMode: string): string {
     family: 'bright family-friendly restaurant with clean tables and cheerful warm lighting',
   };
   const venueTone = toneMap[ctx.venueTone] || toneMap.casual;
-
   const hasRefs = ctx.referenceImages.length > 0;
-  const backgroundInstruction = hasRefs
-    ? `Match the lighting, table surfaces, interior mood and color palette of the provided reference images. ${backgroundBehavior}`
-    : `Generate a realistic restaurant table environment matching this style: ${venueTone}.${ctx.venueCity ? ` The venue is located in ${ctx.venueCity}.` : ''} ${backgroundBehavior}`;
 
-  // Build dish lock section
+  // ── DISH LOCK — always strict regardless of mode ──
   const dishLockExtra = ctx.dishLockRules.length > 0
     ? '\n' + ctx.dishLockRules.map(r => `- ${r}`).join('\n')
     : '';
 
-  // Build negative rules
   const negativeSection = ctx.negativeRules.length > 0
     ? `\n\nNEGATIVE RULES (DO NOT):\n${ctx.negativeRules.map(r => `- ${r}`).join('\n')}`
     : '';
 
-  // Build style context section
   let styleSection = '';
   if (ctx.styleSummary || ctx.lightingMood || ctx.cuisineType || ctx.luxuryLevel) {
     const parts: string[] = [];
@@ -286,9 +278,142 @@ function buildPrompt(ctx: VenueStyleContext, realismMode: string): string {
     styleSection = `\n\nVENUE IDENTITY:\n${parts.join('\n')}`;
   }
 
-  return `You are editing a food photograph for a restaurant marketing image.
+  // ── MODE-SPECIFIC SECTIONS ──
+  // These are DRAMATICALLY different per mode to prevent output collapse
 
-STRICT DISH LOCK RULES:
+  let compositionDirective: string;
+  let backgroundDirective: string;
+  let lightingDirective: string;
+  let polishDirective: string;
+  let environmentDirective: string;
+  let modeGoal: string;
+
+  if (plan.mode === 'safe') {
+    compositionDirective = `COMPOSITION — PRESERVE EXACTLY:
+- Keep the EXACT same camera angle, framing, and crop as the original photo.
+- Do NOT rotate, tilt, zoom, or reframe the shot.
+- The dish must remain in the same position within the frame.
+- Do NOT add or remove any negative space.
+- Maintain the original aspect ratio and perspective.`;
+
+    backgroundDirective = `BACKGROUND — MINIMAL CLEANUP ONLY:
+- Keep the original background as much as possible.
+- Only remove obvious distractions (trash, fingers, phone edges).
+- Do NOT replace the table surface, tablecloth, or setting.
+- Do NOT add props, decorations, or styling elements.
+- The scene should look like the same photo, just cleaner.`;
+
+    lightingDirective = `LIGHTING — GENTLE CORRECTION ONLY:
+- Correct white balance if the image has a color cast.
+- Fix minor underexposure or overexposure.
+- Do NOT add dramatic directional lighting.
+- Do NOT add rim lighting, backlighting, or spotlight effects.
+- Preserve the original natural shadow directions.
+- Keep the ambient light character of the original scene.`;
+
+    polishDirective = `POLISH — SUBTLE PROFESSIONAL CLEANUP:
+- Slightly sharpen for clarity.
+- Minor noise reduction if needed.
+- Subtle contrast adjustment only.
+- The output should look like the original photo taken with a slightly better camera.
+- No visible editing or retouching.`;
+
+    environmentDirective = `ENVIRONMENT — DO NOT CHANGE:
+- Keep existing tableware, napkins, cutlery, glasses.
+- Do NOT add new props or table accessories.
+- Do NOT upgrade or change the crockery.
+- Preserve the authentic restaurant environment.`;
+
+    modeGoal = `The output must look like the exact same photograph, cleaned up by a professional photographer in post-processing. A viewer comparing original and output should see the SAME scene, just better exposed and sharper.`;
+
+  } else if (plan.mode === 'enhanced') {
+    compositionDirective = `COMPOSITION — MODERATE REFINEMENT:
+- You may slightly adjust the framing to improve the composition.
+- Minor crop adjustments are acceptable to follow rule-of-thirds.
+- Keep the same general camera angle but you may subtly improve it.
+- Center the dish better if it's off-center in an unpleasing way.
+- Do NOT dramatically change the perspective or angle.`;
+
+    backgroundDirective = `BACKGROUND — REFINED RESTAURANT SETTING:
+- Clean up and refine the background to look polished.
+- Replace messy or distracting backgrounds with a clean, believable restaurant table setting.
+- Add subtle depth with a naturally blurred background suggesting a real restaurant interior.
+- Use warm, inviting restaurant tones — wooden tables, clean linen, or elegant surfaces.
+- The background should look like a real, well-maintained restaurant — not a studio.`;
+
+    lightingDirective = `LIGHTING — PROFESSIONAL FOOD PHOTOGRAPHY:
+- Apply professional soft directional lighting from a 45-degree angle.
+- Add gentle fill light to reduce harsh shadows under the dish.
+- Create natural-looking highlights on the food surface to make it glisten.
+- Use warm color temperature (around 4500K) for an inviting restaurant feel.
+- Add moderate depth-of-field — gently blur background while keeping the full dish sharp.
+- Add subtle catchlights on sauces, glazes, or moist surfaces.`;
+
+    polishDirective = `POLISH — SOCIAL-MEDIA READY:
+- Increase micro-contrast on the food for texture pop.
+- Boost color saturation moderately — make colors vibrant but natural.
+- Apply professional sharpening to the dish area.
+- The image should feel "Instagram-worthy" — clearly better than a phone snapshot.
+- Professional but not overdone — it should still look authentic.`;
+
+    environmentDirective = `ENVIRONMENT — TASTEFUL UPGRADE:
+- You may add simple, elegant props: a clean napkin, a fork, a small glass.
+- Props should be minimal and not compete with the dish.
+- Ensure tableware looks clean and appropriate for the venue type.
+- The table setting should suggest a real restaurant experience.`;
+
+    modeGoal = `The output should look noticeably better than the original — like a professional food photographer captured it with proper lighting equipment in a well-styled restaurant. It should feel authentic and real, but clearly elevated.`;
+
+  } else {
+    // editorial
+    compositionDirective = `COMPOSITION — CREATIVE FREEDOM:
+- Recompose for maximum visual impact. Use dramatic framing.
+- Apply the rule of thirds, golden ratio, or asymmetric balance.
+- You may shoot from a more dramatic angle — lower perspective, close-up detail, or elegant overhead.
+- Use negative space deliberately for a magazine-layout feel.
+- Create a composition that would work as a full-page magazine ad or hero banner.`;
+
+    backgroundDirective = `BACKGROUND — PREMIUM EDITORIAL ENVIRONMENT:
+- Create a rich, luxurious restaurant environment with depth and atmosphere.
+- Use moody, textured backgrounds — dark marble, rich wood, or elegant stone surfaces.
+- Add environmental storytelling: candlelight reflections, bokeh from distant lights, subtle ambient elements.
+- The setting should feel exclusive and aspirational.
+- Add atmospheric depth — slight haze, warm ambient glow, or dramatic light falloff.
+- The background should support the dish as the hero, not compete with it.`;
+
+    lightingDirective = `LIGHTING — CINEMATIC & DRAMATIC:
+- Use dramatic directional lighting — strong key light from one side creating pronounced shadows.
+- Add beautiful rim lighting or edge light to separate the dish from the background.
+- Create deep, rich shadows alongside bright highlights for maximum contrast.
+- Use warm golden tones mixed with cool shadow areas for cinematic color contrast.
+- Apply strong shallow depth-of-field with creamy, luxurious bokeh.
+- Add specular highlights on sauces, oils, and glossy surfaces to make them shine.
+- The lighting should feel intentional, editorial, and magazine-quality.`;
+
+    polishDirective = `POLISH — HIGH-END MAGAZINE FINISH:
+- Maximum professional retouching — every detail should be perfected.
+- Rich, deep colors with controlled saturation for a premium feel.
+- Pronounced micro-contrast for dramatic texture detail on the food.
+- Cinematic color grading — this is not a casual photo, it's a campaign image.
+- The overall tone should feel luxurious, warm, and aspirational.`;
+
+    environmentDirective = `ENVIRONMENT — LUXURY STYLING:
+- Add premium styling elements: elegant cutlery, linen, crystal, or wine glass.
+- Use sophisticated color palette in the props and surfaces.
+- Every element should reinforce a premium dining narrative.
+- The scene should look like it was styled by a professional food stylist for a luxury magazine shoot.
+- Include subtle premium details: fabric texture, reflective surfaces, fine tableware.`;
+
+    modeGoal = `The output should look dramatically different from a phone photo — like a premium ad campaign or magazine editorial. Think Michelin-starred restaurant marketing, luxury hotel campaign, or high-end food magazine cover. The dish is the hero in a cinematic, aspirational scene.`;
+  }
+
+  const refInstruction = hasRefs
+    ? `Match the specific lighting mood, table surfaces, interior atmosphere, and color palette of the provided reference images.`
+    : `Generate a restaurant table environment matching this style: ${venueTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''}`;
+
+  return `You are editing a food photograph for restaurant marketing. Mode: ${plan.mode.toUpperCase()}.
+
+STRICT DISH LOCK RULES — THESE OVERRIDE EVERYTHING:
 - The food in the uploaded image must remain visually identical.
 - Preserve the exact dish, ingredients, plating and portion size.
 - Do NOT add garnish that was not present.
@@ -298,32 +423,25 @@ STRICT DISH LOCK RULES:
 - Treat the food area as locked pixels. Only the surrounding environment may be modified.
 - Do NOT add text, watermarks, logos, or any overlays.
 - Do NOT make the image look artificial, illustrated, or AI-generated.${dishLockExtra}
+${styleSection}${negativeSection}
 
-VENUE STYLE RULES:
-- Use only the provided reference images and brand data for this venue.
-- Match the atmosphere, lighting, textures, surfaces and mood of this venue.
-- The final image should look like it was genuinely photographed inside this specific venue or in a setting perfectly consistent with its identity.
-- Do not use generic styling if venue-specific references are available.${styleSection}${negativeSection}
+${compositionDirective}
 
-TASK:
-Re-photograph the dish as if it were captured by a professional food photographer in a real restaurant setting.
+${backgroundDirective}
 
-ENVIRONMENT:
-Place the dish naturally in a restaurant setting suitable for ${ctx.venueName ? `"${ctx.venueName}"` : 'a restaurant'} — a ${venueTone} venue.
+${lightingDirective}
 
-BACKGROUND:
-${backgroundInstruction}
+${polishDirective}
 
-LIGHTING:
-${lightingInstruction}
+${environmentDirective}
 
-POLISH LEVEL:
-${polishLevel}
-
-${ctx.brandSummary ? `BRAND NOTES: ${ctx.brandSummary.substring(0, 400)}` : ''}
+VENUE REFERENCE:
+${refInstruction}
+${ctx.venueName ? `Venue: "${ctx.venueName}"` : ''}
+${ctx.brandSummary ? `Brand notes: ${ctx.brandSummary.substring(0, 400)}` : ''}
 
 GOAL:
-Produce a natural restaurant marketing photo suitable for this venue's Instagram or social media while keeping the dish completely unchanged.
+${modeGoal}
 
 Output as JPEG. Do NOT output PNG with transparency.`.trim();
 }
@@ -367,19 +485,19 @@ Deno.serve(async (req) => {
     }
 
     // ═══ STEP 1 — Resolve source image ═══
-    console.log('[PRO-PHOTO] Upload received');
     const { base64: sourceBase64, mime: sourceMime, publicUrl: resolvedSourceUrl } = await resolveSourceImage(
       supabase, venue_id, input_image_url, sourceFileBase64, sourceFileName,
     );
 
     // ═══ STEP 2 — Build venue style context ═══
-    console.log('[PRO-PHOTO] Venue style context loading…');
     const ctx = await buildVenueStyleContext(supabase, venue_id);
-    console.log(`[PRO-PHOTO] Venue style context loaded: sources=[${ctx.styleSourcesUsed.join(', ')}] refs=${ctx.referenceImages.length}`);
+    console.log(`[PRO-PHOTO] Style context: sources=[${ctx.styleSourcesUsed.join(', ')}] refs=${ctx.referenceImages.length}`);
 
-    // ═══ STEP 3 — Build prompt with Dish Lock ═══
-    console.log('[PRO-PHOTO] Dish lock prompt built');
-    const prompt = buildPrompt(ctx, realism_mode || 'safe');
+    // ═══ STEP 3 — Build structured generation plan + prompt ═══
+    const plan = buildGenerationPlan(realism_mode || 'safe');
+    const prompt = buildPrompt(ctx, plan);
+
+    console.log(`[PRO-PHOTO] Mode=${plan.mode} preservation=${plan.preservation_level} lighting_drama=${plan.lighting_drama} bg_flex=${plan.background_flexibility}`);
 
     // Build Gemini message content
     const messageContent: any[] = [
@@ -406,13 +524,12 @@ Deno.serve(async (req) => {
     });
 
     const geminiStatus = geminiResp.status;
-    console.log(`[PRO-PHOTO] Gemini response received: status=${geminiStatus}`);
+    console.log(`[PRO-PHOTO] Gemini response: status=${geminiStatus}`);
 
     if (!geminiResp.ok) {
       const errBody = await geminiResp.text().catch(() => '');
       console.error(`[PRO-PHOTO] Gemini failed: ${geminiStatus} — ${errBody.substring(0, 500)}`);
 
-      // Log generation failure
       await supabase.from('venue_style_generation_logs').insert({
         venue_id,
         model_name: 'google/gemini-2.5-flash-image',
@@ -470,15 +587,17 @@ Deno.serve(async (req) => {
     const { publicUrl: finalUrl, storagePath: finalStoragePath } = await uploadResultBuffer(
       supabase, venue_id, imgBytes, 'final',
     );
-    console.log(`[PRO-PHOTO] Image stored successfully: ${finalUrl}`);
 
     const generationTimeMs = Date.now() - startTime;
 
-    // ═══ STEP 6 — Save to database ═══
+    // ═══ STEP 6 — Save to database (honest metadata) ═══
+    // NOTE: All format variants point to the same URL because only one image is generated.
+    // They are labeled as "same_source" to be honest about this limitation.
     const finalImageVariants = {
       square_1_1: finalUrl,
       portrait_4_5: finalUrl,
       vertical_9_16: finalUrl,
+      _variant_note: 'single_generation_no_real_crops',
     };
 
     if (job_id) {
@@ -487,10 +606,11 @@ Deno.serve(async (req) => {
         final_image_url: finalUrl,
         final_image_variants: finalImageVariants,
         input_image_url: resolvedSourceUrl,
+        realism_mode: plan.mode,
+        provider_settings: plan as unknown as Record<string, unknown>,
       }).eq('id', job_id);
     }
 
-    // edited_assets record
     const { data: editedAssetData } = await supabase.from('edited_assets').insert({
       venue_id,
       source_url: resolvedSourceUrl,
@@ -498,7 +618,8 @@ Deno.serve(async (req) => {
       output_types: ['image/jpeg'],
       engine_version: 'v2',
       settings_json: {
-        realism_mode: realism_mode || 'safe',
+        realism_mode: plan.mode,
+        generation_plan: plan,
         reference_count: ctx.referenceImages.length,
         reference_asset_ids: ctx.referenceImages.map(r => r.assetId),
         model: 'google/gemini-2.5-flash-image',
@@ -509,24 +630,23 @@ Deno.serve(async (req) => {
       compliance_status: 'approved',
     }).select('id').single();
 
-    // Content library record
     let uploadId: string | null = null;
     const { data: uploadData, error: uploadError } = await supabase.from('uploads').insert({
       venue_id,
       storage_path: finalStoragePath,
       uploaded_by: user.id,
       status: 'ready',
-      notes: `Pro Photo (Gemini, ${realism_mode || 'safe'}, ${ctx.referenceImages.length} refs)`,
+      notes: `Pro Photo · ${plan.mode.charAt(0).toUpperCase() + plan.mode.slice(1)} (${ctx.referenceImages.length} refs)`,
     }).select('id').single();
-    
+
     if (uploadError) {
-      console.error('[PRO-PHOTO] uploads insert error:', uploadError.message, uploadError.details);
+      console.error('[PRO-PHOTO] uploads insert error:', uploadError.message);
     } else {
       uploadId = uploadData?.id || null;
-      console.log(`[PRO-PHOTO] Upload record created: ${uploadId}`);
     }
 
-    // Content assets record (Asset Command Center)
+    // Content assets record with proper generation metadata
+    const modeLabel = plan.mode.charAt(0).toUpperCase() + plan.mode.slice(1);
     try {
       await supabase.from('content_assets').insert({
         venue_id,
@@ -534,23 +654,30 @@ Deno.serve(async (req) => {
         asset_type: 'image',
         source_type: 'generated_image',
         status: 'draft',
-        title: 'Pro Photo',
+        title: `Pro Photo · ${modeLabel}`,
         storage_path: finalStoragePath,
         public_url: finalUrl,
         mime_type: 'image/jpeg',
         source_job_id: editedAssetData?.id || null,
         derived_from_editor_job_id: job_id || null,
-        prompt_snapshot: { prompt: prompt.substring(0, 2000) },
+        prompt_snapshot: {
+          prompt: prompt.substring(0, 2000),
+          generation_plan: plan,
+        },
         generation_settings: {
-          realism_mode: realism_mode || 'safe',
+          generation_mode: plan.mode,
+          generation_plan: plan,
           reference_count: ctx.referenceImages.length,
           model: 'google/gemini-2.5-flash-image',
           generation_time_ms: generationTimeMs,
           style_sources: ctx.styleSourcesUsed,
         },
-        metadata: { edited_asset_id: editedAssetData?.id || null, upload_id: uploadId },
+        metadata: {
+          generation_mode: plan.mode,
+          edited_asset_id: editedAssetData?.id || null,
+          upload_id: uploadId,
+        },
       });
-      console.log('[PRO-PHOTO] content_assets record created');
     } catch (e) {
       console.warn('[PRO-PHOTO] content_assets insert error:', e);
     }
@@ -575,17 +702,14 @@ Deno.serve(async (req) => {
       console.warn('[PRO-PHOTO] generation log insert error:', e);
     }
 
-    // Diagnostic log
     console.log(JSON.stringify({
       tag: 'PRO-PHOTO-RESULT',
       job_id: job_id || 'none',
       venue_id,
-      model: 'google/gemini-2.5-flash-image',
-      reference_images_used: ctx.referenceImages.length,
-      style_sources: ctx.styleSourcesUsed,
-      realism_mode: realism_mode || 'safe',
+      mode: plan.mode,
+      preservation_level: plan.preservation_level,
+      lighting_drama: plan.lighting_drama,
       generation_time_ms: generationTimeMs,
-      final_url: finalUrl,
     }));
 
     return jsonResp({
@@ -599,6 +723,8 @@ Deno.serve(async (req) => {
       model: 'google/gemini-2.5-flash-image',
       generation_time_ms: generationTimeMs,
       edited_asset_id: editedAssetData?.id || null,
+      generation_mode: plan.mode,
+      generation_plan: plan,
     });
   } catch (err: unknown) {
     console.error('[PRO-PHOTO] ERROR:', err);
