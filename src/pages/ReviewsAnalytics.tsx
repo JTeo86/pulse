@@ -5,7 +5,7 @@ import {
   Search, Edit2, Power, PowerOff, Trash2, HelpCircle,
   CheckCircle2, XCircle, AlertCircle, Clock, ChevronDown, ChevronRight,
   ExternalLink, Link2, ShieldAlert, Copy, ThumbsUp, ThumbsDown,
-  Archive, Send, Bot, Zap,
+  Archive, Send, Bot, Zap, Activity,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
