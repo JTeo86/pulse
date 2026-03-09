@@ -1,46 +1,53 @@
 
-## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
 
-### What's Happening
+## Layout Sizing Fix — All Pages, All Viewports
 
-The database constraint `copy_projects_module_check` currently only allows:
-
+### Problem
+The main content area in `AppLayout.tsx` (line 497) renders as:
+```html
+<div className="flex-1 p-6 lg:p-8">{children}</div>
 ```
-'email', 'blog', 'ad_copy', 'sms_push'
+Within a flex parent (`<main className="flex-1 ...">`) — but neither the `<main>` nor the content div have `min-w-0` or `overflow-x` constraints. In flexbox, children default to `min-width: auto`, which allows wide content (tables, grids) to push beyond the viewport, causing horizontal scroll.
+
+### Fix (2 changes in AppLayout.tsx)
+
+**1. Add `min-w-0 overflow-x-hidden` to `<main>`** (line 473):
 ```
-
-This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
-
-There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
-
-### Fix
-
-One new migration file will be created:
-
-```sql
--- Drop the old constraint
-ALTER TABLE public.copy_projects
-  DROP CONSTRAINT copy_projects_module_check;
-
--- Recreate it with 'campaign' included
-ALTER TABLE public.copy_projects
-  ADD CONSTRAINT copy_projects_module_check
-  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
-
--- Notify PostgREST to reload its schema cache immediately
-NOTIFY pgrst, 'reload schema';
+<main className="flex-1 pt-14 lg:pt-0 min-h-screen flex flex-col min-w-0">
 ```
 
-The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
+**2. Add `min-w-0 overflow-x-hidden` to the content wrapper** (line 497):
+```
+<div className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">{children}</div>
+```
+Also reduces mobile padding from `p-6` to `p-4` for better use of small screens.
 
-### No Frontend Changes Needed
+**3. Wrap all data tables in horizontal scroll containers** — search for `<Table>` usage across pages and ensure each is wrapped in `<div className="overflow-x-auto">`. Key files:
+- `src/pages/growth/PartnersPage.tsx`
+- `src/pages/growth/ReferralsPage.tsx`
+- `src/pages/growth/PayoutsPage.tsx`
+- `src/pages/growth/OffersPage.tsx`
+- `src/pages/growth/ReferralDashboard.tsx`
+- `src/pages/Team.tsx`
+- Any other page using `<Table>`
 
-The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
+**4. Fix grid breakpoints on Home.tsx** — the 4-column grid (`lg:grid-cols-4`) is fine, but ensure cards use `min-w-0` to prevent overflow:
+```
+<section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+```
+(Already uses `md:grid-cols-2` — change to `sm:` for earlier stacking on tablets.)
 
-### What Changes
+**5. Partner portal layout** — check `PartnerLayout.tsx` for the same flex overflow issue and apply `min-w-0 overflow-x-hidden` to its main content area.
 
-- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
+### Summary of files to edit
+- `src/components/layout/AppLayout.tsx` — core fix (min-w-0, overflow, mobile padding)
+- `src/components/partner/PartnerLayout.tsx` — same flex fix
+- `src/pages/growth/PartnersPage.tsx` — wrap table
+- `src/pages/growth/ReferralsPage.tsx` — wrap table
+- `src/pages/growth/PayoutsPage.tsx` — wrap table
+- `src/pages/growth/OffersPage.tsx` — wrap table if using Table
+- `src/pages/growth/ReferralDashboard.tsx` — wrap tables
+- `src/pages/Team.tsx` — wrap table
+- `src/pages/Home.tsx` — grid breakpoint tweak
+- `src/components/home/ReferralHomeCards.tsx` — ensure grid doesn't overflow on small screens
 
-### Verification
-
-After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
