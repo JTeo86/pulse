@@ -51,3 +51,6 @@ verify_jwt = false
 [functions.generate-review-response-draft]
 verify_jwt = false
 
+[functions.generate-action-feed]
+verify_jwt = false
+
