@@ -7,18 +7,14 @@ import {
   TrendingUp, 
   Image,
   ArrowRight,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  Sparkles
+  Clock
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ActionFeed } from '@/components/home/ActionFeed';
 
 interface SnapshotData {
   reviewsAwaiting: number;
@@ -37,7 +33,7 @@ interface ActivityItem {
 interface ActionItem {
   id: string;
   action_type: string;
-  priority: 'high' | 'medium' | 'low';
+  priority: string;
   title: string;
   description: string;
   cta_label: string;
@@ -45,12 +41,6 @@ interface ActionItem {
   status: string;
   created_at: string;
 }
-
-const PRIORITY_COLORS = {
-  high: 'bg-destructive/10 text-destructive border-destructive/20',
-  medium: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  low: 'bg-muted text-muted-foreground border-border',
-};
 
 export default function Home() {
   const { currentVenue } = useVenue();
@@ -70,60 +60,53 @@ export default function Home() {
       setLoading(true);
       
       try {
-        // Fetch reviews awaiting response
-        const { count: reviewsCount } = await supabase
-          .from('review_response_tasks')
-          .select('*', { count: 'exact', head: true })
-          .eq('venue_id', currentVenue.id)
-          .eq('status', 'pending');
+        const [reviewsRes, scheduledRes, styleRes, recentEditsRes, actionItemsRes] = await Promise.all([
+          supabase
+            .from('review_response_tasks')
+            .select('*', { count: 'exact', head: true })
+            .eq('venue_id', currentVenue.id)
+            .eq('status', 'pending'),
+          supabase
+            .from('content_items')
+            .select('*', { count: 'exact', head: true })
+            .eq('venue_id', currentVenue.id)
+            .eq('status', 'scheduled'),
+          supabase
+            .from('style_reference_assets')
+            .select('*', { count: 'exact', head: true })
+            .eq('venue_id', currentVenue.id)
+            .eq('status', 'analyzed'),
+          supabase
+            .from('edited_assets')
+            .select('id, created_at')
+            .eq('venue_id', currentVenue.id)
+            .order('created_at', { ascending: false })
+            .limit(5),
+          supabase
+            .from('action_feed_items')
+            .select('*')
+            .eq('venue_id', currentVenue.id)
+            .eq('status', 'open')
+            .order('priority', { ascending: true })
+            .order('created_at', { ascending: false })
+            .limit(6),
+        ]);
 
-        // Fetch scheduled content
-        const { count: scheduledCount } = await supabase
-          .from('content_items')
-          .select('*', { count: 'exact', head: true })
-          .eq('venue_id', currentVenue.id)
-          .eq('status', 'scheduled');
-
-        // Fetch style references
-        const { count: styleCount } = await supabase
-          .from('style_reference_assets')
-          .select('*', { count: 'exact', head: true })
-          .eq('venue_id', currentVenue.id)
-          .eq('status', 'analyzed');
-
-        // Fetch recent activity (edited assets, reviews, etc.)
-        const { data: recentEdits } = await supabase
-          .from('edited_assets')
-          .select('id, created_at')
-          .eq('venue_id', currentVenue.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        const recentActivity: ActivityItem[] = (recentEdits || []).map((edit) => ({
+        const recentActivity: ActivityItem[] = (recentEditsRes.data || []).map((edit) => ({
           id: edit.id,
           type: 'image_generated' as const,
           title: 'Pro Photo generated',
           timestamp: edit.created_at,
         }));
 
-        // Fetch action feed items
-        const { data: actionItems } = await supabase
-          .from('action_feed_items')
-          .select('*')
-          .eq('venue_id', currentVenue.id)
-          .eq('status', 'open')
-          .order('priority', { ascending: true })
-          .order('created_at', { ascending: false })
-          .limit(6);
-
         setSnapshot({
-          reviewsAwaiting: reviewsCount || 0,
-          contentScheduled: scheduledCount || 0,
-          styleReferences: styleCount || 0,
+          reviewsAwaiting: reviewsRes.count || 0,
+          contentScheduled: scheduledRes.count || 0,
+          styleReferences: styleRes.count || 0,
           recentActivity,
         });
 
-        setActions((actionItems as ActionItem[]) || []);
+        setActions((actionItemsRes.data as ActionItem[]) || []);
       } catch (error) {
         console.error('Error fetching home data:', error);
       } finally {
@@ -133,15 +116,6 @@ export default function Home() {
 
     fetchData();
   }, [currentVenue]);
-
-  const handleDismissAction = async (actionId: string) => {
-    await supabase
-      .from('action_feed_items')
-      .update({ status: 'dismissed' })
-      .eq('id', actionId);
-    
-    setActions((prev) => prev.filter((a) => a.id !== actionId));
-  };
 
   const formatTimeAgo = (timestamp: string) => {
     const diff = Date.now() - new Date(timestamp).getTime();
@@ -199,47 +173,7 @@ export default function Home() {
       </section>
 
       {/* Action Feed */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent" />
-            Pulse Actions
-          </h2>
-          {actions.length > 0 && (
-            <Badge variant="outline" className="text-xs">
-              {actions.length} pending
-            </Badge>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="grid gap-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-24 rounded-lg" />
-            ))}
-          </div>
-        ) : actions.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <CheckCircle2 className="w-12 h-12 text-accent mb-4" />
-              <h3 className="font-medium mb-1">All caught up!</h3>
-              <p className="text-sm text-muted-foreground">
-                No pending actions. Check back later for recommendations.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-3">
-            {actions.map((action) => (
-              <ActionCard
-                key={action.id}
-                action={action}
-                onDismiss={() => handleDismissAction(action.id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      <ActionFeed actions={actions} loading={loading} onActionsChange={setActions} />
 
       {/* Recent Activity */}
       <section className="space-y-4">
@@ -329,58 +263,5 @@ function SnapshotCard({
         </CardContent>
       </Card>
     </Link>
-  );
-}
-
-function ActionCard({
-  action,
-  onDismiss,
-}: {
-  action: ActionItem;
-  onDismiss: () => void;
-}) {
-  return (
-    <Card className="border-l-4" style={{
-      borderLeftColor: action.priority === 'high' 
-        ? 'hsl(var(--destructive))' 
-        : action.priority === 'medium' 
-          ? 'hsl(38, 92%, 50%)' 
-          : 'hsl(var(--muted-foreground))'
-    }}>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Badge 
-                variant="outline" 
-                className={`text-xs ${PRIORITY_COLORS[action.priority]}`}
-              >
-                {action.priority}
-              </Badge>
-              {action.priority === 'high' && (
-                <AlertTriangle className="w-4 h-4 text-destructive" />
-              )}
-            </div>
-            <h3 className="font-medium text-sm mb-1">{action.title}</h3>
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {action.description}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 shrink-0">
-            <Button size="sm" asChild>
-              <Link to={action.cta_route}>{action.cta_label}</Link>
-            </Button>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              className="text-muted-foreground"
-              onClick={onDismiss}
-            >
-              Dismiss
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
