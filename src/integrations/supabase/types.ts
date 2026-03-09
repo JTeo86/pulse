@@ -412,6 +412,115 @@ export type Database = {
           },
         ]
       }
+      content_assets: {
+        Row: {
+          asset_type: string
+          created_at: string
+          created_by: string | null
+          derived_from_editor_job_id: string | null
+          duration_seconds: number | null
+          generation_settings: Json | null
+          height: number | null
+          id: string
+          is_favorite: boolean
+          is_style_reference: boolean
+          lineage_depth: number
+          metadata: Json
+          mime_type: string | null
+          parent_asset_id: string | null
+          prompt_snapshot: Json | null
+          public_url: string | null
+          root_asset_id: string | null
+          source_job_id: string | null
+          source_type: string
+          status: string
+          storage_path: string | null
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          venue_id: string
+          width: number | null
+        }
+        Insert: {
+          asset_type: string
+          created_at?: string
+          created_by?: string | null
+          derived_from_editor_job_id?: string | null
+          duration_seconds?: number | null
+          generation_settings?: Json | null
+          height?: number | null
+          id?: string
+          is_favorite?: boolean
+          is_style_reference?: boolean
+          lineage_depth?: number
+          metadata?: Json
+          mime_type?: string | null
+          parent_asset_id?: string | null
+          prompt_snapshot?: Json | null
+          public_url?: string | null
+          root_asset_id?: string | null
+          source_job_id?: string | null
+          source_type: string
+          status?: string
+          storage_path?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          venue_id: string
+          width?: number | null
+        }
+        Update: {
+          asset_type?: string
+          created_at?: string
+          created_by?: string | null
+          derived_from_editor_job_id?: string | null
+          duration_seconds?: number | null
+          generation_settings?: Json | null
+          height?: number | null
+          id?: string
+          is_favorite?: boolean
+          is_style_reference?: boolean
+          lineage_depth?: number
+          metadata?: Json
+          mime_type?: string | null
+          parent_asset_id?: string | null
+          prompt_snapshot?: Json | null
+          public_url?: string | null
+          root_asset_id?: string | null
+          source_job_id?: string | null
+          source_type?: string
+          status?: string
+          storage_path?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          venue_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_assets_parent_asset_id_fkey"
+            columns: ["parent_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_root_asset_id_fkey"
+            columns: ["root_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_items: {
         Row: {
           asset_type: string | null
