@@ -133,6 +133,7 @@ function AppRoutes() {
 
         {/* Growth Section */}
         <Route path="/growth/performance" element={<BrandPerformance />} />
+        <Route path="/growth/industry-insights" element={<IndustryInsights />} />
         <Route path="/growth/referrals" element={<ReferralsPage />} />
         <Route path="/growth/partners" element={<PartnersPage />} />
         <Route path="/growth/payouts" element={<PayoutsPage />} />
