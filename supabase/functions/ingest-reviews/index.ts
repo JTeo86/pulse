@@ -222,7 +222,7 @@ async function ingestOpenTable(
     for (const r of reviews) {
       try {
         const externalId = `opentable_${rid}_${r.id || r.author || Math.random().toString(36).slice(2)}`;
-        await supabaseAdmin.from("reviews").upsert({
+        const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({
           venue_id: venueId,
           source: "opentable",
           external_review_id: externalId,
@@ -231,10 +231,14 @@ async function ingestOpenTable(
           review_text: r.text || r.comment || null,
           review_date: safeDateToISO(r.date),
           raw_payload: r,
-        }, { onConflict: "external_review_id" });
-        result.fetched_count++;
+        }, { onConflict: "source,external_review_id" });
+        if (upsertErr) {
+          console.error("OpenTable review upsert error:", upsertErr.message);
+        } else {
+          result.fetched_count++;
+        }
       } catch (rowErr) {
-        // individual row error, continue
+        console.error("OpenTable review row error:", rowErr);
       }
     }
   } catch (e) {
