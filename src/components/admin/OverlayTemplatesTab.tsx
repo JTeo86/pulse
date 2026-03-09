@@ -299,6 +299,7 @@ export default function OverlayTemplatesTab() {
         ) : templates?.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">No overlay templates configured</div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -364,6 +365,7 @@ export default function OverlayTemplatesTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>

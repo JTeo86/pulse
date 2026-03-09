@@ -190,6 +190,7 @@ export default function FeatureFlagsTab() {
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground text-sm">Loading flags…</div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -204,6 +205,7 @@ export default function FeatureFlagsTab() {
                 {orderedFlags.map(renderRow)}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

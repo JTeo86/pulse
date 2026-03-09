@@ -342,6 +342,7 @@ export default function BackgroundAssetsTab() {
         ) : assets?.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">No background assets configured</div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -405,6 +406,7 @@ export default function BackgroundAssetsTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>

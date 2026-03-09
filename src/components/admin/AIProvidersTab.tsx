@@ -233,6 +233,7 @@ export default function AIProvidersTab() {
         ) : providers?.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">No providers configured</div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -283,6 +284,7 @@ export default function AIProvidersTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>
