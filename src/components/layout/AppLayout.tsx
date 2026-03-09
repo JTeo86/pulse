@@ -73,7 +73,6 @@ const homeItem = { name: 'Home', href: '/home', icon: Home };
 
 const studioBaseNavigation = [
   { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
-  { name: 'Style Engine', href: '/studio/style-engine', icon: Sparkles },
 ];
 
 const reelCreatorItem: NavItem = { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film };
@@ -102,6 +101,7 @@ const growthReferralItems: NavItem[] = [
 
 const venueNavigation = [
   { name: 'Brand Basics', href: '/venue/brand-basics', icon: Palette },
+  { name: 'Visual Style', href: '/venue/visual-style', icon: Sparkles },
   { name: 'Integrations', href: '/venue/integrations', icon: Plug },
   { name: 'Team', href: '/venue/team', icon: Users },
 ];
@@ -164,7 +164,6 @@ function AppSidebar() {
   const studioNavigation = [
     studioBaseNavigation[0], // Pro Photo
     ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
-    studioBaseNavigation[1], // Style Engine
   ];
 
   const growthNavigation = [
@@ -388,7 +387,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const mobileStudioNav = [
     studioBaseNavigation[0],
     ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
-    studioBaseNavigation[1],
   ];
 
   // Build mobile nav with same ordering

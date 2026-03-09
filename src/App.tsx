@@ -20,7 +20,7 @@ import Studio from "./pages/Studio";
 import BrandBasics from "./pages/BrandBasics";
 import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
-import StyleEngine from "./pages/StyleEngine";
+import VisualStyle from "./pages/VisualStyle";
 import ReelCreator from "./pages/ReelCreator";
 import ContentScheduler from "./pages/ContentScheduler";
 import Copywriter from "./pages/Copywriter";
@@ -117,12 +117,11 @@ function AppRoutes() {
         {/* Home - Default landing page */}
         <Route path="/home" element={<Home />} />
         
-        {/* Studio Section - Creative workspace hub */}
+        {/* Studio Section - Creative workspace */}
         <Route path="/studio" element={<Studio />} />
         <Route path="/studio/pro-photo" element={<TheEditor />} />
         <Route path="/studio/reel-creator" element={<ReelCreator />} />
         <Route path="/studio/reels" element={<ReelCreator />} />
-        <Route path="/studio/style-engine" element={<StyleEngine />} />
         
         {/* Content Section */}
         <Route path="/content/library" element={<BrandLibrary />} />
@@ -144,6 +143,7 @@ function AppRoutes() {
 
         {/* Venue Section */}
         <Route path="/venue/brand-basics" element={<BrandBasics />} />
+        <Route path="/venue/visual-style" element={<VisualStyle />} />
         <Route path="/venue/integrations" element={<Integrations />} />
         <Route path="/venue/team" element={<Team />} />
         <Route path="/venue/guest-photos" element={<GuestSubmissions />} />
@@ -161,6 +161,9 @@ function AppRoutes() {
         <Route path="/analytics/insights" element={<AIInsights />} />
 
         {/* ============ LEGACY REDIRECTS ============ */}
+        {/* Style Engine → Visual Style */}
+        <Route path="/studio/style-engine" element={<Navigate to="/venue/visual-style" replace />} />
+
         {/* Old Brand routes → New routes */}
         <Route path="/brand" element={<Navigate to="/home" replace />} />
         <Route path="/brand-overview" element={<Navigate to="/home" replace />} />
