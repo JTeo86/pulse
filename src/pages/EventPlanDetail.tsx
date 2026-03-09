@@ -260,7 +260,7 @@ export default function EventPlanDetailPage() {
                         </span>
                       </div>
                       <Link
-                        to={link.content_item_id ? '/studio/editor' : '/studio/content'}
+                        to={link.content_item_id ? '/studio/pro-photo' : '/content/planner'}
                         className="text-accent hover:underline text-sm flex items-center gap-1"
                       >
                         Open in Studio <ExternalLink className="w-3 h-3" />
