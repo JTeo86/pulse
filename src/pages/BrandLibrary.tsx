@@ -178,7 +178,7 @@ export default function BrandLibraryPage() {
             <Sparkles className="w-4 h-4" />
             Generated Images ({imageAssets.length})
           </TabsTrigger>
-          {(flags.video_enabled || flags.gallery_reel_enabled) && (
+          {reelEnabled && (
             <TabsTrigger value="reels" className="gap-2">
               <Film className="w-4 h-4" />
               Reels ({videoAssets.length})
