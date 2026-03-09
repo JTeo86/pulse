@@ -237,10 +237,10 @@ async function ingestOpenTable(
           venue_id: venueId,
           source: "opentable",
           external_review_id: externalId,
-          author_name: r.author || "Anonymous",
+          author_name: r.user?.name || r.author || "Anonymous",
           rating: rating,
-          review_text: r.text || r.comment || null,
-          review_date: safeDateToISO(r.date),
+          review_text: r.content || r.text || r.comment || null,
+          review_date: safeDateToISO(r.submitted_at) || safeDateToISO(r.dined_at) || safeDateToISO(r.date),
           raw_payload: r,
         }, { onConflict: "source,external_review_id" });
         if (upsertErr) {
