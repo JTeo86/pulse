@@ -138,6 +138,7 @@ function AppRoutes() {
         <Route path="/venue/brand-basics" element={<BrandBasics />} />
         <Route path="/venue/integrations" element={<Integrations />} />
         <Route path="/venue/team" element={<Team />} />
+        <Route path="/venue/guest-photos" element={<GuestSubmissions />} />
 
         {/* Admin Section */}
         <Route path="/admin/platform" element={<PlatformAdmin />} />
