@@ -57,6 +57,7 @@ export default function BrandLibraryPage() {
 
   // Feature flags
   const flags = useGalleryFlags();
+  const reelEnabled = flags.video_enabled && flags.reel_creator_enabled;
 
   // Content assets
   const { data: imageAssets = [], isLoading: imagesLoading } = useContentAssets('image');
