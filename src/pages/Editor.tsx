@@ -46,6 +46,68 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/** Crop image to aspect ratio and trigger download */
+async function cropAndDownload(
+  imageUrl: string,
+  aspectRatio: number,
+  filename: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const srcW = img.naturalWidth;
+      const srcH = img.naturalHeight;
+      const srcAspect = srcW / srcH;
+
+      let cropW: number, cropH: number, cropX: number, cropY: number;
+
+      if (srcAspect > aspectRatio) {
+        // Source is wider than target — crop sides
+        cropH = srcH;
+        cropW = srcH * aspectRatio;
+        cropX = (srcW - cropW) / 2;
+        cropY = 0;
+      } else {
+        // Source is taller than target — crop top/bottom
+        cropW = srcW;
+        cropH = srcW / aspectRatio;
+        cropX = 0;
+        cropY = (srcH - cropH) / 2;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas context unavailable'));
+        return;
+      }
+
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to create blob'));
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        resolve();
+      }, 'image/jpeg', 0.95);
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = imageUrl;
+  });
+}
+
 function CreditBar({ used, total, label }: { used: number; total: number; label: string }) {
   const remaining = Math.max(0, total - used);
   const pct = Math.min(100, (used / total) * 100);
