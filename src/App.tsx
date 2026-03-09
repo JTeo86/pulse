@@ -46,6 +46,8 @@ import PartnerReferrals from "./pages/partner/PartnerReferrals";
 import PartnerEarnings from "./pages/partner/PartnerEarnings";
 import PartnerProfile from "./pages/partner/PartnerProfile";
 import { PartnerLayout } from "./components/partner/PartnerLayout";
+import GuestSubmissions from "./pages/GuestSubmissions";
+import GuestUploadPage from "./pages/GuestUploadPage";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
