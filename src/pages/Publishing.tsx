@@ -64,8 +64,7 @@ export default function PublishingPage() {
 
     setSending(item.id);
     try {
-      // In a real implementation, this would call a Make.com webhook
-      // For now, we just update the status
+      // Update status to sent_to_buffer
       const { error } = await supabase
         .from('content_items')
         .update({ status: 'sent_to_buffer' })
