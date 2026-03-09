@@ -222,6 +222,7 @@ function PartnersTab() {
       ) : !partners?.length ? (
         <Card className="border-dashed"><CardContent className="py-8 text-center text-muted-foreground">No partners yet. Invite your first partner to get started.</CardContent></Card>
       ) : (
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
