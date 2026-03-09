@@ -76,6 +76,10 @@ export default function PlatformAdmin() {
         <TabsContent value="flags" className="mt-6">
           <FeatureFlagsTab />
         </TabsContent>
+
+        <TabsContent value="referral" className="mt-6">
+          <ReferralNetworkTab />
+        </TabsContent>
       </Tabs>
     </motion.div>
   );
