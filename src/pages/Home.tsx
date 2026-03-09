@@ -176,6 +176,9 @@ export default function Home() {
       {/* Action Feed */}
       <ActionFeed actions={actions} loading={loading} onActionsChange={setActions} />
 
+      {/* Weekly Marketing Plan */}
+      <WeeklyMarketingPlan />
+
       {/* Recent Activity */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
