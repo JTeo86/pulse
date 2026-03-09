@@ -46,6 +46,68 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/** Crop image to aspect ratio and trigger download */
+async function cropAndDownload(
+  imageUrl: string,
+  aspectRatio: number,
+  filename: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const srcW = img.naturalWidth;
+      const srcH = img.naturalHeight;
+      const srcAspect = srcW / srcH;
+
+      let cropW: number, cropH: number, cropX: number, cropY: number;
+
+      if (srcAspect > aspectRatio) {
+        // Source is wider than target — crop sides
+        cropH = srcH;
+        cropW = srcH * aspectRatio;
+        cropX = (srcW - cropW) / 2;
+        cropY = 0;
+      } else {
+        // Source is taller than target — crop top/bottom
+        cropW = srcW;
+        cropH = srcW / aspectRatio;
+        cropX = 0;
+        cropY = (srcH - cropH) / 2;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas context unavailable'));
+        return;
+      }
+
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Failed to create blob'));
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        resolve();
+      }, 'image/jpeg', 0.95);
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = imageUrl;
+  });
+}
+
 function CreditBar({ used, total, label }: { used: number; total: number; label: string }) {
   const remaining = Math.max(0, total - used);
   const pct = Math.min(100, (used / total) * 100);
@@ -628,20 +690,19 @@ export default function EditorPage() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Download</p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { label: 'Square', key: 'square_1_1', ratio: '1:1' },
-                        { label: 'Portrait', key: 'portrait_4_5', ratio: '4:5' },
-                        { label: 'Vertical', key: 'vertical_9_16', ratio: '9:16' },
+                        { label: 'Square', ratio: 1, filename: 'pro-photo-1x1.jpg', display: '1:1' },
+                        { label: 'Portrait', ratio: 4 / 5, filename: 'pro-photo-4x5.jpg', display: '4:5' },
+                        { label: 'Vertical', ratio: 9 / 16, filename: 'pro-photo-9x16.jpg', display: '9:16' },
                       ].map((fmt) => (
-                        <a
-                          key={fmt.key}
-                          href={jobResult.final_image_variants[fmt.key] || jobResult.final_image_url}
-                          download={`pro-photo-${fmt.key}.jpg`}
+                        <button
+                          key={fmt.label}
+                          onClick={() => cropAndDownload(jobResult.final_image_url, fmt.ratio, fmt.filename)}
                           className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg border border-border hover:border-accent/40 hover:bg-accent/5 transition-all text-center"
                         >
                           <Download className="w-4 h-4 text-muted-foreground" />
                           <span className="text-xs font-medium">{fmt.label}</span>
-                          <span className="text-[10px] text-muted-foreground">{fmt.ratio}</span>
-                        </a>
+                          <span className="text-[10px] text-muted-foreground">{fmt.display}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
