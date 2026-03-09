@@ -191,8 +191,8 @@ function AppRoutes() {
         <Route path="/upload" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/drafts" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/publishing" element={<Navigate to="/studio/pro-photo" replace />} />
-        <Route path="/studio/planner" element={<Navigate to="/venue/integrations" replace />} />
-        <Route path="/studio/email" element={<Navigate to="/content/campaigns" replace />} />
+        <Route path="/studio/planner" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/studio/email" element={<Navigate to="/content/planner" replace />} />
         <Route path="/studio/competitors" element={<Navigate to="/analytics/competitors" replace />} />
         <Route path="/team" element={<Navigate to="/venue/team" replace />} />
         <Route path="/integrations" element={<Navigate to="/venue/integrations" replace />} />
