@@ -40,6 +40,12 @@ interface ReviewSource {
   external_domain: string | null;
   created_at: string;
   updated_at: string;
+  last_ingested_at: string | null;
+  last_fetch_status: string | null;
+  last_fetch_count: number | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  last_response_meta: Record<string, unknown> | null;
 }
 
 interface IngestionRun {
@@ -53,12 +59,23 @@ interface IngestionRun {
   created_at: string;
 }
 
+interface SourceResult {
+  source_id: string;
+  source_type: string;
+  status: 'success' | 'warning' | 'failed';
+  fetched_count: number;
+  error_code: string | null;
+  error_message: string | null;
+  response_meta: Record<string, unknown>;
+}
+
 interface IngestionResult {
   success: boolean;
   fetched_count: number;
   warnings: string[];
   errors: string[];
   provider_meta: Record<string, unknown>;
+  source_results: SourceResult[];
 }
 
 interface ResponseTask {
