@@ -32,8 +32,10 @@ async function uploadResultBuffer(
   console.log(`[PRO-PHOTO] uploadResultBuffer: suffix=${suffix} detected=${ext.toUpperCase()}`);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
   await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
-  const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
-  return { publicUrl, storagePath: path };
+  // Use signed URL since bucket is private (24 hour TTL)
+  const { data: signedData } = await supabase.storage.from('venue-assets').createSignedUrl(path, 86400);
+  const signedUrl = signedData?.signedUrl || '';
+  return { publicUrl: signedUrl, storagePath: path };
 }
 
 async function resolveSourceImage(
@@ -51,8 +53,9 @@ async function resolveSourceImage(
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const path = `venues/${venueId}/uploads/${crypto.randomUUID()}.${ext}`;
     await supabase.storage.from('venue-assets').upload(path, bytes, { contentType: mime });
-    const publicUrl = supabase.storage.from('venue-assets').getPublicUrl(path).data.publicUrl;
-    return { base64: sourceFileBase64, mime, publicUrl };
+    const { data: signedData } = await supabase.storage.from('venue-assets').createSignedUrl(path, 86400);
+    const signedUrl = signedData?.signedUrl || '';
+    return { base64: sourceFileBase64, mime, publicUrl: signedUrl };
   }
   if (inputImageUrl) {
     const resp = await fetch(inputImageUrl);
@@ -163,9 +166,11 @@ async function buildVenueStyleContext(
           }
         } catch { /* fall through */ }
       }
-      // Try storage URL
-      const pubUrl = supabase.storage.from('venue-assets').getPublicUrl(asset.storage_path).data.publicUrl;
-      referenceImages.push({ url: pubUrl, channel: asset.channel, assetId: asset.id });
+      // Try storage URL (signed since bucket is private)
+      const { data: signedRef } = await supabase.storage.from('venue-assets').createSignedUrl(asset.storage_path, 300);
+      if (signedRef?.signedUrl) {
+        referenceImages.push({ url: signedRef.signedUrl, channel: asset.channel, assetId: asset.id });
+      }
     }
   }
 

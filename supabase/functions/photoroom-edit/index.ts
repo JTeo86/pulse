@@ -64,7 +64,8 @@ Deno.serve(async (req) => {
 
       const uploadPath = `venues/${venueId}/uploads/${crypto.randomUUID()}.${ext}`;
       await supabase.storage.from('venue-assets').upload(uploadPath, bytes, { contentType: mime, upsert: false });
-      resolvedSourceUrl = supabase.storage.from('venue-assets').getPublicUrl(uploadPath).data.publicUrl;
+      const { data: signedUpload } = await supabase.storage.from('venue-assets').createSignedUrl(uploadPath, 86400);
+      resolvedSourceUrl = signedUpload?.signedUrl || '';
     } else if (sourceUrl) {
       const resp = await fetch(sourceUrl);
       if (!resp.ok) throw new Error('Failed to fetch source image');
@@ -133,7 +134,8 @@ Deno.serve(async (req) => {
 
     if (uploadError) throw new Error('Failed to save processed image');
 
-    const resultUrl = supabase.storage.from('venue-assets').getPublicUrl(storagePath).data.publicUrl;
+    const { data: signedResult } = await supabase.storage.from('venue-assets').createSignedUrl(storagePath, 86400);
+    const resultUrl = signedResult?.signedUrl || '';
 
     // Log the edit
     await supabase.from('edited_assets').insert({
