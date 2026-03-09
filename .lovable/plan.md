@@ -1,46 +1,25 @@
 
-## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
 
-### What's Happening
+## Design Fix: Snapshot Card Height Consistency
 
-The database constraint `copy_projects_module_check` currently only allows:
+### Problem
+The "View Insights / This Week" card appears smaller than the other three snapshot cards because:
+- When `isLink={true}`, the value text uses `text-base` instead of `text-2xl`
+- This reduces the content height, making the card visually shorter
 
-```
-'email', 'blog', 'ad_copy', 'sms_push'
-```
+### Solution
+Ensure consistent card height by keeping the `text-2xl` sizing for all cards, only changing the color for link-style cards:
 
-This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
+**File:** `src/pages/Home.tsx`
 
-There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
+**Change (line 258):**
+```tsx
+// Before
+<p className={`text-2xl font-bold ${isLink ? 'text-accent text-base' : ''}`}>
 
-### Fix
-
-One new migration file will be created:
-
-```sql
--- Drop the old constraint
-ALTER TABLE public.copy_projects
-  DROP CONSTRAINT copy_projects_module_check;
-
--- Recreate it with 'campaign' included
-ALTER TABLE public.copy_projects
-  ADD CONSTRAINT copy_projects_module_check
-  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
-
--- Notify PostgREST to reload its schema cache immediately
-NOTIFY pgrst, 'reload schema';
+// After  
+<p className={`text-2xl font-bold ${isLink ? 'text-accent' : ''}`}>
 ```
 
-The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
+This removes `text-base` override while keeping the accent color styling, ensuring all four cards maintain identical heights.
 
-### No Frontend Changes Needed
-
-The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
-
-### What Changes
-
-- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
-
-### Verification
-
-After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
