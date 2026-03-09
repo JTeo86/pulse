@@ -1948,6 +1948,12 @@ export type Database = {
           external_id_kind: string | null
           id: string
           is_enabled: boolean
+          last_error_code: string | null
+          last_error_message: string | null
+          last_fetch_count: number | null
+          last_fetch_status: string | null
+          last_ingested_at: string | null
+          last_response_meta: Json | null
           source: string
           updated_at: string
           venue_id: string
@@ -1960,6 +1966,12 @@ export type Database = {
           external_id_kind?: string | null
           id?: string
           is_enabled?: boolean
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_fetch_count?: number | null
+          last_fetch_status?: string | null
+          last_ingested_at?: string | null
+          last_response_meta?: Json | null
           source: string
           updated_at?: string
           venue_id: string
@@ -1972,6 +1984,12 @@ export type Database = {
           external_id_kind?: string | null
           id?: string
           is_enabled?: boolean
+          last_error_code?: string | null
+          last_error_message?: string | null
+          last_fetch_count?: number | null
+          last_fetch_status?: string | null
+          last_ingested_at?: string | null
+          last_response_meta?: Json | null
           source?: string
           updated_at?: string
           venue_id?: string
