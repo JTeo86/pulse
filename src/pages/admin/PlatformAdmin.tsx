@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Plug, Settings2, Flag, Network } from 'lucide-react';
+import { Shield, Plug, Settings2, Flag, Network, Film } from 'lucide-react';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
 import PlatformConfigTab from '@/components/admin/PlatformConfigTab';
 import ReferralNetworkTab from '@/components/admin/ReferralNetworkTab';
+import VideoProviderTab from '@/components/admin/VideoProviderTab';
 
 // Integrations & API Keys tab — lifted directly from AdminIntegrations page
 import AdminIntegrationsContent from '@/components/admin/AdminIntegrationsContent';
@@ -44,7 +45,7 @@ export default function PlatformAdmin() {
         <span className="text-muted-foreground">• Changes affect all workspaces</span>
       </div>
 
-      {/* Three tabs */}
+      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="bg-muted/50">
           <TabsTrigger value="integrations" className="gap-2">
@@ -58,6 +59,10 @@ export default function PlatformAdmin() {
           <TabsTrigger value="flags" className="gap-2">
             <Flag className="w-4 h-4" />
             Feature Flags
+          </TabsTrigger>
+          <TabsTrigger value="video" className="gap-2">
+            <Film className="w-4 h-4" />
+            Video Provider
           </TabsTrigger>
           <TabsTrigger value="referral" className="gap-2">
             <Network className="w-4 h-4" />
@@ -75,6 +80,10 @@ export default function PlatformAdmin() {
 
         <TabsContent value="flags" className="mt-6">
           <FeatureFlagsTab />
+        </TabsContent>
+
+        <TabsContent value="video" className="mt-6">
+          <VideoProviderTab />
         </TabsContent>
 
         <TabsContent value="referral" className="mt-6">
