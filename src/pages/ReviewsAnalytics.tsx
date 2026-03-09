@@ -5,7 +5,7 @@ import {
   Search, Edit2, Power, PowerOff, Trash2, HelpCircle,
   CheckCircle2, XCircle, AlertCircle, Clock, ChevronDown, ChevronRight,
   ExternalLink, Link2, ShieldAlert, Copy, ThumbsUp, ThumbsDown,
-  Archive, Send, Bot, Zap,
+  Archive, Send, Bot, Zap, Activity,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -40,6 +40,12 @@ interface ReviewSource {
   external_domain: string | null;
   created_at: string;
   updated_at: string;
+  last_ingested_at: string | null;
+  last_fetch_status: string | null;
+  last_fetch_count: number | null;
+  last_error_code: string | null;
+  last_error_message: string | null;
+  last_response_meta: Record<string, unknown> | null;
 }
 
 interface IngestionRun {
@@ -53,12 +59,23 @@ interface IngestionRun {
   created_at: string;
 }
 
+interface SourceResult {
+  source_id: string;
+  source_type: string;
+  status: 'success' | 'warning' | 'failed';
+  fetched_count: number;
+  error_code: string | null;
+  error_message: string | null;
+  response_meta: Record<string, unknown>;
+}
+
 interface IngestionResult {
   success: boolean;
   fetched_count: number;
   warnings: string[];
   errors: string[];
   provider_meta: Record<string, unknown>;
+  source_results: SourceResult[];
 }
 
 interface ResponseTask {
@@ -157,6 +174,21 @@ const priorityColor: Record<string, string> = {
 
 // ── Source Setup ────────────────────────────────────────────────────────
 
+function SourceStatusBadge({ status }: { status: string | null }) {
+  if (!status || status === 'never_run') return (
+    <Badge variant="outline" className="text-[10px] gap-1 text-muted-foreground"><Clock className="w-3 h-3" /> Never Run</Badge>
+  );
+  if (status === 'success') return (
+    <Badge variant="outline" className="text-[10px] gap-1 border-accent/30 text-accent"><CheckCircle2 className="w-3 h-3" /> Healthy</Badge>
+  );
+  if (status === 'warning') return (
+    <Badge variant="outline" className="text-[10px] gap-1 border-yellow-500/30 text-yellow-600"><AlertCircle className="w-3 h-3" /> Warning</Badge>
+  );
+  return (
+    <Badge variant="outline" className="text-[10px] gap-1 border-destructive/30 text-destructive"><XCircle className="w-3 h-3" /> Failed</Badge>
+  );
+}
+
 function SourceCard({
   title, description, source, sourceType, venueId,
   existingSource, onRefresh,
@@ -175,6 +207,8 @@ function SourceCard({
   const [extractedId, setExtractedId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
 
   const isConnected = !!existingSource;
 
@@ -278,6 +312,29 @@ function SourceCard({
     }
   };
 
+  const handleTestSource = async () => {
+    if (!existingSource) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-review-source', {
+        body: { source_id: existingSource.id },
+      });
+      if (error) throw error;
+      setTestResult(data);
+      onRefresh();
+      if (data.success) {
+        toast({ title: 'Source is healthy', description: `${data.review_count} reviews available` });
+      } else {
+        toast({ title: 'Source test failed', description: data.error || 'Unknown error', variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Test failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -286,40 +343,90 @@ function SourceCard({
             <CardTitle className="text-base">{title}</CardTitle>
             <CardDescription className="text-xs mt-1">{description}</CardDescription>
           </div>
-          {isConnected ? (
-            <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20 gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Connected
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground gap-1">
-              <AlertCircle className="w-3 h-3" /> Not connected
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {isConnected && <SourceStatusBadge status={existingSource.last_fetch_status} />}
+            {isConnected ? (
+              <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20 gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Connected
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground gap-1">
+                <AlertCircle className="w-3 h-3" /> Not connected
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {isConnected && !editing ? (
           <>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">ID:</span>
-              <code className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{existingSource.external_id}</code>
-              {existingSource.external_id_kind && (
-                <Badge variant="outline" className="text-[9px]">{existingSource.external_id_kind}</Badge>
+            <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground text-xs w-16 shrink-0">{sourceType === 'opentable' ? 'RID:' : 'ID:'}</span>
+                <code className="font-mono text-xs bg-background px-2 py-0.5 rounded break-all">{existingSource.external_id}</code>
+                {existingSource.external_id_kind && (
+                  <Badge variant="outline" className="text-[9px]">{existingSource.external_id_kind}</Badge>
+                )}
+              </div>
+              {(sourceType === 'opentable' || existingSource.external_domain) && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground text-xs w-16 shrink-0">Domain:</span>
+                  <code className="font-mono text-xs bg-background px-2 py-0.5 rounded">
+                    {existingSource.external_domain || 'opentable.com (default)'}
+                  </code>
+                </div>
+              )}
+              {existingSource.last_ingested_at && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground text-xs w-16 shrink-0">Last run:</span>
+                  <span className="text-xs">{format(new Date(existingSource.last_ingested_at), 'MMM d, HH:mm')}</span>
+                  <span className="text-xs text-muted-foreground">• {existingSource.last_fetch_count ?? 0} fetched</span>
+                </div>
+              )}
+              {existingSource.last_error_message && existingSource.last_fetch_status !== 'success' && (
+                <div className="text-xs text-destructive bg-destructive/5 rounded p-2 mt-1">
+                  {existingSource.last_error_code && (
+                    <span className="font-mono text-[10px] mr-1">[{existingSource.last_error_code}]</span>
+                  )}
+                  {existingSource.last_error_message}
+                </div>
               )}
             </div>
-            {existingSource.external_domain && (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Domain:</span>
-                <code className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{existingSource.external_domain}</code>
+
+            {/* Zero-results warning for connected+enabled sources */}
+            {existingSource.is_enabled && existingSource.last_fetch_status && existingSource.last_fetch_status !== 'success' && existingSource.last_fetch_status !== 'never_run' && (
+              <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-3 text-xs space-y-2">
+                <p className="font-medium text-yellow-600 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {sourceType === 'opentable' ? 'OpenTable' : 'Google'} is connected but having issues
+                </p>
+                {sourceType === 'opentable' && (
+                  <ul className="text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Verify the restaurant path (rid) matches your listing</li>
+                    <li>Check the domain — UK venues need <code className="px-1 bg-muted rounded">opentable.co.uk</code> not <code className="px-1 bg-muted rounded">opentable.com</code></li>
+                    <li>Use "Test Source" below to diagnose</li>
+                  </ul>
+                )}
+                {sourceType === 'google' && (
+                  <ul className="text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Verify the place ID or data ID is correct</li>
+                    <li>Use "Test Source" below to diagnose</li>
+                  </ul>
+                )}
               </div>
             )}
+
             <div className="flex items-center gap-2">
               <Switch checked={existingSource.is_enabled} onCheckedChange={handleToggleEnabled} id={`toggle-${existingSource.id}`} />
               <Label htmlFor={`toggle-${existingSource.id}`} className="text-xs">
                 {existingSource.is_enabled ? 'Enabled' : 'Disabled'}
               </Label>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={handleTestSource} disabled={testing}>
+                <Activity className={`w-3 h-3 mr-1 ${testing ? 'animate-pulse' : ''}`} />
+                {testing ? 'Testing…' : 'Test Source'}
+              </Button>
               <Button size="sm" variant="outline" onClick={() => { setEditing(true); setInputVal(existingSource.external_id); }}>
                 <Edit2 className="w-3 h-3 mr-1" /> Edit
               </Button>
@@ -327,6 +434,25 @@ function SourceCard({
                 <PowerOff className="w-3 h-3 mr-1" /> Disable
               </Button>
             </div>
+
+            {testResult && (
+              <Card className={`mt-2 ${testResult.success ? 'border-accent/30' : 'border-destructive/30'}`}>
+                <CardContent className="p-3 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm">
+                    {testResult.success ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <XCircle className="w-4 h-4 text-destructive" />}
+                    <span className="font-medium">
+                      {testResult.success ? `Healthy — ${testResult.review_count} reviews available` : 'Test failed'}
+                    </span>
+                  </div>
+                  {testResult.error && (
+                    <p className="text-xs text-destructive">{testResult.error}</p>
+                  )}
+                  <div className="text-[10px] text-muted-foreground">
+                    ID: {testResult.identifier} {testResult.domain ? `• Domain: ${testResult.domain}` : ''}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         ) : (
           <div className="space-y-3">
@@ -368,17 +494,21 @@ function SourceCard({
             )}
 
             {sourceType === 'opentable' && (
-              <div>
-                <Label className="text-xs">OpenTable Restaurant URL</Label>
+              <div className="space-y-2">
+                <Label className="text-xs">OpenTable Restaurant URL or Path</Label>
                 <Input
-                  placeholder="https://www.opentable.com/r/your-restaurant-slug"
+                  placeholder="https://www.opentable.co.uk/r/your-restaurant-slug"
                   value={inputVal}
                   onChange={e => setInputVal(e.target.value)}
                   className="mt-1 text-sm"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  We use SerpAPI OpenTable Reviews engine — no Apify required.
-                </p>
+                <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground">How this works:</p>
+                  <p>Paste your full OpenTable URL. We'll extract the restaurant path and regional domain automatically.</p>
+                  <p>Example: <code className="px-1 bg-background rounded">https://www.opentable.co.uk/r/the-ivy-london</code></p>
+                  <p>→ Path: <code className="px-1 bg-background rounded">r/the-ivy-london</code> • Domain: <code className="px-1 bg-background rounded">www.opentable.co.uk</code></p>
+                  <p className="text-yellow-600">⚠️ Using the wrong domain (e.g. .com instead of .co.uk) will return no results for UK venues.</p>
+                </div>
               </div>
             )}
 
@@ -477,6 +607,7 @@ function IngestionPanel({ venueId }: { venueId: string }) {
       setResult(data);
       queryClient.invalidateQueries({ queryKey: ['reviews', venueId] });
       queryClient.invalidateQueries({ queryKey: ['ingestion-runs', venueId] });
+      queryClient.invalidateQueries({ queryKey: ['review-sources', venueId] });
       if (data.success) {
         toast({ title: `Fetched ${data.fetched_count} reviews` });
       } else {
@@ -485,8 +616,6 @@ function IngestionPanel({ venueId }: { venueId: string }) {
     },
     onError: (e) => toast({ title: 'Ingestion failed', description: e.message, variant: 'destructive' }),
   });
-
-  const latestRun = lastRuns?.[0];
 
   const statusIcon = (status: string) => {
     if (status === 'success') return <CheckCircle2 className="w-3.5 h-3.5 text-accent" />;
@@ -503,76 +632,58 @@ function IngestionPanel({ venueId }: { venueId: string }) {
         </Button>
       </div>
 
+      {/* Per-source results breakdown */}
       {result && (
-        <Card className={result.success ? 'border-accent/30' : 'border-destructive/30'}>
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              {result.success ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <XCircle className="w-4 h-4 text-destructive" />}
-              <span className="text-sm font-medium">
-                Fetched: {result.fetched_count} reviews
-              </span>
-            </div>
-            {result.warnings.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-yellow-500">Warnings:</p>
-                {result.warnings.map((w, i) => <p key={i} className="text-xs text-muted-foreground">• {w}</p>)}
+        <div className="space-y-3">
+          <Card className={result.success ? 'border-accent/30' : 'border-destructive/30'}>
+            <CardContent className="p-4 space-y-1">
+              <div className="flex items-center gap-2">
+                {result.success ? <CheckCircle2 className="w-4 h-4 text-accent" /> : <XCircle className="w-4 h-4 text-destructive" />}
+                <span className="text-sm font-medium">
+                  Total: {result.fetched_count} reviews fetched
+                </span>
               </div>
-            )}
-            {result.errors.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-destructive">Errors:</p>
-                {result.errors.map((e, i) => (
-                  <div key={i}>
-                   <p className="text-xs text-muted-foreground">• {e}</p>
-                    {e.toLowerCase().includes('401') && (
-                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
-                        💡 This usually means the runtime is not using the same key you saved in Platform Admin. Go to Platform Admin → Integrations and use "Test SerpAPI Key" to confirm the key the runtime actually reads.
-                      </p>
+            </CardContent>
+          </Card>
+
+          {result.source_results?.length > 0 && (
+            <div className="grid gap-2 md:grid-cols-2">
+              {result.source_results.map((sr, i) => (
+                <Card key={i} className={sr.status === 'success' ? 'border-accent/20' : sr.status === 'warning' ? 'border-yellow-500/20' : 'border-destructive/20'}>
+                  <CardContent className="p-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <SourceBadge source={sr.source_type} />
+                      <SourceStatusBadge status={sr.status} />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {sr.fetched_count} reviews fetched
+                    </div>
+                    {sr.error_message && (
+                      <div className="text-xs text-destructive bg-destructive/5 rounded p-2">
+                        {sr.error_code && <span className="font-mono text-[10px] mr-1">[{sr.error_code}]</span>}
+                        {sr.error_message}
+                      </div>
                     )}
-                     {e.toLowerCase().includes('missing rid') && (
-                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
-                         💡 Go to Sources Setup → OpenTable, paste your OpenTable restaurant URL (e.g. opentable.co.uk/r/your-restaurant), and save to extract the rid.
-                       </p>
-                     )}
-                     {(e.toLowerCase().includes("hasn't returned any results") || e.toLowerCase().includes('no results')) && (
-                      <p className="text-[11px] text-yellow-600 bg-yellow-500/10 rounded px-2 py-1 mt-1">
-                         💡 Check you're using the correct OpenTable domain (e.g., .co.uk vs .com). Re-paste your full OpenTable URL in Sources Setup.
-                       </p>
-                     )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {latestRun && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Last run</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              {statusIcon(latestRun.status)}
-              <span className="capitalize">{latestRun.status}</span>
-              <span className="text-muted-foreground">•</span>
-              <span className="text-muted-foreground">{latestRun.fetched_count} fetched</span>
-              <span className="text-muted-foreground">•</span>
-              <span className="text-xs text-muted-foreground">{format(new Date(latestRun.created_at), 'MMM d, HH:mm')}</span>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-            {latestRun.error_message && (
-              <p className="text-xs text-destructive bg-destructive/5 rounded p-2">{latestRun.error_message}</p>
-            )}
-          </CardContent>
-        </Card>
+          )}
+
+          {/* Sources not in results = not configured */}
+          {result.source_results?.length === 0 && result.warnings.length > 0 && (
+            <div className="space-y-1">
+              {result.warnings.map((w, i) => <p key={i} className="text-xs text-muted-foreground">• {w}</p>)}
+            </div>
+          )}
+        </div>
       )}
 
-      {lastRuns && lastRuns.length > 1 && (
+      {lastRuns && lastRuns.length > 0 && (
         <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
           <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             <Clock className="w-3 h-3" />
-            View history ({lastRuns.length} runs)
+            Run history ({lastRuns.length} runs)
             {historyOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2 space-y-1.5">
@@ -580,6 +691,9 @@ function IngestionPanel({ venueId }: { venueId: string }) {
               <div key={run.id} className="flex items-center gap-2 text-xs py-1 border-b border-border last:border-0">
                 {statusIcon(run.status)}
                 <span className="capitalize min-w-[50px]">{run.status}</span>
+                {run.raw_meta && (run.raw_meta as any).engine && (
+                  <SourceBadge source={(run.raw_meta as any).engine === 'google_maps_reviews' ? 'google' : 'opentable'} />
+                )}
                 <span className="text-muted-foreground">{run.fetched_count} fetched</span>
                 <span className="text-muted-foreground ml-auto">{format(new Date(run.created_at), 'MMM d, HH:mm')}</span>
               </div>

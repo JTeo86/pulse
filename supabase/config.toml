@@ -63,3 +63,6 @@ verify_jwt = false
 [functions.create-reel-from-image]
 verify_jwt = false
 
+[functions.test-review-source]
+verify_jwt = false
+
