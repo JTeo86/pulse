@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Building, MapPin, Globe, Instagram, Target, MessageSquare, Utensils, Users, Sparkles, Loader2, AlertTriangle } from 'lucide-react';
+import { Building, MapPin, Globe, Instagram, Target, MessageSquare, Utensils, Users, Sparkles, Loader2, AlertTriangle, ArrowRight, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
