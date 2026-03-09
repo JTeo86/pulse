@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +55,9 @@ interface AssetCardProps {
   isCreatingVariation?: boolean;
   isCreatingReel?: boolean;
   canEdit?: boolean;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onSelect?: (asset: ContentAsset) => void;
 }
 
 const sourceLabels: Record<string, { label: string; className: string }> = {
@@ -88,10 +92,19 @@ export function AssetCard({
   isCreatingVariation = false,
   isCreatingReel = false,
   canEdit = true,
+  selectionMode = false,
+  selected = false,
+  onSelect,
 }: AssetCardProps) {
   const source = sourceLabels[asset.source_type] || sourceLabels.upload;
   const StatusIcon = statusIcons[asset.status] || Clock;
   const imageUrl = asset._resolvedUrl || asset.public_url || '';
+
+  const handleCardClick = () => {
+    if (selectionMode && onSelect) {
+      onSelect(asset);
+    }
+  };
 
   const handleDownload = async () => {
     if (!imageUrl) return;
@@ -112,10 +125,23 @@ export function AssetCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
-      className="group relative rounded-xl overflow-hidden border border-border bg-card hover:border-accent/30 transition-all duration-300"
+      className={`group relative rounded-xl overflow-hidden border bg-card transition-all duration-300 ${
+        selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-accent/30'
+      } ${selectionMode ? 'cursor-pointer' : ''}`}
+      onClick={handleCardClick}
     >
       {/* Image */}
       <div className="aspect-square relative overflow-hidden bg-muted">
+        {/* Selection checkbox */}
+        {selectionMode && (
+          <div className="absolute top-2 right-2 z-20" onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onSelect?.(asset)}
+              className="h-5 w-5 border-2 border-white bg-black/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+            />
+          </div>
+        )}
         {imageUrl ? (
           <img
             src={imageUrl}

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Image,
@@ -9,6 +9,8 @@ import {
   Trash2,
   Loader2,
   Pencil,
+  CheckSquare,
+  X,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -16,6 +18,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -38,6 +41,7 @@ import {
   useToggleFavorite,
   useDeleteAsset,
   useUpdateAssetStatus,
+  useBulkDeleteAssets,
 } from '@/hooks/use-content-assets';
 import { useGalleryFlags } from '@/hooks/use-gallery-flags';
 
@@ -69,6 +73,7 @@ export default function BrandLibraryPage() {
   const toggleFavorite = useToggleFavorite();
   const deleteAsset = useDeleteAsset();
   const updateStatus = useUpdateAssetStatus();
+  const bulkDeleteAssets = useBulkDeleteAssets();
 
   // Variation tracking
   const [variatingId, setVariatingId] = useState<string | null>(null);
@@ -77,11 +82,118 @@ export default function BrandLibraryPage() {
   // Version history panel
   const [lineageAsset, setLineageAsset] = useState<ContentAsset | null>(null);
 
+  // Selection mode
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [selectedUploadIds, setSelectedUploadIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState('images');
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
   // Raw uploads (legacy)
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [uploadsLoading, setUploadsLoading] = useState(true);
   const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
   const [uploadUrls, setUploadUrls] = useState<Record<string, string>>({});
+
+  // Clear selections when leaving selection mode
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedAssetIds(new Set());
+    setSelectedUploadIds(new Set());
+  };
+
+  // Toggle asset selection
+  const toggleAssetSelection = (asset: ContentAsset) => {
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(asset.id)) next.delete(asset.id);
+      else next.add(asset.id);
+      return next;
+    });
+  };
+
+  // Toggle upload selection
+  const toggleUploadSelection = (uploadId: string) => {
+    setSelectedUploadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(uploadId)) next.delete(uploadId);
+      else next.add(uploadId);
+      return next;
+    });
+  };
+
+  // Select all / deselect all for current tab
+  const currentTabItems = useMemo(() => {
+    if (activeTab === 'images') return imageAssets;
+    if (activeTab === 'reels') return videoAssets;
+    return [];
+  }, [activeTab, imageAssets, videoAssets]);
+
+  const allCurrentSelected = useMemo(() => {
+    if (activeTab === 'uploads') {
+      return uploads.length > 0 && uploads.every((u) => selectedUploadIds.has(u.id));
+    }
+    return currentTabItems.length > 0 && currentTabItems.every((a) => selectedAssetIds.has(a.id));
+  }, [activeTab, currentTabItems, selectedAssetIds, uploads, selectedUploadIds]);
+
+  const toggleSelectAll = () => {
+    if (activeTab === 'uploads') {
+      if (allCurrentSelected) {
+        setSelectedUploadIds(new Set());
+      } else {
+        setSelectedUploadIds(new Set(uploads.map((u) => u.id)));
+      }
+    } else {
+      if (allCurrentSelected) {
+        // Deselect all in current tab
+        setSelectedAssetIds((prev) => {
+          const next = new Set(prev);
+          currentTabItems.forEach((a) => next.delete(a.id));
+          return next;
+        });
+      } else {
+        setSelectedAssetIds((prev) => {
+          const next = new Set(prev);
+          currentTabItems.forEach((a) => next.add(a.id));
+          return next;
+        });
+      }
+    }
+  };
+
+  const totalSelected = activeTab === 'uploads' ? selectedUploadIds.size : selectedAssetIds.size;
+
+  // Bulk delete handlers
+  const handleBulkDeleteAssets = async () => {
+    const assetsToDelete = [...imageAssets, ...videoAssets].filter((a) => selectedAssetIds.has(a.id));
+    if (assetsToDelete.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      await bulkDeleteAssets.mutateAsync(assetsToDelete);
+      exitSelectionMode();
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkDeleteUploads = async () => {
+    const uploadsToDelete = uploads.filter((u) => selectedUploadIds.has(u.id));
+    if (uploadsToDelete.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const paths = uploadsToDelete.map((u) => u.storage_path);
+      await supabase.storage.from('venue-assets').remove(paths);
+      const ids = uploadsToDelete.map((u) => u.id);
+      await supabase.from('uploads').delete().in('id', ids);
+      setUploads((prev) => prev.filter((u) => !selectedUploadIds.has(u.id)));
+      toast({ title: `${uploadsToDelete.length} upload${uploadsToDelete.length > 1 ? 's' : ''} deleted` });
+      exitSelectionMode();
+    } catch {
+      toast({ title: 'Bulk delete failed', variant: 'destructive' });
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentBrand) return;
@@ -173,23 +285,56 @@ export default function BrandLibraryPage() {
         description="Your asset command center — manage generated content, create variations, and produce reels."
       />
 
-      <Tabs defaultValue="images" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="images" className="gap-2">
-            <Sparkles className="w-4 h-4" />
-            Generated Images ({imageAssets.length})
-          </TabsTrigger>
-          {reelEnabled && (
-            <TabsTrigger value="reels" className="gap-2">
-              <Film className="w-4 h-4" />
-              Reels ({videoAssets.length})
+      <Tabs defaultValue="images" className="space-y-6" onValueChange={(v) => setActiveTab(v)}>
+        <div className="flex items-center justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="images" className="gap-2">
+              <Sparkles className="w-4 h-4" />
+              Generated Images ({imageAssets.length})
             </TabsTrigger>
+            {reelEnabled && (
+              <TabsTrigger value="reels" className="gap-2">
+                <Film className="w-4 h-4" />
+                Reels ({videoAssets.length})
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="uploads" className="gap-2">
+              <Upload className="w-4 h-4" />
+              Raw Uploads ({uploads.length})
+            </TabsTrigger>
+          </TabsList>
+
+          {canEdit && (
+            <Button
+              variant={selectionMode ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
+              className="gap-2"
+            >
+              {selectionMode ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+              {selectionMode ? 'Cancel' : 'Select'}
+            </Button>
           )}
-          <TabsTrigger value="uploads" className="gap-2">
-            <Upload className="w-4 h-4" />
-            Raw Uploads ({uploads.length})
-          </TabsTrigger>
-        </TabsList>
+        </div>
+
+        {/* Selection toolbar */}
+        {selectionMode && (
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-muted/50">
+            <Checkbox
+              checked={allCurrentSelected}
+              onCheckedChange={toggleSelectAll}
+              className="h-4 w-4"
+            />
+            <span className="text-sm text-muted-foreground">
+              {allCurrentSelected ? 'Deselect all' : 'Select all'}
+            </span>
+            {totalSelected > 0 && (
+              <span className="text-sm font-medium text-foreground ml-auto">
+                {totalSelected} selected
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Generated Images Tab */}
         <TabsContent value="images" className="space-y-4">
@@ -227,6 +372,9 @@ export default function BrandLibraryPage() {
                   isCreatingVariation={variatingId === asset.id}
                   isCreatingReel={reelingId === asset.id}
                   canEdit={canEdit}
+                  selectionMode={selectionMode}
+                  selected={selectedAssetIds.has(asset.id)}
+                  onSelect={toggleAssetSelection}
                 />
               ))}
             </div>
@@ -260,6 +408,9 @@ export default function BrandLibraryPage() {
                     showReel={false}
                     showLineage={flags.gallery_lineage_enabled}
                     canEdit={canEdit}
+                    selectionMode={selectionMode}
+                    selected={selectedAssetIds.has(asset.id)}
+                    onSelect={toggleAssetSelection}
                   />
                 ))}
               </div>
@@ -293,15 +444,29 @@ export default function BrandLibraryPage() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.2, delay: index * 0.02 }}
-                  className="aspect-square rounded-lg overflow-hidden border border-border bg-muted relative group"
+                  className={`aspect-square rounded-lg overflow-hidden border bg-muted relative group cursor-pointer ${
+                    selectionMode && selectedUploadIds.has(upload.id)
+                      ? 'border-primary ring-2 ring-primary/30'
+                      : 'border-border'
+                  }`}
+                  onClick={() => selectionMode && toggleUploadSelection(upload.id)}
                 >
+                  {selectionMode && (
+                    <div className="absolute top-2 right-2 z-20" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedUploadIds.has(upload.id)}
+                        onCheckedChange={() => toggleUploadSelection(upload.id)}
+                        className="h-5 w-5 border-2 border-white bg-black/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                      />
+                    </div>
+                  )}
                   <img
                     src={uploadUrls[upload.id] || ''}
                     alt={upload.notes || ''}
                     className="w-full h-full object-cover"
                     loading="lazy"
                   />
-                  {canEdit && (
+                  {canEdit && !selectionMode && (
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -337,6 +502,53 @@ export default function BrandLibraryPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Sticky bulk action bar */}
+      <AnimatePresence>
+        {selectionMode && totalSelected > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
+          >
+            <div className="flex items-center gap-3 px-5 py-3 rounded-full border border-border bg-card shadow-xl">
+              <span className="text-sm font-medium text-foreground whitespace-nowrap">
+                {totalSelected} selected
+              </span>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" className="gap-2" disabled={isBulkDeleting}>
+                    {isBulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete {totalSelected} {totalSelected === 1 ? 'item' : 'items'}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete the selected {totalSelected === 1 ? 'item' : 'items'} and {totalSelected === 1 ? 'its' : 'their'} files. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={activeTab === 'uploads' ? handleBulkDeleteUploads : handleBulkDeleteAssets}
+                      className="bg-destructive hover:bg-destructive/90"
+                    >
+                      Delete {totalSelected} {totalSelected === 1 ? 'item' : 'items'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button variant="ghost" size="sm" onClick={exitSelectionMode}>
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Version History Panel */}
       <VersionHistoryPanel
