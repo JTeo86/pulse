@@ -172,7 +172,7 @@ function AppRoutes() {
         
         {/* Old Studio routes → New routes */}
         <Route path="/studio/editor" element={<Navigate to="/studio/pro-photo" replace />} />
-        <Route path="/studio/content" element={<Navigate to="/content/campaigns" replace />} />
+        <Route path="/studio/content" element={<Navigate to="/content/planner" replace />} />
         <Route path="/editor" element={<Navigate to="/studio/pro-photo" replace />} />
         
         {/* Old Analytics routes → New routes */}
