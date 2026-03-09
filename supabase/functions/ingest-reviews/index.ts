@@ -222,12 +222,23 @@ async function ingestOpenTable(
     for (const r of reviews) {
       try {
         const externalId = `opentable_${rid}_${r.id || r.author || Math.random().toString(36).slice(2)}`;
+        
+        // Extract overall rating from complex rating object
+        let rating = null;
+        if (typeof r.rating === 'object' && r.rating?.overall) {
+          rating = r.rating.overall;
+        } else if (typeof r.rating === 'number') {
+          rating = r.rating;
+        } else if (r.overall_rating) {
+          rating = r.overall_rating;
+        }
+        
         const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({
           venue_id: venueId,
           source: "opentable",
           external_review_id: externalId,
           author_name: r.author || "Anonymous",
-          rating: r.rating || r.overall_rating || null,
+          rating: rating,
           review_text: r.text || r.comment || null,
           review_date: safeDateToISO(r.date),
           raw_payload: r,
