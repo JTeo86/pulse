@@ -134,7 +134,8 @@ Deno.serve(async (req) => {
 
     if (uploadError) throw new Error('Failed to save processed image');
 
-    const resultUrl = supabase.storage.from('venue-assets').getPublicUrl(storagePath).data.publicUrl;
+    const { data: signedResult } = await supabase.storage.from('venue-assets').createSignedUrl(storagePath, 86400);
+    const resultUrl = signedResult?.signedUrl || '';
 
     // Log the edit
     await supabase.from('edited_assets').insert({

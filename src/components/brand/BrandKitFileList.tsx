@@ -79,8 +79,9 @@ export function BrandKitFileList({ files, canEdit, onDeleteComplete }: BrandKitF
 
   const handleDownload = async (file: BrandKitFile) => {
     try {
-      const { data } = supabase.storage.from('venue-assets').getPublicUrl(file.storage_path);
-      window.open(data.publicUrl, '_blank');
+      // Use signed URL since bucket is private (1 hour TTL)
+      const { data } = await supabase.storage.from('venue-assets').createSignedUrl(file.storage_path, 3600);
+      if (data?.signedUrl) window.open(data.signedUrl, '_blank');
     } catch (error) {
       toast({
         title: 'Download failed',

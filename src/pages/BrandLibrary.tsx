@@ -153,7 +153,7 @@ export default function BrandLibraryPage() {
                     className="aspect-square rounded-lg overflow-hidden border border-border bg-muted relative group"
                   >
                     <img
-                      src={getPublicUrl(upload.storage_path)}
+                      src={imageUrls[upload.id] || ''}
                       alt={upload.notes || ''}
                       className="w-full h-full object-cover"
                     />

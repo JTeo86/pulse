@@ -166,9 +166,11 @@ async function buildVenueStyleContext(
           }
         } catch { /* fall through */ }
       }
-      // Try storage URL
-      const pubUrl = supabase.storage.from('venue-assets').getPublicUrl(asset.storage_path).data.publicUrl;
-      referenceImages.push({ url: pubUrl, channel: asset.channel, assetId: asset.id });
+      // Try storage URL (signed since bucket is private)
+      const { data: signedRef } = await supabase.storage.from('venue-assets').createSignedUrl(asset.storage_path, 300);
+      if (signedRef?.signedUrl) {
+        referenceImages.push({ url: signedRef.signedUrl, channel: asset.channel, assetId: asset.id });
+      }
     }
   }
 

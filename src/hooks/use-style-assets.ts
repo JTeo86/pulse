@@ -20,19 +20,40 @@ export function useStyleAssets(venueId: string | undefined, channel: StyleChanne
       if (error) throw error;
 
       const bucket = CHANNEL_BUCKETS[channel];
-      const enriched: StyleAssetWithAnalysis[] = (data || []).map((row: any) => {
-        const thumb = row.thumbnail_path
-          ? supabase.storage.from(bucket).getPublicUrl(row.thumbnail_path).data.publicUrl
-          : supabase.storage.from(bucket).getPublicUrl(row.storage_path).data.publicUrl;
-        const pub = supabase.storage.from(bucket).getPublicUrl(row.storage_path).data.publicUrl;
-        const analysis = Array.isArray(row.analysis) ? row.analysis[0] : row.analysis;
-        return {
-          ...row,
-          analysis: analysis || null,
-          publicUrl: pub,
-          thumbnailUrl: thumb,
-        };
-      });
+      // venue_atmosphere is public, others are private and need signed URLs
+      const isPublicBucket = bucket === 'venue_atmosphere';
+      
+      const enriched: StyleAssetWithAnalysis[] = await Promise.all(
+        (data || []).map(async (row: any) => {
+          let pub: string;
+          let thumb: string;
+          
+          if (isPublicBucket) {
+            pub = supabase.storage.from(bucket).getPublicUrl(row.storage_path).data.publicUrl;
+            thumb = row.thumbnail_path
+              ? supabase.storage.from(bucket).getPublicUrl(row.thumbnail_path).data.publicUrl
+              : pub;
+          } else {
+            // Use signed URLs for private buckets (5 min TTL)
+            const { data: signedPub } = await supabase.storage.from(bucket).createSignedUrl(row.storage_path, 300);
+            pub = signedPub?.signedUrl || '';
+            if (row.thumbnail_path) {
+              const { data: signedThumb } = await supabase.storage.from(bucket).createSignedUrl(row.thumbnail_path, 300);
+              thumb = signedThumb?.signedUrl || '';
+            } else {
+              thumb = pub;
+            }
+          }
+          
+          const analysis = Array.isArray(row.analysis) ? row.analysis[0] : row.analysis;
+          return {
+            ...row,
+            analysis: analysis || null,
+            publicUrl: pub,
+            thumbnailUrl: thumb,
+          };
+        })
+      );
 
       setAssets(enriched);
     } catch (err) {
