@@ -1,46 +1,51 @@
 
-## Fix: copy_projects CHECK Constraint Still Blocking 'campaign' Saves
 
-### What's Happening
+## Root Cause: OpenTable Rating Structure Mismatch
 
-The database constraint `copy_projects_module_check` currently only allows:
+The issue is in the `ingest-reviews` function at line 230. OpenTable returns ratings as a complex JSON object with multiple dimensions:
 
-```
-'email', 'blog', 'ad_copy', 'sms_push'
-```
-
-This has been verified directly in the live database right now. The migration was approved in the plan but never executed — the constraint change never landed. Every time "Save Campaign" is clicked, the insert of `module: 'campaign'` hits this constraint and is rejected.
-
-There are no frontend code issues. `CampaignEngine.tsx` at line 202 correctly sends `module: 'campaign'`.
-
-### Fix
-
-One new migration file will be created:
-
-```sql
--- Drop the old constraint
-ALTER TABLE public.copy_projects
-  DROP CONSTRAINT copy_projects_module_check;
-
--- Recreate it with 'campaign' included
-ALTER TABLE public.copy_projects
-  ADD CONSTRAINT copy_projects_module_check
-  CHECK (module IN ('email', 'blog', 'ad_copy', 'sms_push', 'campaign'));
-
--- Notify PostgREST to reload its schema cache immediately
-NOTIFY pgrst, 'reload schema';
+```json
+{
+  "overall": 4,
+  "food": 5,
+  "service": 5,
+  "ambience": 5,
+  "value": 5,
+  "noise": "Quiet"
+}
 ```
 
-The `NOTIFY pgrst, 'reload schema'` line is included to ensure PostgREST picks up the schema change immediately without any delay.
+But the code tries to insert this directly into the database's `rating` column, which is defined as `numeric` and expects a single number.
 
-### No Frontend Changes Needed
+## The Fix: Extract Overall Rating
 
-The frontend code in `CampaignEngine.tsx` is already correct. `RecentDrafts.tsx` already renders campaign module entries. The `generate-copy` edge function already handles the `campaign` module path. Only the database constraint needs updating.
+Change the OpenTable upsert logic to extract the `overall` rating from the rating object instead of passing the entire object:
 
-### What Changes
+**File**: `supabase/functions/ingest-reviews/index.ts`
+**Line**: 230
 
-- `supabase/migrations/[timestamp]_fix_copy_projects_module_check.sql` — new migration file that drops and recreates the constraint
+**Current code**:
+```typescript
+rating: r.rating || r.overall_rating || null,
+```
 
-### Verification
+**Fixed code**:
+```typescript
+rating: (typeof r.rating === 'object' && r.rating?.overall) 
+  ? r.rating.overall 
+  : (r.rating || r.overall_rating || null),
+```
 
-After the migration runs, clicking "Save Campaign" will insert successfully into `copy_projects` with `module = 'campaign'` and the saved campaign will appear immediately in the Recent Drafts list.
+This will:
+1. Check if `r.rating` is an object with an `overall` property
+2. If so, extract the `overall` value as the rating
+3. Otherwise, fall back to the existing logic
+
+## Alternative Storage Strategy
+
+Optionally, we could also store the full rating breakdown in the `raw_payload` for future analysis while using the overall rating for the main `rating` field (which the current code already does).
+
+## Testing
+
+After the fix, re-run "Fetch latest reviews" and the OpenTable reviews should successfully save to the database and appear in the reviews feed.
+
