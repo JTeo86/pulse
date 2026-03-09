@@ -492,7 +492,7 @@ Deno.serve(async (req) => {
       venue_id,
       storage_path: finalStoragePath,
       uploaded_by: user.id,
-      status: 'completed',
+      status: 'ready',
       notes: `Pro Photo (Gemini, ${realism_mode || 'safe'}, ${ctx.referenceImages.length} refs)`,
     }).select('id').single();
     
