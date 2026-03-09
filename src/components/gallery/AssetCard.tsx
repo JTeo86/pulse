@@ -92,10 +92,19 @@ export function AssetCard({
   isCreatingVariation = false,
   isCreatingReel = false,
   canEdit = true,
+  selectionMode = false,
+  selected = false,
+  onSelect,
 }: AssetCardProps) {
   const source = sourceLabels[asset.source_type] || sourceLabels.upload;
   const StatusIcon = statusIcons[asset.status] || Clock;
   const imageUrl = asset._resolvedUrl || asset.public_url || '';
+
+  const handleCardClick = () => {
+    if (selectionMode && onSelect) {
+      onSelect(asset);
+    }
+  };
 
   const handleDownload = async () => {
     if (!imageUrl) return;
