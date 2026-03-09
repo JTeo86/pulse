@@ -126,8 +126,10 @@ function AppRoutes() {
         
         {/* Content Section */}
         <Route path="/content/library" element={<BrandLibrary />} />
+        <Route path="/content/planner" element={<Planner />} />
+        <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
         <Route path="/content/scheduler" element={<ContentScheduler />} />
-        <Route path="/content/campaigns" element={<Copywriter />} />
+        <Route path="/content/campaigns" element={<Navigate to="/content/planner" replace />} />
 
         {/* Reputation Section */}
         <Route path="/reputation/reviews" element={<ReviewsAnalytics />} />
@@ -150,9 +152,9 @@ function AppRoutes() {
         <Route path="/admin/platform" element={<PlatformAdmin />} />
         <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
-        {/* Event Planning (keeping for backward compat but not in nav) */}
-        <Route path="/studio/events" element={<EventsPlanner />} />
-        <Route path="/studio/events/:planId" element={<EventPlanDetail />} />
+        {/* Legacy event planner redirects */}
+        <Route path="/studio/events" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/studio/events/:planId" element={<Navigate to="/content/planner" replace />} />
         
         {/* Legacy analytics routes kept for deep links */}
         <Route path="/analytics/competitors" element={<CompetitorIntel />} />
