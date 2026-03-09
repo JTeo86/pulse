@@ -71,11 +71,12 @@ interface AppLayoutProps {
 // New simplified navigation structure
 const homeItem = { name: 'Home', href: '/home', icon: Home };
 
-const studioNavigation = [
+const studioBaseNavigation = [
   { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
-  { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film, badge: 'Soon' },
   { name: 'Style Engine', href: '/studio/style-engine', icon: Sparkles },
 ];
+
+const reelCreatorItem: NavItem = { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film };
 
 const contentNavigation = [
   { name: 'Library', href: '/content/library', icon: FolderOpen },
