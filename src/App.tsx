@@ -32,7 +32,7 @@ import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
-import EventsPlanner from "./pages/EventsPlanner";
+// EventsPlanner is now fully consolidated into Planner
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import ReferralDashboard from "./pages/growth/ReferralDashboard";
