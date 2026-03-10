@@ -128,6 +128,8 @@ function AppRoutes() {
         <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
         <Route path="/content/scheduler" element={<ContentScheduler />} />
         <Route path="/content/campaigns" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/content/copywriter" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/copywriter" element={<Navigate to="/content/planner" replace />} />
 
         {/* Reputation Section */}
         <Route path="/reputation/reviews" element={<ReviewsAnalytics />} />
