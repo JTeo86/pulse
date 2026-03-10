@@ -146,7 +146,7 @@ export function VenueProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
     refreshVenues();
-  }, [user, authLoading]);
+  }, [user?.id, authLoading]);
 
   useEffect(() => {
     if (currentVenue) {
