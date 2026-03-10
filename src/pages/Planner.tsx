@@ -1,22 +1,19 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CalendarDays, Megaphone, FileText } from 'lucide-react';
+import { CalendarDays, ClipboardList } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { OpportunitiesTab } from '@/components/planner/OpportunitiesTab';
-import { CampaignsTab } from '@/components/planner/CampaignsTab';
-import { CopyTab } from '@/components/planner/CopyTab';
+import { PlansTab } from '@/components/planner/PlansTab';
 
 export default function PlannerPage() {
   const [activeTab, setActiveTab] = useState('opportunities');
-  const navigate = useNavigate();
 
   return (
     <>
       <PageHeader
         title="Planner"
-        description="Plan campaigns, seize opportunities, and create compelling copy — all in one place."
+        description="Spot opportunities. Build plans. Execute campaigns."
       />
 
       <motion.div
@@ -29,24 +26,17 @@ export default function PlannerPage() {
             <TabsTrigger value="opportunities" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
               <CalendarDays className="w-4 h-4" /> Opportunities
             </TabsTrigger>
-            <TabsTrigger value="campaigns" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
-              <Megaphone className="w-4 h-4" /> Campaigns
-            </TabsTrigger>
-            <TabsTrigger value="copy" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
-              <FileText className="w-4 h-4" /> Copy
+            <TabsTrigger value="plans" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
+              <ClipboardList className="w-4 h-4" /> Plans
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="opportunities">
-            <OpportunitiesTab onCreateCampaign={() => setActiveTab('campaigns')} />
+            <OpportunitiesTab />
           </TabsContent>
 
-          <TabsContent value="campaigns">
-            <CampaignsTab />
-          </TabsContent>
-
-          <TabsContent value="copy">
-            <CopyTab />
+          <TabsContent value="plans">
+            <PlansTab />
           </TabsContent>
         </Tabs>
       </motion.div>

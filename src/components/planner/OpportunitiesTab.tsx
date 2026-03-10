@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CalendarDays, LayoutGrid, RefreshCw, Sparkles, SkipForward, Plus, Filter, ArrowRight } from 'lucide-react';
+import { CalendarDays, LayoutGrid, RefreshCw, Sparkles, SkipForward, Plus, Filter } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,16 +33,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   hospitality_moment: 'bg-warning/20 text-warning',
 };
 
-interface OpportunitiesTabProps {
-  onCreateCampaign: () => void;
-}
-
-export function OpportunitiesTab({ onCreateCampaign }: OpportunitiesTabProps) {
+export function OpportunitiesTab() {
   const navigate = useNavigate();
   const { currentVenue } = useVenue();
   const { toast } = useToast();
   const { events, loading: eventsLoading, refetch: refetchEvents } = useEventsCatalog();
-  const { plans, loading: plansLoading, createPlan, updatePlanStatus, skipPlan, fetchPlans } = useVenueEventPlans();
+  const { plans, loading: plansLoading, createPlan, skipPlan, fetchPlans } = useVenueEventPlans();
   const { syncing, seedHospitalityMoments, syncNagerHolidays } = useSeedEvents();
 
   const [skipModal, setSkipModal] = useState<{ eventId: string; title: string; event?: EventCatalogItem } | null>(null);
@@ -70,7 +66,7 @@ export function OpportunitiesTab({ onCreateCampaign }: OpportunitiesTabProps) {
     await refetchEvents();
   };
 
-  const handlePlan = async (event: EventCatalogItem) => {
+  const handleCreatePlan = async (event: EventCatalogItem) => {
     const plan = await createPlan(event);
     if (plan) {
       navigate(`/content/planner/plan/${plan.id}`);
@@ -94,7 +90,7 @@ export function OpportunitiesTab({ onCreateCampaign }: OpportunitiesTabProps) {
     setSkipReason('');
   };
 
-  const handleAiSuggest = async (event: any) => {
+  const handleAiSuggest = async (event: EventCatalogItem) => {
     if (!currentVenue) return;
     let plan = plans.find(p => p.event_id === event.id);
     if (!plan) {
@@ -144,7 +140,7 @@ export function OpportunitiesTab({ onCreateCampaign }: OpportunitiesTabProps) {
           plans={plans}
           leadTimeDays={leadTimeDays}
           venueId={currentVenue.id}
-          onPlanNow={handlePlan}
+          onPlanNow={handleCreatePlan}
           onSkip={handleSkipOpen}
           onRefresh={fetchPlans}
         />
@@ -258,8 +254,8 @@ export function OpportunitiesTab({ onCreateCampaign }: OpportunitiesTabProps) {
                       </Button>
                     ) : (
                       <>
-                        <Button size="sm" className="h-7 text-xs" onClick={() => handlePlan(event)}>
-                          <Plus className="w-3 h-3 mr-1" /> Plan
+                        <Button size="sm" className="h-7 text-xs" onClick={() => handleCreatePlan(event)}>
+                          <Plus className="w-3 h-3 mr-1" /> Create Plan
                         </Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleSkipOpen(event)}>
                           <SkipForward className="w-3 h-3 mr-1" /> Skip
