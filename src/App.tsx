@@ -23,7 +23,6 @@ import TheEditor from "./pages/TheEditor";
 import VisualStyle from "./pages/VisualStyle";
 import ReelCreator from "./pages/ReelCreator";
 import ContentScheduler from "./pages/ContentScheduler";
-import Copywriter from "./pages/Copywriter";
 import Planner from "./pages/Planner";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
@@ -33,7 +32,7 @@ import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
-import EventsPlanner from "./pages/EventsPlanner";
+// EventsPlanner is now fully consolidated into Planner
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
 import ReferralDashboard from "./pages/growth/ReferralDashboard";
@@ -129,6 +128,8 @@ function AppRoutes() {
         <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
         <Route path="/content/scheduler" element={<ContentScheduler />} />
         <Route path="/content/campaigns" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/content/copywriter" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/copywriter" element={<Navigate to="/content/planner" replace />} />
 
         {/* Reputation Section */}
         <Route path="/reputation/reviews" element={<ReviewsAnalytics />} />
