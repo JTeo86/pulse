@@ -23,7 +23,6 @@ import TheEditor from "./pages/TheEditor";
 import VisualStyle from "./pages/VisualStyle";
 import ReelCreator from "./pages/ReelCreator";
 import ContentScheduler from "./pages/ContentScheduler";
-import Copywriter from "./pages/Copywriter";
 import Planner from "./pages/Planner";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
