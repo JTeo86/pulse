@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CalendarDays, LayoutGrid, RefreshCw, Sparkles, SkipForward, Plus, Filter } from 'lucide-react';
+import {
+  CalendarDays, LayoutGrid, RefreshCw, Sparkles, SkipForward, Plus, Filter,
+  Image, Video, Play, Gift, Clock
+} from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,21 +19,84 @@ import { useToast } from '@/hooks/use-toast';
 import { LilyRecommendations } from '@/components/events/LilyRecommendations';
 
 const STATUS_LABELS: Record<string, string> = {
-  not_started: 'Not Started',
-  planned: 'Planned',
-  in_production: 'In Production',
-  in_review: 'In Review',
-  approved: 'Approved',
-  scheduled: 'Scheduled',
-  done: 'Done',
-  skipped: 'Skipped',
+  not_started: 'Not Started', planned: 'Planned', in_production: 'In Production',
+  in_review: 'In Review', approved: 'Approved', scheduled: 'Scheduled', done: 'Done', skipped: 'Skipped',
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  holiday: 'bg-accent/20 text-accent',
-  observance: 'bg-info/20 text-info',
-  local_event: 'bg-success/20 text-success',
-  hospitality_moment: 'bg-warning/20 text-warning',
+const CATEGORY_CONFIG: Record<string, { color: string; label: string }> = {
+  holiday: { color: 'bg-accent/20 text-accent', label: 'Holiday' },
+  observance: { color: 'bg-info/20 text-info', label: 'Observance' },
+  local_event: { color: 'bg-success/20 text-success', label: 'Local Event' },
+  hospitality_moment: { color: 'bg-warning/20 text-warning', label: 'Hospitality' },
+};
+
+/* Suggested campaign angles and assets by category */
+function getSuggestions(event: EventCatalogItem, daysAway: number) {
+  const title = event.title.toLowerCase();
+  const suggestions: { angle: string; offer: string; assets: string[] } = {
+    angle: 'Seasonal promotion',
+    offer: '',
+    assets: ['Hero Image', 'Story'],
+  };
+
+  if (title.includes('valentine')) {
+    suggestions.angle = 'Couples dining experience';
+    suggestions.offer = 'Prix fixe dinner for two with complimentary prosecco';
+    suggestions.assets = ['Hero Image', 'Reel', 'Story'];
+  } else if (title.includes('mother')) {
+    suggestions.angle = 'Celebrate mums with afternoon tea';
+    suggestions.offer = 'Complimentary prosecco for mums';
+    suggestions.assets = ['Hero Image', 'Reel', 'Story'];
+  } else if (title.includes('father')) {
+    suggestions.angle = 'Father\'s Day dining';
+    suggestions.offer = 'Complimentary craft beer for dads';
+    suggestions.assets = ['Hero Image', 'Story'];
+  } else if (title.includes('easter')) {
+    suggestions.angle = 'Easter brunch or family lunch';
+    suggestions.offer = 'Easter set menu with kids eat free';
+    suggestions.assets = ['Hero Image', 'Reel', 'Story'];
+  } else if (title.includes('christmas') || title.includes('xmas')) {
+    suggestions.angle = 'Festive season bookings';
+    suggestions.offer = 'Book Christmas party packages';
+    suggestions.assets = ['Hero Image', 'Reel', 'Story', 'Email'];
+  } else if (title.includes('halloween')) {
+    suggestions.angle = 'Halloween themed night';
+    suggestions.offer = 'Themed cocktails and dress-up specials';
+    suggestions.assets = ['Reel', 'Story'];
+  } else if (title.includes('cocktail')) {
+    suggestions.angle = 'Cocktail week specials';
+    suggestions.offer = '2-for-1 signature cocktails';
+    suggestions.assets = ['Reel', 'Story'];
+  } else if (title.includes('brunch')) {
+    suggestions.angle = 'Weekend brunch campaign';
+    suggestions.offer = 'Bottomless brunch launch special';
+    suggestions.assets = ['Hero Image', 'Reel'];
+  } else if (title.includes('al fresco') || title.includes('terrace') || title.includes('summer')) {
+    suggestions.angle = 'Outdoor dining season';
+    suggestions.offer = 'Terrace opening with welcome drink';
+    suggestions.assets = ['Hero Image', 'Reel', 'Story'];
+  } else if (title.includes('new year')) {
+    suggestions.angle = 'NYE celebration';
+    suggestions.offer = 'NYE dining package with champagne toast';
+    suggestions.assets = ['Hero Image', 'Reel', 'Story'];
+  } else if (title.includes('dry january')) {
+    suggestions.angle = 'Non-alcoholic drinks menu';
+    suggestions.offer = 'Zero-proof cocktail tasting flight';
+    suggestions.assets = ['Hero Image', 'Story'];
+  } else if (event.category === 'holiday') {
+    suggestions.angle = 'Holiday special menu';
+    suggestions.offer = 'Special set menu for the occasion';
+    suggestions.assets = ['Hero Image', 'Story'];
+  }
+
+  return suggestions;
+}
+
+const ASSET_ICONS: Record<string, any> = {
+  'Hero Image': Image,
+  'Reel': Video,
+  'Story': Play,
+  'Email': CalendarDays,
 };
 
 export function OpportunitiesTab() {
@@ -46,17 +112,13 @@ export function OpportunitiesTab() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showSkipped, setShowSkipped] = useState(false);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
   const plannedEventIds = new Set(plans.map(p => p.event_id));
   const leadTimeDays = (currentVenue as any)?.default_lead_time_days ?? 21;
 
   const filteredEvents = events.filter(e => {
     if (categoryFilter !== 'all' && e.category !== categoryFilter) return false;
-    return true;
-  });
-
-  const filteredPlans = plans.filter(p => {
-    if (!showSkipped && p.status === 'skipped') return false;
     return true;
   });
 
@@ -189,7 +251,7 @@ export function OpportunitiesTab() {
           </Button>
         </div>
 
-        {/* Calendar View */}
+        {/* Calendar View — Enhanced Cards */}
         <TabsContent value="calendar" className="space-y-2">
           {eventsLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -199,13 +261,16 @@ export function OpportunitiesTab() {
             <div className="text-center py-16 text-muted-foreground">
               <CalendarDays className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">No upcoming events found.</p>
-              <p className="text-xs mt-1">Click "Sync Events" to populate your calendar.</p>
+              <p className="text-xs mt-1">Click "Sync Events" to populate your marketing calendar.</p>
             </div>
           ) : (
             filteredEvents.map((event, i) => {
               const hasPlan = plannedEventIds.has(event.id);
               const plan = plans.find(p => p.event_id === event.id);
               const daysAway = differenceInDays(new Date(event.starts_at), new Date());
+              const isExpanded = expandedCard === event.id;
+              const suggestions = getSuggestions(event, daysAway);
+              const catConf = CATEGORY_CONFIG[event.category || ''] || { color: 'bg-muted text-muted-foreground', label: 'General' };
 
               return (
                 <motion.div
@@ -213,66 +278,117 @@ export function OpportunitiesTab() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.02 }}
-                  className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-card/60 hover:bg-card transition-colors"
+                  className="rounded-lg border border-border/50 bg-card/60 hover:bg-card transition-colors overflow-hidden"
                 >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="text-center shrink-0 w-14">
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        {format(new Date(event.starts_at), 'MMM')}
+                  {/* Main Row */}
+                  <div
+                    className="flex items-center justify-between p-4 cursor-pointer"
+                    onClick={() => setExpandedCard(isExpanded ? null : event.id)}
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="text-center shrink-0 w-14">
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                          {format(new Date(event.starts_at), 'MMM')}
+                        </div>
+                        <div className="text-xl font-semibold tabular-nums">
+                          {format(new Date(event.starts_at), 'dd')}
+                        </div>
                       </div>
-                      <div className="text-xl font-semibold tabular-nums">
-                        {format(new Date(event.starts_at), 'dd')}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{event.title}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge variant="secondary" className={`text-[10px] ${catConf.color}`}>
+                            {catConf.label}
+                          </Badge>
+                          {daysAway >= 0 && (
+                            <span className="text-[10px] text-muted-foreground">{daysAway}d away</span>
+                          )}
+                          {hasPlan && plan && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {STATUS_LABELS[plan.status] || plan.status}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{event.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="secondary" className={`text-[10px] ${CATEGORY_COLORS[event.category || ''] || 'bg-muted text-muted-foreground'}`}>
-                          {event.category || 'general'}
-                        </Badge>
-                        {daysAway >= 0 && (
-                          <span className="text-[10px] text-muted-foreground">{daysAway}d away</span>
-                        )}
-                        {hasPlan && plan && (
-                          <Badge variant="outline" className="text-[10px]">
-                            {STATUS_LABELS[plan.status] || plan.status}
-                          </Badge>
-                        )}
-                        {plan?.ai_recommendation && (
-                          <Badge className="bg-accent/20 text-accent text-[10px] border-0">
-                            AI: {(plan.ai_recommendation as any)?.action}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {hasPlan && plan ? (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate(`/content/planner/plan/${plan.id}`)}>
-                        Open Plan
-                      </Button>
-                    ) : (
-                      <>
+                    <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                      {hasPlan && plan ? (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate(`/content/planner/plan/${plan.id}`)}>
+                          Open Plan
+                        </Button>
+                      ) : (
                         <Button size="sm" className="h-7 text-xs" onClick={() => handleCreatePlan(event)}>
                           <Plus className="w-3 h-3 mr-1" /> Create Plan
                         </Button>
+                      )}
+                      {!hasPlan && (
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleSkipOpen(event)}>
-                          <SkipForward className="w-3 h-3 mr-1" /> Skip
+                          <SkipForward className="w-3 h-3" />
                         </Button>
-                      </>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-xs"
-                      onClick={() => handleAiSuggest(event)}
-                      disabled={aiLoading === event.id}
-                    >
-                      <Sparkles className={`w-3 h-3 mr-1 ${aiLoading === event.id ? 'animate-pulse' : ''}`} />
-                      AI
-                    </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() => handleAiSuggest(event)}
+                        disabled={aiLoading === event.id}
+                      >
+                        <Sparkles className={`w-3 h-3 ${aiLoading === event.id ? 'animate-pulse' : ''}`} />
+                      </Button>
+                    </div>
                   </div>
+
+                  {/* Expanded Lily Suggestion */}
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="px-4 pb-4 border-t border-border/30"
+                    >
+                      <div className="pt-3 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-accent mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-xs font-semibold text-accent">Lily's suggestion</p>
+                            <p className="text-sm text-foreground mt-0.5">{suggestions.angle}</p>
+                          </div>
+                        </div>
+
+                        {suggestions.offer && (
+                          <div className="flex items-start gap-2">
+                            <Gift className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-xs font-semibold text-warning">Suggested offer</p>
+                              <p className="text-sm text-muted-foreground">{suggestions.offer}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Assets:</span>
+                          {suggestions.assets.map(a => {
+                            const Icon = ASSET_ICONS[a] || Image;
+                            return (
+                              <Badge key={a} variant="outline" className="text-[10px] gap-1">
+                                <Icon className="w-2.5 h-2.5" /> {a}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+
+                        {/* AI recommendation if available */}
+                        {plan?.ai_recommendation && (
+                          <div className="rounded-lg bg-accent/5 border border-accent/20 p-3">
+                            <p className="text-xs text-muted-foreground">
+                              {(plan.ai_recommendation as any)?.why || 'AI analysis available'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
                 </motion.div>
               );
             })
@@ -289,11 +405,11 @@ export function OpportunitiesTab() {
                     {STATUS_LABELS[status]}
                   </h3>
                   <Badge variant="secondary" className="text-[10px]">
-                    {filteredPlans.filter(p => p.status === status).length}
+                    {plans.filter(p => p.status === status && (showSkipped || p.status !== 'skipped')).length}
                   </Badge>
                 </div>
                 <div className="space-y-2 min-h-[80px]">
-                  {filteredPlans.filter(p => p.status === status).map(plan => (
+                  {plans.filter(p => p.status === status && (showSkipped || p.status !== 'skipped')).map(plan => (
                     <div
                       key={plan.id}
                       className="p-3 rounded-lg border border-border/50 bg-card/60 cursor-pointer hover:border-accent/20 transition-colors"
