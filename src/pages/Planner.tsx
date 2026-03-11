@@ -13,7 +13,7 @@ export default function PlannerPage() {
     <>
       <PageHeader
         title="Planner"
-        description="Spot opportunities. Build plans. Execute campaigns."
+        description="Your hospitality marketing command centre. Spot opportunities, build plans, execute campaigns."
       />
 
       <motion.div
