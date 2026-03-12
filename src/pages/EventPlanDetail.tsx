@@ -273,35 +273,26 @@ function StrategySection({
   const { toast } = useToast();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [localOfferTerms, setLocalOfferTerms] = useState(plan?.decision?.offer_terms || '');
-  const [localAudience, setLocalAudience] = useState(plan?.decision?.target_audience || '');
-  const [localAngle, setLocalAngle] = useState(plan?.decision?.campaign_angle || '');
-  const isEditingRef = useRef(false);
-
-  useEffect(() => {
-    if (!isEditingRef.current) {
-      setLocalOfferTerms(plan?.decision?.offer_terms || '');
-      setLocalAudience(plan?.decision?.target_audience || '');
-      setLocalAngle(plan?.decision?.campaign_angle || '');
-    }
-  }, [plan?.decision]);
-
-  useEffect(() => {
-    if (!isEditingRef.current) return;
-    const timer = setTimeout(() => {
-      const current = plan?.decision || {};
-      updateDecision({
-        ...current,
-        offer_terms: localOfferTerms,
-        target_audience: localAudience,
-        campaign_angle: localAngle,
-      });
-      isEditingRef.current = false;
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [localOfferTerms, localAudience, localAngle]);
 
   const decision = plan.decision || {};
+
+  // Autosave fields — debounced, no full refetch
+  const saveDecisionField = useCallback(async (key: string, value: string) => {
+    await updateDecision({ ...plan.decision, [key]: value });
+  }, [plan.decision, updateDecision]);
+
+  const offerTerms = useAutosaveField(
+    decision.offer_terms || '',
+    (v) => saveDecisionField('offer_terms', v),
+  );
+  const audience = useAutosaveField(
+    decision.target_audience || '',
+    (v) => saveDecisionField('target_audience', v),
+  );
+  const angle = useAutosaveField(
+    decision.campaign_angle || '',
+    (v) => saveDecisionField('campaign_angle', v),
+  );
 
   const handleToggle = (key: string, val: boolean) => {
     updateDecision({ ...decision, [key]: val });
