@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -21,6 +21,8 @@ import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { usePulseBrain, buildStrategyContext } from '@/hooks/use-pulse-brain';
+import { useAutosaveField } from '@/hooks/use-optimistic-mutation';
+import { SaveIndicator } from '@/components/ui/save-indicator';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -77,7 +79,7 @@ export default function EventPlanDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const brain = usePulseBrain();
-  const { plan, tasks, links, loading, fetchAll, updateDecision, toggleTask, addTask, deleteTask, updateStatus } = useEventPlanDetail(planId);
+  const { plan, tasks, links, loading, fetchAll, updateDecision, toggleTask, addTask, deleteTask, updateStatus, updateTitle } = useEventPlanDetail(planId);
 
   const [activeSection, setActiveSection] = useState('strategy');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -117,8 +119,7 @@ export default function EventPlanDetailPage() {
 
   const handleTitleSave = async () => {
     if (!planId || !titleDraft.trim()) return;
-    await supabase.from('venue_event_plans').update({ title: titleDraft.trim() }).eq('id', planId);
-    await fetchAll();
+    await updateTitle(titleDraft.trim());
     setEditingTitle(false);
   };
 
@@ -272,35 +273,26 @@ function StrategySection({
   const { toast } = useToast();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [localOfferTerms, setLocalOfferTerms] = useState(plan?.decision?.offer_terms || '');
-  const [localAudience, setLocalAudience] = useState(plan?.decision?.target_audience || '');
-  const [localAngle, setLocalAngle] = useState(plan?.decision?.campaign_angle || '');
-  const isEditingRef = useRef(false);
-
-  useEffect(() => {
-    if (!isEditingRef.current) {
-      setLocalOfferTerms(plan?.decision?.offer_terms || '');
-      setLocalAudience(plan?.decision?.target_audience || '');
-      setLocalAngle(plan?.decision?.campaign_angle || '');
-    }
-  }, [plan?.decision]);
-
-  useEffect(() => {
-    if (!isEditingRef.current) return;
-    const timer = setTimeout(() => {
-      const current = plan?.decision || {};
-      updateDecision({
-        ...current,
-        offer_terms: localOfferTerms,
-        target_audience: localAudience,
-        campaign_angle: localAngle,
-      });
-      isEditingRef.current = false;
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [localOfferTerms, localAudience, localAngle]);
 
   const decision = plan.decision || {};
+
+  // Autosave fields — debounced, no full refetch
+  const saveDecisionField = useCallback(async (key: string, value: string) => {
+    await updateDecision({ ...plan.decision, [key]: value });
+  }, [plan.decision, updateDecision]);
+
+  const offerTerms = useAutosaveField(
+    decision.offer_terms || '',
+    (v) => saveDecisionField('offer_terms', v),
+  );
+  const audience = useAutosaveField(
+    decision.target_audience || '',
+    (v) => saveDecisionField('target_audience', v),
+  );
+  const angle = useAutosaveField(
+    decision.campaign_angle || '',
+    (v) => saveDecisionField('campaign_angle', v),
+  );
 
   const handleToggle = (key: string, val: boolean) => {
     updateDecision({ ...decision, [key]: val });
@@ -443,31 +435,40 @@ function StrategySection({
 
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label className="text-xs">Target audience</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Target audience</Label>
+                <SaveIndicator status={audience.status} />
+              </div>
               <Input
                 placeholder="e.g., Date night couples, families, foodies..."
-                value={localAudience}
-                onChange={e => { isEditingRef.current = true; setLocalAudience(e.target.value); }}
+                value={audience.value}
+                onChange={e => audience.onChange(e.target.value)}
                 className="text-sm"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs">Campaign angle</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Campaign angle</Label>
+                <SaveIndicator status={angle.status} />
+              </div>
               <Input
                 placeholder="e.g., Seasonal ingredients, indulgence, celebration..."
-                value={localAngle}
-                onChange={e => { isEditingRef.current = true; setLocalAngle(e.target.value); }}
+                value={angle.value}
+                onChange={e => angle.onChange(e.target.value)}
                 className="text-sm"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs">Offer terms</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Offer terms</Label>
+                <SaveIndicator status={offerTerms.status} />
+              </div>
               <Textarea
                 placeholder="e.g., 2-for-1 cocktails 5-7pm..."
-                value={localOfferTerms}
-                onChange={e => { isEditingRef.current = true; setLocalOfferTerms(e.target.value); }}
+                value={offerTerms.value}
+                onChange={e => offerTerms.onChange(e.target.value)}
                 rows={3}
                 className="text-sm"
               />
