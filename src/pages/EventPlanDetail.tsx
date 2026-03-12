@@ -435,31 +435,40 @@ function StrategySection({
 
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label className="text-xs">Target audience</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Target audience</Label>
+                <SaveIndicator status={audience.status} />
+              </div>
               <Input
                 placeholder="e.g., Date night couples, families, foodies..."
-                value={localAudience}
-                onChange={e => { isEditingRef.current = true; setLocalAudience(e.target.value); }}
+                value={audience.value}
+                onChange={e => audience.onChange(e.target.value)}
                 className="text-sm"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs">Campaign angle</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Campaign angle</Label>
+                <SaveIndicator status={angle.status} />
+              </div>
               <Input
                 placeholder="e.g., Seasonal ingredients, indulgence, celebration..."
-                value={localAngle}
-                onChange={e => { isEditingRef.current = true; setLocalAngle(e.target.value); }}
+                value={angle.value}
+                onChange={e => angle.onChange(e.target.value)}
                 className="text-sm"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs">Offer terms</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Offer terms</Label>
+                <SaveIndicator status={offerTerms.status} />
+              </div>
               <Textarea
                 placeholder="e.g., 2-for-1 cocktails 5-7pm..."
-                value={localOfferTerms}
-                onChange={e => { isEditingRef.current = true; setLocalOfferTerms(e.target.value); }}
+                value={offerTerms.value}
+                onChange={e => offerTerms.onChange(e.target.value)}
                 rows={3}
                 className="text-sm"
               />
