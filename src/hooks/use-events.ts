@@ -92,11 +92,11 @@ export function useVenueEventPlans() {
   const { currentVenue } = useVenue();
   const { toast } = useToast();
   const [plans, setPlans] = useState<VenueEventPlan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const hasFetched = useRef(false);
 
   const fetchPlans = useCallback(async () => {
     if (!currentVenue) return;
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('venue_event_plans')
@@ -109,11 +109,18 @@ export function useVenueEventPlans() {
     } catch (err: any) {
       console.error('Error fetching plans:', err);
     } finally {
-      setLoading(false);
+      if (!hasFetched.current) {
+        hasFetched.current = true;
+        setInitialLoading(false);
+      }
     }
   }, [currentVenue]);
 
-  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+  useEffect(() => {
+    hasFetched.current = false;
+    setInitialLoading(true);
+    fetchPlans();
+  }, [fetchPlans]);
 
   const createPlan = async (event: EventCatalogItem) => {
     if (!currentVenue) return null;
@@ -134,37 +141,37 @@ export function useVenueEventPlans() {
       toast({ variant: 'destructive', title: 'Error creating plan', description: error.message });
       return null;
     }
-    await fetchPlans();
+    // Optimistic append
+    if (data) setPlans(prev => [...prev, data as any as VenueEventPlan]);
     return data as any as VenueEventPlan;
   };
 
   const updatePlanStatus = async (planId: string, status: string) => {
+    // Optimistic
+    setPlans(prev => prev.map(p => p.id === planId ? { ...p, status } : p));
     const { error } = await supabase
       .from('venue_event_plans')
       .update({ status })
       .eq('id', planId);
-
     if (error) {
       toast({ variant: 'destructive', title: 'Error updating plan', description: error.message });
-      return;
+      fetchPlans(); // rollback
     }
-    await fetchPlans();
   };
 
   const skipPlan = async (planId: string, reason: string) => {
+    setPlans(prev => prev.map(p => p.id === planId ? { ...p, status: 'skipped', skip_reason: reason } : p));
     const { error } = await supabase
       .from('venue_event_plans')
       .update({ status: 'skipped', skip_reason: reason })
       .eq('id', planId);
-
     if (error) {
       toast({ variant: 'destructive', title: 'Error skipping plan', description: error.message });
-      return;
+      fetchPlans();
     }
-    await fetchPlans();
   };
 
-  return { plans, loading, fetchPlans, createPlan, updatePlanStatus, skipPlan };
+  return { plans, loading: initialLoading, fetchPlans, createPlan, updatePlanStatus, skipPlan };
 }
 
 export function useEventPlanDetail(planId: string | undefined) {
