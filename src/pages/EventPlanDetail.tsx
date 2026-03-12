@@ -119,8 +119,7 @@ export default function EventPlanDetailPage() {
 
   const handleTitleSave = async () => {
     if (!planId || !titleDraft.trim()) return;
-    await supabase.from('venue_event_plans').update({ title: titleDraft.trim() }).eq('id', planId);
-    await fetchAll();
+    await updateTitle(titleDraft.trim());
     setEditingTitle(false);
   };
 
