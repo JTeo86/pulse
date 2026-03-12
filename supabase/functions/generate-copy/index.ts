@@ -141,12 +141,20 @@ Return EXACTLY this JSON structure:
   }
 }`;
 
+      const strategy = inputs?.plan_strategy || {};
+      const brainContext = inputs?.brain_context || '';
+      const planTitle = inputs?.plan_title || goal;
+
       const userPrompt = `Create a full Campaign Kit for:
 
 PRIMARY OBJECTIVE: ${goal}
-KEY MESSAGE: ${inputs.key_message}
-CALL TO ACTION: ${inputs.call_to_action}
-OPPORTUNITY: ${inputs.opportunity_label || "General Campaign"}
+CAMPAIGN: ${planTitle}
+${strategy.offer_terms ? `OFFER: ${strategy.offer_terms}` : ''}
+${strategy.target_audience ? `TARGET AUDIENCE: ${strategy.target_audience}` : ''}
+${strategy.campaign_angle ? `CAMPAIGN ANGLE: ${strategy.campaign_angle}` : ''}
+${inputs?.key_message ? `KEY MESSAGE: ${inputs.key_message}` : ''}
+${inputs?.call_to_action ? `CALL TO ACTION: ${inputs.call_to_action}` : ''}
+${brainContext ? `\nVENUE CONTEXT:\n${brainContext}` : ''}
 
 Generate a complete, professional, compliant campaign kit.`;
 
