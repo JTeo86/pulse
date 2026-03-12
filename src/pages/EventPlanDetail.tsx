@@ -79,7 +79,7 @@ export default function EventPlanDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const brain = usePulseBrain();
-  const { plan, tasks, links, loading, fetchAll, updateDecision, toggleTask, addTask, deleteTask, updateStatus } = useEventPlanDetail(planId);
+  const { plan, tasks, links, loading, fetchAll, updateDecision, toggleTask, addTask, deleteTask, updateStatus, updateTitle } = useEventPlanDetail(planId);
 
   const [activeSection, setActiveSection] = useState('strategy');
   const [editingTitle, setEditingTitle] = useState(false);
