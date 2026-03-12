@@ -51,7 +51,15 @@ serve(async (req) => {
     const body = await req.json();
     const { venue_id, module, goal, opportunity, inputs } = body;
 
-    if (!venue_id || !module || !goal || !inputs?.key_message) {
+    // Campaign mode has different required fields
+    if (module === 'campaign') {
+      if (!venue_id || !goal) {
+        return new Response(JSON.stringify({ error: "Missing required fields" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (!venue_id || !module || !goal || !inputs?.key_message) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -133,12 +141,20 @@ Return EXACTLY this JSON structure:
   }
 }`;
 
+      const strategy = inputs?.plan_strategy || {};
+      const brainContext = inputs?.brain_context || '';
+      const planTitle = inputs?.plan_title || goal;
+
       const userPrompt = `Create a full Campaign Kit for:
 
 PRIMARY OBJECTIVE: ${goal}
-KEY MESSAGE: ${inputs.key_message}
-CALL TO ACTION: ${inputs.call_to_action}
-OPPORTUNITY: ${inputs.opportunity_label || "General Campaign"}
+CAMPAIGN: ${planTitle}
+${strategy.offer_terms ? `OFFER: ${strategy.offer_terms}` : ''}
+${strategy.target_audience ? `TARGET AUDIENCE: ${strategy.target_audience}` : ''}
+${strategy.campaign_angle ? `CAMPAIGN ANGLE: ${strategy.campaign_angle}` : ''}
+${inputs?.key_message ? `KEY MESSAGE: ${inputs.key_message}` : ''}
+${inputs?.call_to_action ? `CALL TO ACTION: ${inputs.call_to_action}` : ''}
+${brainContext ? `\nVENUE CONTEXT:\n${brainContext}` : ''}
 
 Generate a complete, professional, compliant campaign kit.`;
 
