@@ -21,6 +21,8 @@ import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { usePulseBrain, buildStrategyContext } from '@/hooks/use-pulse-brain';
+import { useAutosaveField, useSaveStatus } from '@/hooks/use-optimistic-mutation';
+import { SaveIndicator } from '@/components/ui/save-indicator';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_LABELS: Record<string, string> = {
