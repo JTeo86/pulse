@@ -51,7 +51,15 @@ serve(async (req) => {
     const body = await req.json();
     const { venue_id, module, goal, opportunity, inputs } = body;
 
-    if (!venue_id || !module || !goal || !inputs?.key_message) {
+    // Campaign mode has different required fields
+    if (module === 'campaign') {
+      if (!venue_id || !goal) {
+        return new Response(JSON.stringify({ error: "Missing required fields" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (!venue_id || !module || !goal || !inputs?.key_message) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
