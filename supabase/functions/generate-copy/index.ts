@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const complianceRules = `
@@ -52,7 +53,7 @@ serve(async (req) => {
     const { venue_id, module, goal, opportunity, inputs } = body;
 
     // Campaign mode has different required fields
-    if (module === 'campaign') {
+    if (module === "campaign") {
       if (!venue_id || !goal) {
         return new Response(JSON.stringify({ error: "Missing required fields" }), {
           status: 400,
@@ -68,8 +69,16 @@ serve(async (req) => {
 
     // Fetch brand context
     const [{ data: brandKit }, { data: venue }] = await Promise.all([
-      supabase.from("brand_kits").select("preset, rules_text").eq("venue_id", venue_id).maybeSingle(),
-      supabase.from("venues").select("name").eq("id", venue_id).maybeSingle(),
+      supabase
+        .from("brand_kits")
+        .select("preset, rules_text")
+        .eq("venue_id", venue_id)
+        .maybeSingle(),
+      supabase
+        .from("venues")
+        .select("name")
+        .eq("id", venue_id)
+        .maybeSingle(),
     ]);
 
     const toneMap: Record<string, string> = {
@@ -92,17 +101,27 @@ serve(async (req) => {
       brandContext.push(`Brand Voice Guidelines: ${brandKit.rules_text}`);
       contextUsed.push("Brand voice rules applied");
     }
-    if (inputs.secondary_focus?.length) {
+    if (inputs?.secondary_focus?.length) {
       brandContext.push(`Secondary Focus: ${inputs.secondary_focus.join(", ")}`);
-      contextUsed.push(...inputs.secondary_focus.map((f: string) => f.replace(/_/g, " ")));
+      contextUsed.push(
+        ...inputs.secondary_focus.map((f: string) => f.replace(/_/g, " "))
+      );
     }
-    if (opportunity && opportunity.label && opportunity.label !== "General Campaign") {
-      brandContext.push(`Campaign Opportunity: ${opportunity.label}${opportunity.meta ? ` (${opportunity.meta})` : ""}`);
+    if (opportunity?.label && opportunity.label !== "General Campaign") {
+      brandContext.push(
+        `Campaign Opportunity: ${opportunity.label}${opportunity.meta ? ` (${opportunity.meta})` : ""}`
+      );
       contextUsed.push(`Opportunity: ${opportunity.label}`);
     }
 
-    // Campaign mode — generate full kit
+    // ═══════════════════════════════════════════════════
+    // CAMPAIGN MODE — Canonical Campaign Pack
+    // ═══════════════════════════════════════════════════
     if (module === "campaign") {
+      const strategy = inputs?.plan_strategy || {};
+      const brainContext = inputs?.brain_context || "";
+      const planTitle = inputs?.plan_title || goal;
+
       const systemPrompt = `You are a senior hospitality marketing strategist and copywriter.
 
 BRAND CONTEXT:
@@ -110,110 +129,228 @@ ${brandContext.join("\n")}
 
 ${complianceRules}
 
-You will produce a complete, structured Campaign Kit as JSON. Every asset should be immediately usable, on-brand, and compliant.
+You will produce a complete, structured Campaign Pack as JSON.
+Every asset should be immediately usable, on-brand, and compliant.
 
 Return EXACTLY this JSON structure:
 {
-  "kit": {
-    "strategy": {
-      "objective": "One-line campaign objective statement",
-      "offerFraming": "How the offer/experience is framed",
-      "ctaPositioning": "CTA approach and reasoning"
+  "campaign_pack": {
+    "copy": {
+      "instagram_caption": "Full Instagram caption (2-4 sentences, one CTA, no hashtags unless organic)",
+      "short_caption": "Short punchy version (1-2 sentences max)",
+      "story_text": "Instagram Story text overlay (brief, impactful, under 20 words)",
+      "reel_hook": "Opening hook line for a reel (attention-grabbing, under 10 words)",
+      "promo_headline": "Promotional headline for website/poster",
+      "call_to_action": "Clear, specific CTA",
+      "sms_push_notification": "SMS/push message (under 160 characters)",
+      "email_subject": "Email subject line (under 50 chars)",
+      "email_preview": "Email preview text (under 90 chars)",
+      "email_body": "Full email body with greeting, value proposition, CTA and sign-off"
     },
-    "assets": {
-      "email": {
-        "subject": "Email subject line (under 50 chars)",
-        "preview": "Email preview text (under 90 chars)",
-        "body": "Full email body with greeting, value proposition, CTA and sign-off"
-      },
-      "instagram": "Instagram caption (2-4 sentences, one CTA, no hashtags unless organic)",
-      "sms": "SMS message (under 160 characters)",
-      "websiteBanner": "Website banner headline and subline (2 lines)",
-      "staffBriefing": "Internal staff summary: what the campaign is about, key talking points, and how to upsell or support it",
-      "visualDirection": "Suggested visual direction: mood, shot type, colour palette cues, styling notes"
+    "production": {
+      "visual_direction": "Detailed visual direction: mood, shot types, colour palette, styling notes, props",
+      "asset_briefs": [
+        {
+          "asset_type": "hero_image",
+          "title": "Hero Campaign Image",
+          "brief": "Detailed creative brief for the hero image",
+          "intended_channel": "Instagram Feed"
+        },
+        {
+          "asset_type": "reel",
+          "title": "Campaign Reel",
+          "brief": "Detailed brief for the campaign reel",
+          "intended_channel": "Instagram Reels / TikTok"
+        },
+        {
+          "asset_type": "story_visual",
+          "title": "Story Visual",
+          "brief": "Detailed brief for the story visual",
+          "intended_channel": "Instagram Stories"
+        }
+      ]
     },
-    "contextUsed": ${JSON.stringify(contextUsed)},
-    "performanceInsights": [
-      "Insight about why this campaign approach works",
-      "Another strategic or psychological insight",
-      "Third insight about brand alignment or timing"
-    ]
+    "execution": {
+      "recommended_channels": ["Instagram Feed", "Instagram Stories", "Instagram Reels"],
+      "recommended_posting_window": "Suggested days/times for maximum impact",
+      "campaign_duration": "Suggested campaign length"
+    },
+    "metadata": {
+      "generated_at": "ISO timestamp",
+      "context_used": ${JSON.stringify(contextUsed)},
+      "performance_insights": [
+        "Insight about why this campaign approach works",
+        "Strategic or psychological insight",
+        "Brand alignment or timing insight"
+      ]
+    }
   }
 }`;
 
-      const strategy = inputs?.plan_strategy || {};
-      const brainContext = inputs?.brain_context || '';
-      const planTitle = inputs?.plan_title || goal;
-
-      const userPrompt = `Create a full Campaign Kit for:
+      const userPrompt = `Create a full Campaign Pack for:
 
 PRIMARY OBJECTIVE: ${goal}
 CAMPAIGN: ${planTitle}
-${strategy.offer_terms ? `OFFER: ${strategy.offer_terms}` : ''}
-${strategy.target_audience ? `TARGET AUDIENCE: ${strategy.target_audience}` : ''}
-${strategy.campaign_angle ? `CAMPAIGN ANGLE: ${strategy.campaign_angle}` : ''}
-${inputs?.key_message ? `KEY MESSAGE: ${inputs.key_message}` : ''}
-${inputs?.call_to_action ? `CALL TO ACTION: ${inputs.call_to_action}` : ''}
-${brainContext ? `\nVENUE CONTEXT:\n${brainContext}` : ''}
+${strategy.offer_terms ? `OFFER: ${strategy.offer_terms}` : ""}
+${strategy.target_audience ? `TARGET AUDIENCE: ${strategy.target_audience}` : ""}
+${strategy.campaign_angle ? `CAMPAIGN ANGLE: ${strategy.campaign_angle}` : ""}
+${inputs?.key_message ? `KEY MESSAGE: ${inputs.key_message}` : ""}
+${inputs?.call_to_action ? `CALL TO ACTION: ${inputs.call_to_action}` : ""}
+${brainContext ? `\nVENUE CONTEXT:\n${brainContext}` : ""}
 
-Generate a complete, professional, compliant campaign kit.`;
+Generate a complete, professional, compliant campaign pack.`;
 
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
-        return new Response(JSON.stringify({ error: "AI service not configured" }), {
+        return new Response(
+          JSON.stringify({ error: "AI service not configured" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`Generating campaign pack for venue ${venue_id}, goal: ${goal}`);
+
+      const aiResponse = await fetch(
+        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            response_format: { type: "json_object" },
+          }),
+        }
+      );
+
+      if (!aiResponse.ok) {
+        const status = aiResponse.status;
+        if (status === 429) {
+          return new Response(
+            JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (status === 402) {
+          return new Response(
+            JSON.stringify({ error: "AI credits exhausted." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const errorText = await aiResponse.text();
+        console.error("AI gateway error:", status, errorText);
+        return new Response(
+          JSON.stringify({ error: "Failed to generate campaign pack" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const aiData = await aiResponse.json();
+      const content = aiData.choices?.[0]?.message?.content;
+      if (!content) {
+        return new Response(JSON.stringify({ error: "No content returned" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      console.log(`Generating campaign kit for venue ${venue_id}, goal: ${goal}`);
-
-      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (!aiResponse.ok) {
-        const status = aiResponse.status;
-        if (status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        if (status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        const errorText = await aiResponse.text();
-        console.error("AI gateway error:", status, errorText);
-        return new Response(JSON.stringify({ error: "Failed to generate campaign kit" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const aiData = await aiResponse.json();
-      const content = aiData.choices?.[0]?.message?.content;
-      if (!content) return new Response(JSON.stringify({ error: "No content returned" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
       let parsed;
       try {
         parsed = JSON.parse(content);
       } catch {
-        return new Response(JSON.stringify({ error: "Failed to parse campaign kit" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(
+          JSON.stringify({ error: "Failed to parse campaign pack" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      // Ensure contextUsed is injected
-      if (parsed.kit) {
-        parsed.kit.contextUsed = contextUsed;
+      // Normalize: accept both {campaign_pack: ...} and {kit: ...} shapes
+      const pack = parsed.campaign_pack || parsed.kit || parsed;
+
+      // Ensure metadata has context_used
+      if (pack.metadata) {
+        pack.metadata.context_used = contextUsed;
+        pack.metadata.generated_at = new Date().toISOString();
       }
 
-      console.log("Campaign kit generated successfully");
-      return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // ── Atomic persistence to plan_outputs + plan_asset_briefs ──
+      const planId = inputs?.plan_id;
+      if (planId) {
+        try {
+          const copy = pack.copy || pack.assets || {};
+          const outputRows = Object.entries(copy)
+            .filter(([_, v]) => typeof v === "string" && (v as string).trim())
+            .map(([key, val]) => ({
+              plan_id: planId,
+              output_type: key,
+              title: key
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (c: string) => c.toUpperCase()),
+              content: val as string,
+              status: "draft",
+              metadata: {},
+            }));
+
+          if (outputRows.length > 0) {
+            // Clear previous outputs for this plan
+            await supabase
+              .from("plan_outputs")
+              .delete()
+              .eq("plan_id", planId);
+
+            const { error: outErr } = await supabase
+              .from("plan_outputs")
+              .insert(outputRows);
+            if (outErr) console.error("plan_outputs insert error:", outErr);
+          }
+
+          // Persist asset briefs
+          const briefs = pack.production?.asset_briefs;
+          if (Array.isArray(briefs) && briefs.length > 0) {
+            await supabase
+              .from("plan_asset_briefs")
+              .delete()
+              .eq("plan_id", planId);
+
+            const briefRows = briefs.map((b: any) => ({
+              plan_id: planId,
+              asset_type: b.asset_type || "image",
+              title: b.title || "Asset",
+              brief: b.brief || "",
+              intended_channel: b.intended_channel || null,
+              status: "brief_ready",
+              metadata: {},
+            }));
+            const { error: briefErr } = await supabase
+              .from("plan_asset_briefs")
+              .insert(briefRows);
+            if (briefErr) console.error("plan_asset_briefs insert error:", briefErr);
+          }
+
+          console.log(
+            `Persisted ${outputRows.length} outputs and ${briefs?.length || 0} briefs for plan ${planId}`
+          );
+        } catch (persistErr) {
+          console.error("Persistence error (non-fatal):", persistErr);
+        }
+      }
+
+      console.log("Campaign pack generated successfully");
+      return new Response(
+        JSON.stringify({ campaign_pack: pack }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Legacy single-module mode (email, blog, ad_copy, sms_push)
+    // ═══════════════════════════════════════════════════
+    // LEGACY SINGLE-MODULE MODE
+    // ═══════════════════════════════════════════════════
     const moduleConfig: Record<string, any> = {
       email: {
         name: "Email Campaign",
@@ -238,43 +375,82 @@ Generate a complete, professional, compliant campaign kit.`;
     };
 
     const config = moduleConfig[module];
-    if (!config) return new Response(JSON.stringify({ error: "Unknown module" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!config) {
+      return new Response(JSON.stringify({ error: "Unknown module" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const length = inputs.length || "medium";
     const systemPrompt = `You are a senior hospitality copywriter.\n\nBRAND CONTEXT:\n${brandContext.join("\n")}\n\n${complianceRules}\n\nGenerate exactly 3 variations. Format: ${config.format}\nTarget length: ${config.lengthGuide[length]}`;
     const userPrompt = `Create ${config.name} for:\nGOAL: ${goal}\nKEY MESSAGE: ${inputs.key_message}\nCTA: ${inputs.call_to_action}`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) return new Response(JSON.stringify({ error: "AI service not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!LOVABLE_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "AI service not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-        response_format: { type: "json_object" },
-      }),
-    });
+    const aiResponse = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      }
+    );
 
-    if (!aiResponse.ok) return new Response(JSON.stringify({ error: "Failed to generate copy" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!aiResponse.ok) {
+      return new Response(
+        JSON.stringify({ error: "Failed to generate copy" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content;
-    if (!content) return new Response(JSON.stringify({ error: "No content returned" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!content) {
+      return new Response(JSON.stringify({ error: "No content returned" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     try {
       const parsed = JSON.parse(content);
-      return new Response(JSON.stringify(parsed), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(parsed), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     } catch {
-      return new Response(JSON.stringify({ error: "Failed to parse response" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(
+        JSON.stringify({ error: "Failed to parse response" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
-
   } catch (error) {
     console.error("generate-copy error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
 });
