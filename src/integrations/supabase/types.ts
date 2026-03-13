@@ -1578,6 +1578,38 @@ export type Database = {
         }
         Relationships: []
       }
+      pulse_brain_contexts: {
+        Row: {
+          brand_context: Json
+          updated_at: string
+          venue_id: string
+          venue_summary: string
+          visual_context: Json
+        }
+        Insert: {
+          brand_context?: Json
+          updated_at?: string
+          venue_id: string
+          venue_summary?: string
+          visual_context?: Json
+        }
+        Update: {
+          brand_context?: Json
+          updated_at?: string
+          venue_id?: string
+          venue_summary?: string
+          visual_context?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pulse_brain_contexts_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referral_audit_events: {
         Row: {
           actor_user_id: string | null
@@ -2379,8 +2411,12 @@ export type Database = {
           job_payload: Json
           job_type: string
           max_attempts: number
+          payload: Json
+          plan_id: string | null
+          run_after: string
           started_at: string | null
           status: string
+          updated_at: string
           venue_id: string
         }
         Insert: {
@@ -2392,8 +2428,12 @@ export type Database = {
           job_payload?: Json
           job_type: string
           max_attempts?: number
+          payload?: Json
+          plan_id?: string | null
+          run_after?: string
           started_at?: string | null
           status?: string
+          updated_at?: string
           venue_id: string
         }
         Update: {
@@ -2405,11 +2445,22 @@ export type Database = {
           job_payload?: Json
           job_type?: string
           max_attempts?: number
+          payload?: Json
+          plan_id?: string | null
+          run_after?: string
           started_at?: string | null
           status?: string
+          updated_at?: string
           venue_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "system_jobs_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "system_jobs_venue_id_fkey"
             columns: ["venue_id"]
