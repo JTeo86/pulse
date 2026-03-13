@@ -1315,6 +1315,185 @@ export type Database = {
           },
         ]
       }
+      plan_asset_briefs: {
+        Row: {
+          asset_type: string
+          brief: string
+          created_at: string
+          id: string
+          intended_channel: string | null
+          metadata: Json | null
+          plan_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          asset_type: string
+          brief?: string
+          created_at?: string
+          id?: string
+          intended_channel?: string | null
+          metadata?: Json | null
+          plan_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: string
+          brief?: string
+          created_at?: string
+          id?: string
+          intended_channel?: string | null
+          metadata?: Json | null
+          plan_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_asset_briefs_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_assets: {
+        Row: {
+          asset_brief_id: string | null
+          asset_type: string
+          content_asset_id: string | null
+          created_at: string
+          id: string
+          plan_id: string
+          status: string
+        }
+        Insert: {
+          asset_brief_id?: string | null
+          asset_type: string
+          content_asset_id?: string | null
+          created_at?: string
+          id?: string
+          plan_id: string
+          status?: string
+        }
+        Update: {
+          asset_brief_id?: string | null
+          asset_type?: string
+          content_asset_id?: string | null
+          created_at?: string
+          id?: string
+          plan_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_assets_asset_brief_id_fkey"
+            columns: ["asset_brief_id"]
+            isOneToOne: false
+            referencedRelation: "plan_asset_briefs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_assets_content_asset_id_fkey"
+            columns: ["content_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_assets_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_outputs: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          output_type: string
+          plan_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          output_type: string
+          plan_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          output_type?: string
+          plan_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_outputs_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_workspace_snapshots: {
+        Row: {
+          plan_id: string
+          snapshot: Json
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          plan_id: string
+          snapshot?: Json
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          plan_id?: string
+          snapshot?: Json
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_workspace_snapshots_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: true
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_workspace_snapshots_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_admins: {
         Row: {
           created_at: string
@@ -1398,6 +1577,38 @@ export type Database = {
           value?: string
         }
         Relationships: []
+      }
+      pulse_brain_contexts: {
+        Row: {
+          brand_context: Json
+          updated_at: string
+          venue_id: string
+          venue_summary: string
+          visual_context: Json
+        }
+        Insert: {
+          brand_context?: Json
+          updated_at?: string
+          venue_id: string
+          venue_summary?: string
+          visual_context?: Json
+        }
+        Update: {
+          brand_context?: Json
+          updated_at?: string
+          venue_id?: string
+          venue_summary?: string
+          visual_context?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pulse_brain_contexts_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       referral_audit_events: {
         Row: {
@@ -2200,8 +2411,12 @@ export type Database = {
           job_payload: Json
           job_type: string
           max_attempts: number
+          payload: Json
+          plan_id: string | null
+          run_after: string
           started_at: string | null
           status: string
+          updated_at: string
           venue_id: string
         }
         Insert: {
@@ -2213,8 +2428,12 @@ export type Database = {
           job_payload?: Json
           job_type: string
           max_attempts?: number
+          payload?: Json
+          plan_id?: string | null
+          run_after?: string
           started_at?: string | null
           status?: string
+          updated_at?: string
           venue_id: string
         }
         Update: {
@@ -2226,11 +2445,22 @@ export type Database = {
           job_payload?: Json
           job_type?: string
           max_attempts?: number
+          payload?: Json
+          plan_id?: string | null
+          run_after?: string
           started_at?: string | null
           status?: string
+          updated_at?: string
           venue_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "system_jobs_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "system_jobs_venue_id_fkey"
             columns: ["venue_id"]
