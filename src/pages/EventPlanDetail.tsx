@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2, ExternalLink,
+  ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2,
   AlertTriangle, Copy, Check, Loader2, FileText, Image, Calendar,
-  Lightbulb, Pencil, Package, Play, TrendingUp, ArrowRight, Video
+  Lightbulb, Pencil, Package, Play, TrendingUp, ArrowRight, Video,
+  RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -13,10 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useEventPlanDetail, PLAN_STATUSES } from '@/hooks/use-events';
+import { usePlanWorkspace, OUTPUT_TYPE_LABELS, OUTPUT_SECTIONS, BRIEF_STATUS_LABELS } from '@/hooks/use-plan-workspace';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -27,85 +28,106 @@ import { supabase } from '@/integrations/supabase/client';
 
 const STATUS_LABELS: Record<string, string> = {
   not_started: 'Idea', planned: 'Planned', in_production: 'In Production',
-  in_review: 'In Review', approved: 'Approved', scheduled: 'Scheduled', done: 'Published', skipped: 'Skipped',
+  in_review: 'In Review', approved: 'Approved', scheduled: 'Scheduled',
+  done: 'Published', skipped: 'Skipped',
 };
 
-const COPY_TYPES = [
-  { id: 'instagram_caption', label: 'Instagram Caption' },
-  { id: 'story_text', label: 'Story Text' },
-  { id: 'reel_hook', label: 'Reel Hook' },
-  { id: 'promo_headline', label: 'Promotional Headline' },
-  { id: 'email_subject', label: 'Email Subject Line' },
-  { id: 'call_to_action', label: 'Call to Action' },
-];
+/* ══════════════════════════════════════════════════════════
+   WORKFLOW STEPS
+   ══════════════════════════════════════════════════════════ */
+const WORKFLOW_STEPS = [
+  { id: 'strategy', label: 'Strategy', icon: Lightbulb },
+  { id: 'campaign_pack', label: 'Campaign Pack', icon: Package },
+  { id: 'production', label: 'Production', icon: Image },
+  { id: 'publish', label: 'Publish', icon: Calendar },
+  { id: 'revenue', label: 'Revenue', icon: TrendingUp },
+] as const;
 
-interface CopyDraft {
-  id: string;
-  title: string | null;
-  content: string;
-  created_at: string;
-  project_id: string;
+type WorkflowStep = typeof WORKFLOW_STEPS[number]['id'];
+
+function getStepStatus(
+  step: WorkflowStep,
+  plan: any,
+  hasCampaignPack: boolean,
+  hasAssetBriefs: boolean,
+  hasLinkedAssets: boolean,
+): 'not_started' | 'in_progress' | 'ready' | 'done' {
+  const decision = plan?.decision || {};
+  const hasStrategy = decision.run_offer || decision.run_event_promo || decision.run_menu_highlight ||
+    decision.offer_terms || decision.target_audience || decision.campaign_angle;
+
+  switch (step) {
+    case 'strategy':
+      return hasStrategy ? 'done' : 'not_started';
+    case 'campaign_pack':
+      return hasCampaignPack ? 'done' : hasStrategy ? 'ready' : 'not_started';
+    case 'production':
+      return hasLinkedAssets ? 'done' : hasAssetBriefs ? 'ready' : 'not_started';
+    case 'publish':
+      return plan?.status === 'scheduled' || plan?.status === 'done' ? 'done' : 'not_started';
+    case 'revenue':
+      return 'not_started';
+    default:
+      return 'not_started';
+  }
 }
 
-/* ══════════════════════════════════════════════════════════
-   NEXT BEST ACTION
-   ══════════════════════════════════════════════════════════ */
-function getNextBestAction(plan: any, activeSection: string, hasCampaignPack: boolean, hasAssets: boolean): { label: string; description: string; action: string; icon: any } | null {
+function getNextBestAction(
+  activeStep: WorkflowStep,
+  plan: any,
+  hasCampaignPack: boolean,
+  hasAssetBriefs: boolean,
+  hasLinkedAssets: boolean,
+): { label: string; description: string; target: WorkflowStep } | null {
   const decision = plan?.decision || {};
-  const hasStrategy = decision.run_offer || decision.run_event_promo || decision.run_menu_highlight || decision.offer_terms;
+  const hasStrategy = decision.run_offer || decision.run_event_promo || decision.offer_terms || decision.campaign_angle;
 
-  if (!hasStrategy && activeSection !== 'strategy') {
-    return { label: 'Complete Strategy', description: 'Define your campaign objectives and offer terms first.', action: 'strategy', icon: Lightbulb };
-  }
-  if (!hasCampaignPack && activeSection !== 'campaign_pack') {
-    return { label: 'Generate Campaign Pack', description: 'Auto-generate copy and creative direction for all channels.', action: 'campaign_pack', icon: Package };
-  }
-  if (!hasAssets && activeSection !== 'production') {
-    return { label: 'Create Assets', description: 'Produce hero images and reels for your campaign.', action: 'production', icon: Image };
-  }
-  if (plan?.status !== 'scheduled' && plan?.status !== 'done' && activeSection !== 'publish') {
-    return { label: 'Schedule & Publish', description: 'Set publishing dates and push to channels.', action: 'publish', icon: Calendar };
-  }
+  if (!hasStrategy && activeStep !== 'strategy')
+    return { label: 'Complete Strategy', description: 'Define your campaign objectives and offer terms.', target: 'strategy' };
+  if (!hasCampaignPack && activeStep !== 'campaign_pack')
+    return { label: 'Generate Campaign Pack', description: 'Auto-generate copy and creative direction for all channels.', target: 'campaign_pack' };
+  if (!hasLinkedAssets && hasAssetBriefs && activeStep !== 'production')
+    return { label: 'Create Assets', description: 'Produce hero images and reels for your campaign.', target: 'production' };
+  if (plan?.status !== 'scheduled' && plan?.status !== 'done' && hasCampaignPack && activeStep !== 'publish')
+    return { label: 'Schedule & Publish', description: 'Set publishing dates and push to channels.', target: 'publish' };
   return null;
 }
 
 /* ══════════════════════════════════════════════════════════
-   PLAN DETAIL PAGE
+   MAIN PAGE — Workflow Shell
    ══════════════════════════════════════════════════════════ */
 export default function EventPlanDetailPage() {
   const { planId } = useParams<{ planId: string }>();
   const navigate = useNavigate();
-  const { currentVenue, isDemoMode } = useVenue();
+  const { currentVenue } = useVenue();
   const { user } = useAuth();
   const { toast } = useToast();
   const brain = usePulseBrain();
-  const { plan, tasks, links, loading, fetchAll, updateDecision, toggleTask, addTask, deleteTask, updateStatus, updateTitle } = useEventPlanDetail(planId);
 
-  const [activeSection, setActiveSection] = useState('strategy');
+  const {
+    plan, tasks, links, loading,
+    fetchAll, updateDecision, toggleTask, addTask, deleteTask, updateStatus, updateTitle,
+  } = useEventPlanDetail(planId);
+
+  const workspace = usePlanWorkspace(planId);
+
+  const [activeStep, setActiveStep] = useState<WorkflowStep>('strategy');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
-  const [hasCampaignPack, setHasCampaignPack] = useState(false);
 
   useEffect(() => {
     if (plan) setTitleDraft(plan.title);
   }, [plan?.title]);
 
-  // Check if campaign pack exists
+  // Auto-advance to correct step on load
   useEffect(() => {
-    if (!planId) return;
-    const check = async () => {
-      const { data } = await supabase
-        .from('event_plan_links')
-        .select('id')
-        .eq('plan_id', planId)
-        .eq('kind', 'campaign_pack')
-        .limit(1);
-      setHasCampaignPack((data?.length || 0) > 0);
-    };
-    check();
-  }, [planId]);
+    if (workspace.loading || loading) return;
+    if (workspace.hasCampaignPack && activeStep === 'strategy') {
+      // Already has pack — show it
+    }
+  }, [workspace.loading, loading]);
 
-  if (loading) {
+  if (loading || workspace.loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -123,13 +145,12 @@ export default function EventPlanDetailPage() {
     setEditingTitle(false);
   };
 
-  const hasAssets = links.filter(l => l.content_item_id).length > 0;
-  const nextAction = getNextBestAction(plan, activeSection, hasCampaignPack, hasAssets);
+  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-4">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-center gap-3 min-w-0">
           <Link to="/content/planner">
             <Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button>
@@ -159,98 +180,168 @@ export default function EventPlanDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <Select value={plan.status} onValueChange={v => updateStatus(v)}>
-            <SelectTrigger className="w-[150px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PLAN_STATUSES.map(s => (
-                <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={plan.status} onValueChange={v => updateStatus(v)}>
+          <SelectTrigger className="w-[150px] h-9 shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PLAN_STATUSES.map(s => (
+              <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Next Best Action */}
-      {nextAction && (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          <button
-            onClick={() => setActiveSection(nextAction.action)}
-            className="w-full flex items-center gap-4 p-4 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 transition-colors text-left group"
-          >
-            <div className="p-2 rounded-lg bg-accent/15 shrink-0">
-              <nextAction.icon className="w-4 h-4 text-accent" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground">Next step: {nextAction.label}</p>
-              <p className="text-xs text-muted-foreground">{nextAction.description}</p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-          </button>
-        </motion.div>
-      )}
+      {/* Workflow Shell */}
+      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-6">
+        {/* LEFT — Progress Steps */}
+        <div className="space-y-1">
+          {WORKFLOW_STEPS.map((step) => {
+            const status = getStepStatus(step.id, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets);
+            const isActive = activeStep === step.id;
+            return (
+              <button
+                key={step.id}
+                onClick={() => setActiveStep(step.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors text-sm ${
+                  isActive
+                    ? 'bg-accent/10 text-foreground font-medium border border-accent/20'
+                    : 'hover:bg-muted/30 text-muted-foreground'
+                }`}
+              >
+                <div className={`p-1 rounded ${
+                  status === 'done' ? 'text-success' :
+                  status === 'ready' ? 'text-accent' :
+                  'text-muted-foreground/50'
+                }`}>
+                  {status === 'done' ? (
+                    <CheckCircle2 className="w-4 h-4" />
+                  ) : (
+                    <step.icon className="w-4 h-4" />
+                  )}
+                </div>
+                <span>{step.label}</span>
+                {status === 'ready' && (
+                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-accent" />
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Section Tabs */}
-      <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-6">
-        <TabsList className="bg-muted/30 border border-border/50 flex-wrap h-auto gap-0.5 p-1">
-          <TabsTrigger value="strategy" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <Lightbulb className="w-3.5 h-3.5" /> Strategy
-          </TabsTrigger>
-          <TabsTrigger value="campaign_pack" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <Package className="w-3.5 h-3.5" /> Campaign Pack
-          </TabsTrigger>
-          <TabsTrigger value="production" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <Image className="w-3.5 h-3.5" /> Production
-          </TabsTrigger>
-          <TabsTrigger value="publish" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <Calendar className="w-3.5 h-3.5" /> Publish
-          </TabsTrigger>
-          <TabsTrigger value="revenue" className="gap-1.5 text-xs data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <TrendingUp className="w-3.5 h-3.5" /> Revenue
-          </TabsTrigger>
-        </TabsList>
+        {/* MAIN — Active Step Content */}
+        <div className="min-w-0">
+          {/* Next Best Action */}
+          {nextAction && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6"
+            >
+              <button
+                onClick={() => setActiveStep(nextAction.target)}
+                className="w-full flex items-center gap-4 p-4 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 transition-colors text-left group"
+              >
+                <div className="p-2 rounded-lg bg-accent/15 shrink-0">
+                  <ArrowRight className="w-4 h-4 text-accent" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">Next: {nextAction.label}</p>
+                  <p className="text-xs text-muted-foreground">{nextAction.description}</p>
+                </div>
+              </button>
+            </motion.div>
+          )}
 
-        <TabsContent value="strategy">
-          <StrategySection
-            plan={plan}
-            tasks={tasks}
-            brain={brain}
-            updateDecision={updateDecision}
-            toggleTask={toggleTask}
-            addTask={addTask}
-            deleteTask={deleteTask}
-            fetchAll={fetchAll}
-          />
-        </TabsContent>
+          {activeStep === 'strategy' && (
+            <StrategySection
+              plan={plan}
+              tasks={tasks}
+              brain={brain}
+              updateDecision={updateDecision}
+              toggleTask={toggleTask}
+              addTask={addTask}
+              deleteTask={deleteTask}
+              fetchAll={fetchAll}
+            />
+          )}
+          {activeStep === 'campaign_pack' && (
+            <CampaignPackSection
+              planId={planId!}
+              plan={plan}
+              brain={brain}
+              workspace={workspace}
+            />
+          )}
+          {activeStep === 'production' && (
+            <ProductionSection
+              planId={planId!}
+              plan={plan}
+              workspace={workspace}
+            />
+          )}
+          {activeStep === 'publish' && (
+            <PublishSection plan={plan} />
+          )}
+          {activeStep === 'revenue' && (
+            <RevenueSection plan={plan} brain={brain} />
+          )}
+        </div>
 
-        <TabsContent value="campaign_pack">
-          <CampaignPackSection
-            planId={planId!}
-            plan={plan}
-            brain={brain}
-            onPackGenerated={() => setHasCampaignPack(true)}
-          />
-        </TabsContent>
-
-        <TabsContent value="production">
-          <ProductionSection links={links} plan={plan} />
-        </TabsContent>
-
-        <TabsContent value="publish">
-          <PublishSection plan={plan} />
-        </TabsContent>
-
-        <TabsContent value="revenue">
-          <RevenueSection plan={plan} brain={brain} />
-        </TabsContent>
-      </Tabs>
+        {/* RIGHT — Lily Assistant */}
+        <div className="space-y-4">
+          <LilyPanel plan={plan} brain={brain} activeStep={activeStep} workspace={workspace} />
+        </div>
+      </div>
     </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   LILY ASSISTANT PANEL
+   ═══════════════════════════════════════════════════════ */
+function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: any; activeStep: WorkflowStep; workspace: any }) {
+  const insights: string[] = [];
+
+  if (activeStep === 'strategy') {
+    if (!plan.decision?.offer_terms)
+      insights.push('Campaigns with specific offers typically perform 40% better in hospitality.');
+    if (!plan.decision?.target_audience)
+      insights.push('Define your target audience to get more relevant copy and creative direction.');
+    if (brain.recentPlans.length > 0)
+      insights.push(`You have ${brain.recentPlans.length} recent plans. Build on what\'s working.`);
+  } else if (activeStep === 'campaign_pack') {
+    if (!workspace.hasCampaignPack)
+      insights.push('Generate your Campaign Pack to get copy for Instagram, Stories, Reels, Email, and SMS in one click.');
+    else
+      insights.push(`${workspace.outputs.length} copy outputs ready. Review, edit and approve them for your campaign.`);
+  } else if (activeStep === 'production') {
+    insights.push('Hero images with food styling and natural light perform best on Instagram.');
+    if (workspace.hasAssetBriefs)
+      insights.push(`${workspace.briefs.length} creative briefs ready. Click "Create in Studio" to start producing.`);
+  } else if (activeStep === 'publish') {
+    insights.push('Post Instagram Reels 5-7 days before the event for maximum reach.');
+    insights.push('Stories should run daily during the campaign window.');
+  } else if (activeStep === 'revenue') {
+    if (brain.revenueInsights.totalSignals > 0)
+      insights.push(`${brain.revenueInsights.totalSignals} revenue signals tracked across your campaigns.`);
+    else
+      insights.push('Revenue tracking will show campaign ROI once your campaigns go live.');
+  }
+
+  return (
+    <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-accent" />
+        <h3 className="text-sm font-medium">Lily</h3>
+      </div>
+      {insights.map((insight, i) => (
+        <p key={i} className="text-xs text-muted-foreground leading-relaxed">{insight}</p>
+      ))}
+      {insights.length === 0 && (
+        <p className="text-xs text-muted-foreground">No suggestions right now. Keep building your campaign!</p>
+      )}
+    </div>
   );
 }
 
@@ -260,9 +351,7 @@ export default function EventPlanDetailPage() {
 function StrategySection({
   plan, tasks, brain, updateDecision, toggleTask, addTask, deleteTask, fetchAll,
 }: {
-  plan: any;
-  tasks: any[];
-  brain: any;
+  plan: any; tasks: any[]; brain: any;
   updateDecision: (d: any) => Promise<void>;
   toggleTask: (id: string, done: boolean) => Promise<void>;
   addTask: (title: string) => Promise<void>;
@@ -273,26 +362,15 @@ function StrategySection({
   const { toast } = useToast();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [generating, setGenerating] = useState(false);
-
   const decision = plan.decision || {};
 
-  // Autosave fields — debounced, no full refetch
-  const saveDecisionField = useCallback(async (key: string, value: string) => {
+  const saveField = useCallback(async (key: string, value: string) => {
     await updateDecision({ ...plan.decision, [key]: value });
   }, [plan.decision, updateDecision]);
 
-  const offerTerms = useAutosaveField(
-    decision.offer_terms || '',
-    (v) => saveDecisionField('offer_terms', v),
-  );
-  const audience = useAutosaveField(
-    decision.target_audience || '',
-    (v) => saveDecisionField('target_audience', v),
-  );
-  const angle = useAutosaveField(
-    decision.campaign_angle || '',
-    (v) => saveDecisionField('campaign_angle', v),
-  );
+  const offerTerms = useAutosaveField(decision.offer_terms || '', (v) => saveField('offer_terms', v));
+  const audience = useAutosaveField(decision.target_audience || '', (v) => saveField('target_audience', v));
+  const angle = useAutosaveField(decision.campaign_angle || '', (v) => saveField('campaign_angle', v));
 
   const handleToggle = (key: string, val: boolean) => {
     updateDecision({ ...decision, [key]: val });
@@ -343,146 +421,139 @@ function StrategySection({
   const rec = plan.ai_recommendation as any;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-6">
-        {/* AI Recommendation */}
-        {rec && (
-          <div className="card-elevated p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-accent" />
-              <h3 className="font-medium">Lily's Recommendation</h3>
-              <Badge className={rec.action === 'plan' ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'}>
-                {rec.action === 'plan' ? 'Recommended' : 'Skip Suggested'}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">{rec.why}</p>
-            {rec.angles?.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {rec.angles.map((a: string, i: number) => (
-                  <Badge key={i} variant="outline">{a}</Badge>
-                ))}
-              </div>
-            )}
+    <div className="space-y-6">
+      {/* AI Recommendation */}
+      {rec && (
+        <div className="card-elevated p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-accent" />
+            <h3 className="font-medium">Lily's Recommendation</h3>
+            <Badge className={rec.action === 'plan' ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'}>
+              {rec.action === 'plan' ? 'Recommended' : 'Skip Suggested'}
+            </Badge>
           </div>
-        )}
-
-        {/* Generate Strategy */}
-        <div className="card-elevated p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">AI Strategy</h3>
-              <p className="text-sm text-muted-foreground">Lily generates tasks and recommendations using your venue context</p>
+          <p className="text-sm text-muted-foreground">{rec.why}</p>
+          {rec.angles?.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {rec.angles.map((a: string, i: number) => (
+                <Badge key={i} variant="outline">{a}</Badge>
+              ))}
             </div>
-            <Button onClick={handleGenerate} disabled={generating} size="sm">
-              <Sparkles className={`w-4 h-4 mr-2 ${generating ? 'animate-pulse' : ''}`} />
-              {generating ? 'Generating...' : 'Generate Strategy'}
-            </Button>
-          </div>
+          )}
         </div>
+      )}
 
-        {/* Checklist */}
-        <div className="card-elevated p-5 space-y-4">
-          <h3 className="font-medium">Checklist</h3>
-          <div className="space-y-2">
-            {tasks.map(task => (
-              <div key={task.id} className="flex items-center gap-3 group">
-                <button onClick={() => toggleTask(task.id, !task.is_done)} className="shrink-0">
-                  {task.is_done ? <CheckCircle2 className="w-5 h-5 text-success" /> : <Circle className="w-5 h-5 text-muted-foreground" />}
-                </button>
-                <span className={`flex-1 text-sm ${task.is_done ? 'line-through text-muted-foreground' : ''}`}>
-                  {task.title}
-                </span>
-                <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7" onClick={() => deleteTask(task.id)}>
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
+      {/* Campaign Brief */}
+      <div className="card-elevated p-5 space-y-4">
+        <h3 className="font-medium">Campaign Brief</h3>
+
+        {[
+          { key: 'run_offer', label: 'Run promotional offer?' },
+          { key: 'run_event_promo', label: 'Run event promotion?' },
+          { key: 'run_menu_highlight', label: 'Highlight menu item?' },
+          { key: 'run_brand_story', label: 'Run brand story?' },
+        ].map(({ key, label }) => (
+          <div key={key} className="flex items-center justify-between">
+            <Label className="text-sm">{label}</Label>
+            <Switch checked={!!decision[key]} onCheckedChange={v => handleToggle(key, v)} />
           </div>
-          <div className="flex gap-2">
+        ))}
+
+        <Separator />
+
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Target audience</Label>
+              <SaveIndicator status={audience.status} />
+            </div>
             <Input
-              placeholder="Add a task..."
-              value={newTaskTitle}
-              onChange={e => setNewTaskTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-              className="flex-1"
+              placeholder="e.g., Date night couples, families, foodies..."
+              value={audience.value}
+              onChange={e => audience.onChange(e.target.value)}
+              className="text-sm"
             />
-            <Button size="sm" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
-              <Plus className="w-3 h-3 mr-1" /> Add
-            </Button>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Campaign angle</Label>
+              <SaveIndicator status={angle.status} />
+            </div>
+            <Input
+              placeholder="e.g., Seasonal ingredients, indulgence, celebration..."
+              value={angle.value}
+              onChange={e => angle.onChange(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Offer terms</Label>
+              <SaveIndicator status={offerTerms.status} />
+            </div>
+            <Textarea
+              placeholder="e.g., 2-for-1 cocktails 5-7pm..."
+              value={offerTerms.value}
+              onChange={e => offerTerms.onChange(e.target.value)}
+              rows={3}
+              className="text-sm"
+            />
           </div>
         </div>
       </div>
 
-      {/* Sidebar */}
-      <div className="space-y-6">
-        <div className="card-elevated p-5 space-y-4">
-          <h3 className="font-medium">Campaign Brief</h3>
+      {/* Generate AI Strategy */}
+      <div className="card-elevated p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium">AI Strategy</h3>
+            <p className="text-sm text-muted-foreground">Generate tasks and recommendations using your venue context</p>
+          </div>
+          <Button onClick={handleGenerate} disabled={generating} size="sm">
+            <Sparkles className={`w-4 h-4 mr-2 ${generating ? 'animate-pulse' : ''}`} />
+            {generating ? 'Generating...' : 'Generate Strategy'}
+          </Button>
+        </div>
+      </div>
 
-          {/* Objective toggles */}
-          {[
-            { key: 'run_offer', label: 'Run promotional offer?' },
-            { key: 'run_event_promo', label: 'Run event promotion?' },
-            { key: 'run_menu_highlight', label: 'Highlight menu item?' },
-            { key: 'run_brand_story', label: 'Run brand story?' },
-          ].map(({ key, label }) => (
-            <div key={key} className="flex items-center justify-between">
-              <Label className="text-sm">{label}</Label>
-              <Switch checked={!!decision[key]} onCheckedChange={v => handleToggle(key, v)} />
+      {/* Checklist */}
+      <div className="card-elevated p-5 space-y-4">
+        <h3 className="font-medium">Checklist</h3>
+        <div className="space-y-2">
+          {tasks.map(task => (
+            <div key={task.id} className="flex items-center gap-3 group">
+              <button onClick={() => toggleTask(task.id, !task.is_done)} className="shrink-0">
+                {task.is_done ? <CheckCircle2 className="w-5 h-5 text-success" /> : <Circle className="w-5 h-5 text-muted-foreground" />}
+              </button>
+              <span className={`flex-1 text-sm ${task.is_done ? 'line-through text-muted-foreground' : ''}`}>
+                {task.title}
+              </span>
+              <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7" onClick={() => deleteTask(task.id)}>
+                <Trash2 className="w-3 h-3" />
+              </Button>
             </div>
           ))}
-
-          <Separator />
-
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Target audience</Label>
-                <SaveIndicator status={audience.status} />
-              </div>
-              <Input
-                placeholder="e.g., Date night couples, families, foodies..."
-                value={audience.value}
-                onChange={e => audience.onChange(e.target.value)}
-                className="text-sm"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Campaign angle</Label>
-                <SaveIndicator status={angle.status} />
-              </div>
-              <Input
-                placeholder="e.g., Seasonal ingredients, indulgence, celebration..."
-                value={angle.value}
-                onChange={e => angle.onChange(e.target.value)}
-                className="text-sm"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Offer terms</Label>
-                <SaveIndicator status={offerTerms.status} />
-              </div>
-              <Textarea
-                placeholder="e.g., 2-for-1 cocktails 5-7pm..."
-                value={offerTerms.value}
-                onChange={e => offerTerms.onChange(e.target.value)}
-                rows={3}
-                className="text-sm"
-              />
-            </div>
-          </div>
         </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Add a task..."
+            value={newTaskTitle}
+            onChange={e => setNewTaskTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddTask()}
+            className="flex-1"
+          />
+          <Button size="sm" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
+            <Plus className="w-3 h-3 mr-1" /> Add
+          </Button>
+        </div>
+      </div>
 
-        <div className="p-4 rounded-lg border border-warning/20 bg-warning/5">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-            <p className="text-xs text-muted-foreground">
-              No fake discounts or invented claims. AI will use only the information you provide.
-            </p>
-          </div>
+      <div className="p-4 rounded-lg border border-warning/20 bg-warning/5">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            No fake discounts or invented claims. AI will use only the information you provide.
+          </p>
         </div>
       </div>
     </div>
@@ -492,48 +563,14 @@ function StrategySection({
 /* ═══════════════════════════════════════════════════════
    CAMPAIGN PACK SECTION
    ═══════════════════════════════════════════════════════ */
-function CampaignPackSection({ planId, plan, brain, onPackGenerated }: {
-  planId: string; plan: any; brain: any; onPackGenerated: () => void;
+function CampaignPackSection({ planId, plan, brain, workspace }: {
+  planId: string; plan: any; brain: any; workspace: ReturnType<typeof usePlanWorkspace>;
 }) {
-  const { currentVenue, isDemoMode } = useVenue();
+  const { currentVenue } = useVenue();
   const { user } = useAuth();
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
-  const [drafts, setDrafts] = useState<CopyDraft[]>([]);
-  const [loadingDrafts, setLoadingDrafts] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
-
-  // Single copy generation
-  const [copyType, setCopyType] = useState('instagram_caption');
-  const [prompt, setPrompt] = useState('');
-  const [singleGenerating, setSingleGenerating] = useState(false);
-  const [generatedCopy, setGeneratedCopy] = useState('');
-
-  useEffect(() => {
-    const fetchDrafts = async () => {
-      setLoadingDrafts(true);
-      const { data: linkData } = await supabase
-        .from('event_plan_links')
-        .select('copy_project_id')
-        .eq('plan_id', planId)
-        .not('copy_project_id', 'is', null);
-
-      const projectIds = (linkData || []).map(l => l.copy_project_id).filter(Boolean) as string[];
-      if (projectIds.length > 0) {
-        const { data } = await supabase
-          .from('copy_outputs')
-          .select('id, title, content, created_at, project_id')
-          .in('project_id', projectIds)
-          .order('created_at', { ascending: false })
-          .limit(30);
-        setDrafts((data as CopyDraft[]) || []);
-      } else {
-        setDrafts([]);
-      }
-      setLoadingDrafts(false);
-    };
-    fetchDrafts();
-  }, [planId]);
 
   const handleGeneratePack = async () => {
     if (!currentVenue || !user) return;
@@ -545,6 +582,7 @@ function CampaignPackSection({ planId, plan, brain, onPackGenerated }: {
           module: 'campaign',
           goal: 'campaign_pack',
           inputs: {
+            plan_id: planId,
             plan_title: plan.title,
             plan_strategy: plan.decision || {},
             brain_context: buildStrategyContext(brain, plan),
@@ -555,73 +593,9 @@ function CampaignPackSection({ planId, plan, brain, onPackGenerated }: {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      // Save as pack
-      if (!isDemoMode) {
-        const { data: project } = await supabase
-          .from('copy_projects')
-          .insert({
-            venue_id: currentVenue.id,
-            created_by: user.id,
-            module: 'campaign',
-            goal: 'campaign_pack',
-            inputs: { plan_id: planId, plan_title: plan.title } as any,
-          })
-          .select()
-          .single();
-
-        if (project) {
-          const kit = data.kit || data;
-          const assets = kit?.assets || {};
-
-          // Save individual outputs
-          const outputs: { title: string; content: string }[] = [];
-          if (assets.social_captions?.length) {
-            assets.social_captions.forEach((c: string, i: number) => {
-              outputs.push({ title: `Instagram Caption ${i + 1}`, content: c });
-            });
-          }
-          if (assets.short_caption) outputs.push({ title: 'Short Caption', content: assets.short_caption });
-          if (assets.story_text) outputs.push({ title: 'Story Text', content: assets.story_text });
-          if (assets.reel_hook) outputs.push({ title: 'Reel Hook', content: assets.reel_hook });
-          if (assets.promo_headline) outputs.push({ title: 'Promo Headline', content: assets.promo_headline });
-          if (assets.email_subject) outputs.push({ title: 'Email Subject', content: assets.email_subject });
-          if (assets.call_to_action) outputs.push({ title: 'Call to Action', content: assets.call_to_action });
-
-          // Fallback: store full kit
-          if (outputs.length === 0) {
-            outputs.push({ title: 'Campaign Pack', content: JSON.stringify(kit, null, 2) });
-          }
-
-          for (let i = 0; i < outputs.length; i++) {
-            await supabase.from('copy_outputs').insert({
-              project_id: project.id,
-              version: i + 1,
-              title: outputs[i].title,
-              content: outputs[i].content,
-            });
-          }
-
-          await supabase.from('event_plan_links').insert({
-            plan_id: planId,
-            copy_project_id: project.id,
-            kind: 'campaign_pack',
-          });
-
-          setDrafts(prev => [
-            ...outputs.map((o, i) => ({
-              id: crypto.randomUUID(),
-              title: o.title,
-              content: o.content,
-              created_at: new Date().toISOString(),
-              project_id: project.id,
-            })),
-            ...prev,
-          ]);
-          onPackGenerated();
-        }
-      }
-
-      toast({ title: 'Campaign Pack generated!', description: 'Copy for all channels has been created.' });
+      toast({ title: 'Campaign Pack generated!', description: 'Copy and creative briefs saved to your plan.' });
+      // Refresh workspace to load persisted outputs + briefs
+      await workspace.fetchWorkspace();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message });
     } finally {
@@ -629,83 +603,22 @@ function CampaignPackSection({ planId, plan, brain, onPackGenerated }: {
     }
   };
 
-  const handleGenerateSingle = async () => {
-    if (!currentVenue || !user || !prompt.trim()) return;
-    setSingleGenerating(true);
-    setGeneratedCopy('');
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-copy', {
-        body: {
-          venue_id: currentVenue.id,
-          module: 'quick_copy',
-          goal: copyType,
-          inputs: {
-            copy_type: COPY_TYPES.find(t => t.id === copyType)?.label,
-            key_message: prompt,
-            plan_title: plan.title,
-            brain_context: buildStrategyContext(brain, plan),
-            format: 'single',
-          },
-        },
-      });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      const output = data.kit?.assets?.social_captions?.[0] || data.kit?.assets?.email_body || data.content || JSON.stringify(data.kit?.assets || data, null, 2);
-      const outputStr = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
-      setGeneratedCopy(outputStr);
-
-      if (!isDemoMode) {
-        const { data: project } = await supabase
-          .from('copy_projects')
-          .insert({
-            venue_id: currentVenue.id,
-            created_by: user.id,
-            module: 'quick_copy',
-            goal: copyType,
-            inputs: { key_message: prompt, copy_type: copyType, plan_id: planId } as any,
-          })
-          .select()
-          .single();
-
-        if (project) {
-          await supabase.from('copy_outputs').insert({
-            project_id: project.id,
-            version: 1,
-            title: COPY_TYPES.find(t => t.id === copyType)?.label || copyType,
-            content: outputStr,
-          });
-          await supabase.from('event_plan_links').insert({
-            plan_id: planId,
-            copy_project_id: project.id,
-            kind: 'copy',
-          });
-          setDrafts(prev => [{
-            id: crypto.randomUUID(),
-            title: COPY_TYPES.find(t => t.id === copyType)?.label || copyType,
-            content: outputStr,
-            created_at: new Date().toISOString(),
-            project_id: project.id,
-          }, ...prev]);
-        }
-      }
-      toast({ title: 'Copy generated' });
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Generation failed', description: err.message });
-    } finally {
-      setSingleGenerating(false);
-    }
-  };
-
-  const handleCopyText = (text: string, id: string) => {
+  const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
   };
 
+  const coreCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.core_copy.includes(o.output_type));
+  const emailCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.email.includes(o.output_type));
+  const otherCopy = workspace.outputs.filter(o =>
+    !OUTPUT_SECTIONS.core_copy.includes(o.output_type) &&
+    !OUTPUT_SECTIONS.email.includes(o.output_type)
+  );
+
   return (
     <div className="space-y-8">
-      {/* Campaign Pack Generator */}
+      {/* Generator */}
       <div className="rounded-xl border border-accent/20 bg-gradient-to-br from-card to-card/60 p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-accent/15">
@@ -714,7 +627,7 @@ function CampaignPackSection({ planId, plan, brain, onPackGenerated }: {
           <div>
             <h3 className="text-sm font-semibold text-foreground">Campaign Pack</h3>
             <p className="text-xs text-muted-foreground">
-              Generate copy for all channels in one click — captions, hooks, headlines, and CTAs.
+              Generate copy for all channels — captions, hooks, headlines, CTAs, email, and SMS.
             </p>
           </div>
         </div>
@@ -723,105 +636,76 @@ function CampaignPackSection({ planId, plan, brain, onPackGenerated }: {
         {(plan.decision?.offer_terms || plan.decision?.campaign_angle) && (
           <div className="rounded-lg bg-muted/20 border border-border/40 p-3 space-y-1">
             <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Strategy Context</p>
-            {plan.decision?.campaign_angle && (
-              <p className="text-xs text-foreground">Angle: {plan.decision.campaign_angle}</p>
-            )}
-            {plan.decision?.offer_terms && (
-              <p className="text-xs text-foreground">Offer: {plan.decision.offer_terms}</p>
-            )}
-            {plan.decision?.target_audience && (
-              <p className="text-xs text-foreground">Audience: {plan.decision.target_audience}</p>
-            )}
+            {plan.decision?.campaign_angle && <p className="text-xs text-foreground">Angle: {plan.decision.campaign_angle}</p>}
+            {plan.decision?.offer_terms && <p className="text-xs text-foreground">Offer: {plan.decision.offer_terms}</p>}
+            {plan.decision?.target_audience && <p className="text-xs text-foreground">Audience: {plan.decision.target_audience}</p>}
           </div>
         )}
 
         <Button onClick={handleGeneratePack} disabled={generating} className="gap-2">
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {generating ? 'Generating Campaign Pack...' : 'Generate Campaign Pack'}
+          {generating ? 'Generating Campaign Pack...' : workspace.hasCampaignPack ? 'Regenerate Campaign Pack' : 'Generate Campaign Pack'}
         </Button>
       </div>
 
-      {/* Quick Single Copy */}
-      <div className="rounded-xl border border-border/50 bg-card/60 p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium text-foreground">Quick Copy</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Type</Label>
-            <Select value={copyType} onValueChange={setCopyType}>
-              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {COPY_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">What are you promoting?</Label>
-          <Textarea
-            placeholder="e.g., New spring tasting menu launching next Friday..."
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-            rows={2}
-            className="text-sm"
-          />
-        </div>
-        <Button onClick={handleGenerateSingle} disabled={singleGenerating || !prompt.trim()} size="sm" className="gap-2">
-          {singleGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {singleGenerating ? 'Generating...' : 'Generate'}
-        </Button>
-        {generatedCopy && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border border-accent/20 bg-accent/5 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <Badge variant="outline" className="text-[10px]">{COPY_TYPES.find(t => t.id === copyType)?.label}</Badge>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={() => handleCopyText(generatedCopy, 'single')}>
-                {copied === 'single' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                {copied === 'single' ? 'Copied' : 'Copy'}
-              </Button>
-            </div>
-            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{generatedCopy}</p>
-          </motion.div>
-        )}
-      </div>
+      {/* Core Campaign Copy */}
+      {coreCopy.length > 0 && (
+        <OutputSection title="Core Campaign Copy" outputs={coreCopy} copied={copied} onCopy={handleCopy} />
+      )}
 
-      {/* Drafts */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <FileText className="h-4 w-4" />
-          Campaign Drafts ({drafts.length})
+      {/* Email Messaging */}
+      {emailCopy.length > 0 && (
+        <OutputSection title="Email Messaging" outputs={emailCopy} copied={copied} onCopy={handleCopy} />
+      )}
+
+      {/* Other outputs */}
+      {otherCopy.length > 0 && (
+        <OutputSection title="Additional Outputs" outputs={otherCopy} copied={copied} onCopy={handleCopy} />
+      )}
+
+      {!workspace.hasCampaignPack && (
+        <div className="text-center py-8 text-muted-foreground">
+          <Package className="w-8 h-8 mx-auto opacity-40 mb-2" />
+          <p className="text-sm">No campaign pack generated yet.</p>
+          <p className="text-xs mt-1">Complete your Strategy, then generate your Campaign Pack above.</p>
         </div>
-        {loadingDrafts ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-            <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            Loading...
-          </div>
-        ) : drafts.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">No drafts yet. Generate a Campaign Pack above.</p>
-        ) : (
-          <div className="grid gap-2">
-            {drafts.map(draft => (
-              <div key={draft.id} className="p-3 rounded-lg bg-muted/20 border border-border/50 hover:border-border transition-colors group">
-                <div className="flex items-center justify-between mb-1">
-                  <Badge variant="outline" className="text-[10px]">{draft.title || 'Draft'}</Badge>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground">{format(new Date(draft.created_at), 'MMM d')}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleCopyText(draft.content, draft.id)}
-                    >
-                      {copied === draft.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    </Button>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground line-clamp-2">{draft.content?.substring(0, 150)}</p>
+      )}
+    </div>
+  );
+}
+
+/* Output Section Component */
+function OutputSection({ title, outputs, copied, onCopy }: {
+  title: string;
+  outputs: Array<{ id: string; output_type: string; title: string; content: string; status: string }>;
+  copied: string | null;
+  onCopy: (text: string, id: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-medium text-foreground">{title}</h3>
+      <div className="grid gap-2">
+        {outputs.map(output => (
+          <div key={output.id} className="p-4 rounded-lg bg-muted/20 border border-border/50 hover:border-border transition-colors group">
+            <div className="flex items-center justify-between mb-2">
+              <Badge variant="outline" className="text-[10px]">
+                {OUTPUT_TYPE_LABELS[output.output_type] || output.title}
+              </Badge>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="secondary" className="text-[10px]">{output.status}</Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => onCopy(output.content, output.id)}
+                >
+                  {copied === output.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                </Button>
               </div>
-            ))}
+            </div>
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{output.content}</p>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
@@ -830,73 +714,69 @@ function CampaignPackSection({ planId, plan, brain, onPackGenerated }: {
 /* ═══════════════════════════════════════════════════════
    PRODUCTION SECTION
    ═══════════════════════════════════════════════════════ */
-function ProductionSection({ links, plan }: { links: any[]; plan: any }) {
+function ProductionSection({ planId, plan, workspace }: {
+  planId: string; plan: any; workspace: ReturnType<typeof usePlanWorkspace>;
+}) {
   const navigate = useNavigate();
 
-  const ASSET_BRIEFS = [
-    { type: 'Hero Image', channel: 'Instagram Feed', icon: Image, status: 'Not started', description: 'Primary campaign visual for feed posts' },
-    { type: 'Reel', channel: 'Instagram Reels / TikTok', icon: Video, status: 'Not started', description: 'Short-form video content (15-30s)' },
-    { type: 'Story Visual', channel: 'Instagram Stories', icon: Play, status: 'Not started', description: 'Vertical story format visual' },
-  ];
-
-  const contentLinks = links.filter(l => l.content_item_id);
+  const getRouteForBrief = (brief: { asset_type: string }) => {
+    if (brief.asset_type === 'reel') return '/studio/reel-creator';
+    return '/studio/pro-photo';
+  };
 
   return (
     <div className="space-y-6">
-      {/* Asset Brief Cards */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-foreground">Recommended Assets</h3>
-        <p className="text-xs text-muted-foreground">Create the assets needed for this campaign. Briefs are based on your strategy.</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {ASSET_BRIEFS.map((brief) => (
-            <div key={brief.type} className="card-elevated p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <brief.icon className="w-4 h-4 text-accent" />
-                  <span className="text-sm font-medium">{brief.type}</span>
+      {workspace.briefs.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-foreground">Creative Briefs</h3>
+            <Badge variant="secondary" className="text-xs">{workspace.briefs.length} briefs</Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {workspace.briefs.map(brief => {
+              const linkedAsset = workspace.assets.find(a => a.asset_brief_id === brief.id);
+              return (
+                <div key={brief.id} className="card-elevated p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {brief.asset_type === 'reel' ? (
+                        <Video className="w-4 h-4 text-accent" />
+                      ) : (
+                        <Image className="w-4 h-4 text-accent" />
+                      )}
+                      <span className="text-sm font-medium">{brief.title}</span>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">
+                      {BRIEF_STATUS_LABELS[brief.status] || brief.status}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-3">{brief.brief}</p>
+                  {brief.intended_channel && (
+                    <p className="text-[10px] text-muted-foreground">Channel: {brief.intended_channel}</p>
+                  )}
+                  {linkedAsset ? (
+                    <Button size="sm" variant="outline" className="w-full text-xs gap-1.5"
+                      onClick={() => navigate(getRouteForBrief(brief))}
+                    >
+                      <CheckCircle2 className="w-3 h-3 text-success" /> View Asset
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="w-full text-xs gap-1.5"
+                      onClick={() => navigate(getRouteForBrief(brief))}
+                    >
+                      <Plus className="w-3 h-3" /> Create in Studio
+                    </Button>
+                  )}
                 </div>
-                <Badge variant="outline" className="text-[10px]">{brief.status}</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">{brief.description}</p>
-              <p className="text-[10px] text-muted-foreground">Channel: {brief.channel}</p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full text-xs gap-1.5"
-                onClick={() => navigate(brief.type === 'Reel' ? '/studio/reel-creator' : '/studio/pro-photo')}
-              >
-                <Plus className="w-3 h-3" /> Create in Studio
-              </Button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Linked Assets */}
-      {contentLinks.length > 0 && (
-        <div className="card-elevated p-5 space-y-4">
-          <h3 className="font-medium">Linked Assets</h3>
-          <div className="space-y-2">
-            {contentLinks.map(link => (
-              <div key={link.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{link.kind}</Badge>
-                  <span className="text-sm">Content Asset</span>
-                </div>
-                <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => navigate('/studio/pro-photo')}>
-                  Open <ExternalLink className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
-      )}
-
-      {contentLinks.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground">
+      ) : (
+        <div className="text-center py-12 text-muted-foreground">
           <Image className="w-8 h-8 mx-auto opacity-40 mb-2" />
-          <p className="text-sm">No assets linked yet. Create them above or attach existing assets from your library.</p>
+          <p className="text-sm">No creative briefs yet.</p>
+          <p className="text-xs mt-1">Generate a Campaign Pack first — asset briefs will be created automatically.</p>
         </div>
       )}
     </div>
@@ -908,7 +788,6 @@ function ProductionSection({ links, plan }: { links: any[]; plan: any }) {
    ═══════════════════════════════════════════════════════ */
 function PublishSection({ plan }: { plan: any }) {
   const navigate = useNavigate();
-
   const channels = [
     { name: 'Instagram Feed', icon: Image, suggested: 'Post 2-3 days before event' },
     { name: 'Instagram Stories', icon: Play, suggested: 'Daily during campaign window' },
@@ -919,7 +798,6 @@ function PublishSection({ plan }: { plan: any }) {
     <div className="space-y-6">
       <div className="card-elevated p-5 space-y-4">
         <h3 className="font-medium">Publishing Schedule</h3>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 rounded-lg bg-muted/20 border border-border/50">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Event Date</p>
@@ -930,7 +808,6 @@ function PublishSection({ plan }: { plan: any }) {
             <p className="text-sm font-medium">{STATUS_LABELS[plan.status] || plan.status}</p>
           </div>
         </div>
-
         {plan.deployed_at && (
           <div className="p-4 rounded-lg bg-success/5 border border-success/20">
             <p className="text-[10px] uppercase tracking-wider text-success font-semibold mb-1">Deployed</p>
@@ -939,7 +816,6 @@ function PublishSection({ plan }: { plan: any }) {
         )}
       </div>
 
-      {/* Channel Suggestions */}
       <div className="space-y-3">
         <h3 className="text-sm font-medium text-foreground">Suggested Channel Plan</h3>
         <div className="space-y-2">
@@ -1002,7 +878,6 @@ function RevenueSection({ plan, brain }: { plan: any; brain: any }) {
         )}
       </div>
 
-      {/* Lily Insight */}
       <div className="rounded-xl border border-accent/20 bg-accent/5 p-5 space-y-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
@@ -1011,7 +886,7 @@ function RevenueSection({ plan, brain }: { plan: any; brain: any }) {
         <p className="text-sm text-muted-foreground">
           {brain.recentPlans.length > 3
             ? `You've created ${brain.recentPlans.length} plans. Campaigns with clear offers and hero images tend to drive the strongest engagement for ${brain.venue?.name || 'your venue'}.`
-            : `Start building your campaign history. After a few campaigns, Lily will provide personalised performance insights and recommendations.`}
+            : `Start building your campaign history. After a few campaigns, Lily will provide personalised performance insights.`}
         </p>
       </div>
     </div>
