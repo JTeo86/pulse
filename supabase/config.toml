@@ -66,3 +66,6 @@ verify_jwt = false
 [functions.test-review-source]
 verify_jwt = false
 
+[functions.generate-weekly-revenue-brief]
+verify_jwt = false
+

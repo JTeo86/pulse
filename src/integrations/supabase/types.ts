@@ -1369,6 +1369,7 @@ export type Database = {
           content_asset_id: string | null
           created_at: string
           id: string
+          metadata: Json | null
           plan_id: string
           status: string
         }
@@ -1378,6 +1379,7 @@ export type Database = {
           content_asset_id?: string | null
           created_at?: string
           id?: string
+          metadata?: Json | null
           plan_id: string
           status?: string
         }
@@ -1387,6 +1389,7 @@ export type Database = {
           content_asset_id?: string | null
           created_at?: string
           id?: string
+          metadata?: Json | null
           plan_id?: string
           status?: string
         }
@@ -2538,12 +2541,14 @@ export type Database = {
       venue_event_plans: {
         Row: {
           ai_recommendation: Json | null
+          archived_at: string | null
           created_at: string
           decision: Json
           deployed_at: string | null
           ends_at: string | null
           event_id: string | null
           id: string
+          is_archived: boolean
           skip_reason: string | null
           snoozed_until: string | null
           starts_at: string
@@ -2554,12 +2559,14 @@ export type Database = {
         }
         Insert: {
           ai_recommendation?: Json | null
+          archived_at?: string | null
           created_at?: string
           decision?: Json
           deployed_at?: string | null
           ends_at?: string | null
           event_id?: string | null
           id?: string
+          is_archived?: boolean
           skip_reason?: string | null
           snoozed_until?: string | null
           starts_at: string
@@ -2570,12 +2577,14 @@ export type Database = {
         }
         Update: {
           ai_recommendation?: Json | null
+          archived_at?: string | null
           created_at?: string
           decision?: Json
           deployed_at?: string | null
           ends_at?: string | null
           event_id?: string | null
           id?: string
+          is_archived?: boolean
           skip_reason?: string | null
           snoozed_until?: string | null
           starts_at?: string
@@ -3056,6 +3065,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "venue_style_reference_assets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_weekly_briefs: {
+        Row: {
+          created_at: string
+          estimated_uplift: string | null
+          id: string
+          marketing_summary: string
+          menu_insights: string
+          opportunities_detected: Json
+          recommended_actions: Json
+          revenue_summary: string
+          venue_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          estimated_uplift?: string | null
+          id?: string
+          marketing_summary?: string
+          menu_insights?: string
+          opportunities_detected?: Json
+          recommended_actions?: Json
+          revenue_summary?: string
+          venue_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          estimated_uplift?: string | null
+          id?: string
+          marketing_summary?: string
+          menu_insights?: string
+          opportunities_detected?: Json
+          recommended_actions?: Json
+          revenue_summary?: string
+          venue_id?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_weekly_briefs_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
