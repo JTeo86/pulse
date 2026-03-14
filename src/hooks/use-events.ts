@@ -28,6 +28,8 @@ export interface VenueEventPlan {
   skip_reason: string | null;
   ai_recommendation: Record<string, any> | null;
   deployed_at: string | null;
+  is_archived: boolean;
+  archived_at: string | null;
   created_at: string;
 }
 
@@ -141,13 +143,11 @@ export function useVenueEventPlans() {
       toast({ variant: 'destructive', title: 'Error creating plan', description: error.message });
       return null;
     }
-    // Optimistic append
     if (data) setPlans(prev => [...prev, data as any as VenueEventPlan]);
     return data as any as VenueEventPlan;
   };
 
   const updatePlanStatus = async (planId: string, status: string) => {
-    // Optimistic
     setPlans(prev => prev.map(p => p.id === planId ? { ...p, status } : p));
     const { error } = await supabase
       .from('venue_event_plans')
@@ -155,7 +155,7 @@ export function useVenueEventPlans() {
       .eq('id', planId);
     if (error) {
       toast({ variant: 'destructive', title: 'Error updating plan', description: error.message });
-      fetchPlans(); // rollback
+      fetchPlans();
     }
   };
 
@@ -171,7 +171,63 @@ export function useVenueEventPlans() {
     }
   };
 
-  return { plans, loading: initialLoading, fetchPlans, createPlan, updatePlanStatus, skipPlan };
+  const archivePlan = async (planId: string) => {
+    setPlans(prev => prev.map(p => p.id === planId ? { ...p, is_archived: true, archived_at: new Date().toISOString() } : p));
+    const { error } = await supabase
+      .from('venue_event_plans')
+      .update({ is_archived: true, archived_at: new Date().toISOString() })
+      .eq('id', planId);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Error archiving plan', description: error.message });
+      fetchPlans();
+    } else {
+      toast({ title: 'Plan archived' });
+    }
+  };
+
+  const restorePlan = async (planId: string) => {
+    setPlans(prev => prev.map(p => p.id === planId ? { ...p, is_archived: false, archived_at: null } : p));
+    const { error } = await supabase
+      .from('venue_event_plans')
+      .update({ is_archived: false, archived_at: null })
+      .eq('id', planId);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Error restoring plan', description: error.message });
+      fetchPlans();
+    } else {
+      toast({ title: 'Plan restored' });
+    }
+  };
+
+  const deletePlan = async (planId: string) => {
+    const snapshot = [...plans];
+    setPlans(prev => prev.filter(p => p.id !== planId));
+    // Clean up related data first
+    await Promise.all([
+      supabase.from('plan_outputs').delete().eq('plan_id', planId),
+      supabase.from('plan_asset_briefs').delete().eq('plan_id', planId),
+      supabase.from('plan_assets').delete().eq('plan_id', planId),
+      supabase.from('event_plan_tasks').delete().eq('plan_id', planId),
+      supabase.from('event_plan_links').delete().eq('plan_id', planId),
+      supabase.from('plan_workspace_snapshots').delete().eq('plan_id', planId),
+    ]);
+    const { error } = await supabase
+      .from('venue_event_plans')
+      .delete()
+      .eq('id', planId);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Error deleting plan', description: error.message });
+      setPlans(snapshot);
+    } else {
+      toast({ title: 'Plan deleted' });
+    }
+  };
+
+  return {
+    plans, loading: initialLoading, fetchPlans,
+    createPlan, updatePlanStatus, skipPlan,
+    archivePlan, restorePlan, deletePlan,
+  };
 }
 
 export function useEventPlanDetail(planId: string | undefined) {
@@ -211,10 +267,8 @@ export function useEventPlanDetail(planId: string | undefined) {
     fetchAll();
   }, [fetchAll]);
 
-  /* ── Optimistic: update decision (no refetch) ── */
   const updateDecision = useCallback(async (decision: Record<string, any>) => {
     if (!planId) return;
-    // Optimistic local patch
     setPlan(prev => prev ? { ...prev, decision } as VenueEventPlan : prev);
     const { error } = await supabase
       .from('venue_event_plans')
@@ -222,12 +276,10 @@ export function useEventPlanDetail(planId: string | undefined) {
       .eq('id', planId);
     if (error) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
-      // Rollback — refetch
       fetchAll();
     }
   }, [planId, fetchAll, toast]);
 
-  /* ── Optimistic: toggle task ── */
   const toggleTask = useCallback(async (taskId: string, isDone: boolean) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_done: isDone } : t));
     const { error } = await supabase
@@ -237,7 +289,6 @@ export function useEventPlanDetail(planId: string | undefined) {
     if (error) fetchAll();
   }, [fetchAll]);
 
-  /* ── Optimistic: add task ── */
   const addTask = useCallback(async (title: string) => {
     if (!planId) return;
     const maxOrder = tasks.reduce((m, t) => Math.max(m, t.sort_order), 0);
@@ -254,12 +305,10 @@ export function useEventPlanDetail(planId: string | undefined) {
     if (error) {
       setTasks(prev => prev.filter(t => t.id !== tempId));
     } else if (data) {
-      // Replace temp with real record
       setTasks(prev => prev.map(t => t.id === tempId ? (data as any as EventPlanTask) : t));
     }
   }, [planId, tasks]);
 
-  /* ── Optimistic: delete task ── */
   const deleteTask = useCallback(async (taskId: string) => {
     const snapshot = [...tasks];
     setTasks(prev => prev.filter(t => t.id !== taskId));
@@ -270,7 +319,6 @@ export function useEventPlanDetail(planId: string | undefined) {
     if (error) setTasks(snapshot);
   }, [tasks]);
 
-  /* ── Optimistic: update status ── */
   const updateStatus = useCallback(async (status: string) => {
     if (!planId) return;
     const prevStatus = plan?.status;
@@ -287,7 +335,6 @@ export function useEventPlanDetail(planId: string | undefined) {
     }
   }, [planId, plan?.status, toast]);
 
-  /* ── Optimistic: update title ── */
   const updateTitle = useCallback(async (title: string) => {
     if (!planId || !title.trim()) return;
     setPlan(prev => prev ? { ...prev, title: title.trim() } as VenueEventPlan : prev);

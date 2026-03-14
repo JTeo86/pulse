@@ -34,14 +34,21 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
+    // User-scoped client for auth checks
+    const supabaseUser = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Service-role client for persistence (bypasses RLS)
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
     if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -67,18 +74,24 @@ serve(async (req) => {
       });
     }
 
+    // Verify membership
+    const userId = claimsData.claims.sub as string;
+    const { data: isMember } = await supabaseAdmin.rpc("is_venue_member", {
+      check_venue_id: venue_id,
+      check_user_id: userId,
+    });
+    if (!isMember) {
+      return new Response(JSON.stringify({ error: "Not a member of this venue" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch brand context
-    const [{ data: brandKit }, { data: venue }] = await Promise.all([
-      supabase
-        .from("brand_kits")
-        .select("preset, rules_text")
-        .eq("venue_id", venue_id)
-        .maybeSingle(),
-      supabase
-        .from("venues")
-        .select("name")
-        .eq("id", venue_id)
-        .maybeSingle(),
+    const [{ data: brandKit }, { data: venue }, { data: styleProfile }] = await Promise.all([
+      supabaseAdmin.from("brand_kits").select("preset, rules_text").eq("venue_id", venue_id).maybeSingle(),
+      supabaseAdmin.from("venues").select("name").eq("id", venue_id).maybeSingle(),
+      supabaseAdmin.from("venue_style_profiles").select("cuisine_type, venue_tone, brand_summary, target_audience, key_selling_points").eq("venue_id", venue_id).maybeSingle(),
     ]);
 
     const toneMap: Record<string, string> = {
@@ -93,9 +106,26 @@ serve(async (req) => {
       brandContext.push(`Business: ${venue.name}`);
       contextUsed.push(`Brand: ${venue.name}`);
     }
-    if (brandKit?.preset && toneMap[brandKit.preset]) {
+    if (styleProfile?.cuisine_type) {
+      brandContext.push(`Cuisine: ${styleProfile.cuisine_type}`);
+      contextUsed.push(`Cuisine: ${styleProfile.cuisine_type}`);
+    }
+    if (styleProfile?.venue_tone) {
+      brandContext.push(`Brand Tone: ${styleProfile.venue_tone}`);
+      contextUsed.push(`Tone: ${styleProfile.venue_tone}`);
+    } else if (brandKit?.preset && toneMap[brandKit.preset]) {
       brandContext.push(`Brand Tone: ${toneMap[brandKit.preset]}`);
       contextUsed.push(`Tone: ${toneMap[brandKit.preset]}`);
+    }
+    if (styleProfile?.brand_summary) {
+      brandContext.push(`Brand Summary: ${styleProfile.brand_summary}`);
+      contextUsed.push("Brand summary applied");
+    }
+    if (styleProfile?.target_audience) {
+      brandContext.push(`Target Audience: ${styleProfile.target_audience}`);
+    }
+    if (styleProfile?.key_selling_points) {
+      brandContext.push(`Key Selling Points: ${styleProfile.key_selling_points}`);
     }
     if (brandKit?.rules_text) {
       brandContext.push(`Brand Voice Guidelines: ${brandKit.rules_text}`);
@@ -103,14 +133,10 @@ serve(async (req) => {
     }
     if (inputs?.secondary_focus?.length) {
       brandContext.push(`Secondary Focus: ${inputs.secondary_focus.join(", ")}`);
-      contextUsed.push(
-        ...inputs.secondary_focus.map((f: string) => f.replace(/_/g, " "))
-      );
+      contextUsed.push(...inputs.secondary_focus.map((f: string) => f.replace(/_/g, " ")));
     }
     if (opportunity?.label && opportunity.label !== "General Campaign") {
-      brandContext.push(
-        `Campaign Opportunity: ${opportunity.label}${opportunity.meta ? ` (${opportunity.meta})` : ""}`
-      );
+      brandContext.push(`Campaign Opportunity: ${opportunity.label}${opportunity.meta ? ` (${opportunity.meta})` : ""}`);
       contextUsed.push(`Opportunity: ${opportunity.label}`);
     }
 
@@ -273,51 +299,60 @@ Generate a complete, professional, compliant campaign pack.`;
       // Normalize: accept both {campaign_pack: ...} and {kit: ...} shapes
       const pack = parsed.campaign_pack || parsed.kit || parsed;
 
-      // Ensure metadata has context_used
+      // Ensure metadata
       if (pack.metadata) {
         pack.metadata.context_used = contextUsed;
         pack.metadata.generated_at = new Date().toISOString();
       }
 
-      // ── Atomic persistence to plan_outputs + plan_asset_briefs ──
+      // ── Atomic persistence using service-role client ──
       const planId = inputs?.plan_id;
+      let persistenceOk = true;
+      let outputCount = 0;
+      let briefCount = 0;
+
       if (planId) {
         try {
-          const copy = pack.copy || pack.assets || {};
+          const copy = pack.copy || {};
           const outputRows = Object.entries(copy)
             .filter(([_, v]) => typeof v === "string" && (v as string).trim())
             .map(([key, val]) => ({
               plan_id: planId,
               output_type: key,
-              title: key
-                .replace(/_/g, " ")
-                .replace(/\b\w/g, (c: string) => c.toUpperCase()),
+              title: key.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
               content: val as string,
               status: "draft",
               metadata: {},
             }));
 
-          if (outputRows.length > 0) {
-            // Clear previous outputs for this plan
-            await supabase
-              .from("plan_outputs")
-              .delete()
-              .eq("plan_id", planId);
+          // Add visual_direction as an output too
+          if (pack.production?.visual_direction) {
+            outputRows.push({
+              plan_id: planId,
+              output_type: "visual_direction",
+              title: "Visual Direction",
+              content: pack.production.visual_direction,
+              status: "draft",
+              metadata: {},
+            });
+          }
 
-            const { error: outErr } = await supabase
-              .from("plan_outputs")
-              .insert(outputRows);
-            if (outErr) console.error("plan_outputs insert error:", outErr);
+          if (outputRows.length > 0) {
+            // Clear previous outputs
+            await supabaseAdmin.from("plan_outputs").delete().eq("plan_id", planId);
+            const { error: outErr } = await supabaseAdmin.from("plan_outputs").insert(outputRows);
+            if (outErr) {
+              console.error("plan_outputs insert error:", outErr);
+              persistenceOk = false;
+            } else {
+              outputCount = outputRows.length;
+            }
           }
 
           // Persist asset briefs
           const briefs = pack.production?.asset_briefs;
           if (Array.isArray(briefs) && briefs.length > 0) {
-            await supabase
-              .from("plan_asset_briefs")
-              .delete()
-              .eq("plan_id", planId);
-
+            await supabaseAdmin.from("plan_asset_briefs").delete().eq("plan_id", planId);
             const briefRows = briefs.map((b: any) => ({
               plan_id: planId,
               asset_type: b.asset_type || "image",
@@ -327,23 +362,49 @@ Generate a complete, professional, compliant campaign pack.`;
               status: "brief_ready",
               metadata: {},
             }));
-            const { error: briefErr } = await supabase
-              .from("plan_asset_briefs")
-              .insert(briefRows);
-            if (briefErr) console.error("plan_asset_briefs insert error:", briefErr);
+            const { error: briefErr } = await supabaseAdmin.from("plan_asset_briefs").insert(briefRows);
+            if (briefErr) {
+              console.error("plan_asset_briefs insert error:", briefErr);
+              persistenceOk = false;
+            } else {
+              briefCount = briefRows.length;
+            }
           }
 
-          console.log(
-            `Persisted ${outputRows.length} outputs and ${briefs?.length || 0} briefs for plan ${planId}`
-          );
+          // Update plan workspace snapshot
+          await supabaseAdmin.from("plan_workspace_snapshots").upsert({
+            plan_id: planId,
+            venue_id: venue_id,
+            snapshot: {
+              has_campaign_pack: true,
+              output_count: outputCount,
+              brief_count: briefCount,
+              last_generated: new Date().toISOString(),
+              execution: pack.execution || null,
+            },
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "plan_id" });
+
+          console.log(`Persisted ${outputCount} outputs and ${briefCount} briefs for plan ${planId}`);
         } catch (persistErr) {
-          console.error("Persistence error (non-fatal):", persistErr);
+          console.error("Persistence error:", persistErr);
+          persistenceOk = false;
         }
       }
 
-      console.log("Campaign pack generated successfully");
+      if (!persistenceOk) {
+        return new Response(
+          JSON.stringify({ error: "Campaign pack generated but failed to save. Please try again." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("Campaign pack generated and persisted successfully");
       return new Response(
-        JSON.stringify({ campaign_pack: pack }),
+        JSON.stringify({
+          campaign_pack: pack,
+          persisted: { outputs: outputCount, briefs: briefCount },
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

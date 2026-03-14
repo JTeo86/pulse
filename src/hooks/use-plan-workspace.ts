@@ -37,6 +37,7 @@ export interface PlanAsset {
   content_asset_id: string | null;
   asset_type: string;
   status: string;
+  metadata: Record<string, any>;
   created_at: string;
 }
 
@@ -52,12 +53,14 @@ export const OUTPUT_TYPE_LABELS: Record<string, string> = {
   email_subject: 'Email Subject',
   email_preview: 'Email Preview',
   email_body: 'Email Body',
+  visual_direction: 'Visual Direction',
 };
 
 // Group outputs into sections
 export const OUTPUT_SECTIONS = {
   core_copy: ['instagram_caption', 'short_caption', 'story_text', 'reel_hook', 'promo_headline', 'call_to_action', 'sms_push_notification'],
   email: ['email_subject', 'email_preview', 'email_body'],
+  visual: ['visual_direction'],
 };
 
 export const BRIEF_STATUS_LABELS: Record<string, string> = {
@@ -147,6 +150,7 @@ export function usePlanWorkspace(planId: string | undefined) {
       content_asset_id: contentAssetId,
       asset_type: assetType,
       status: 'created',
+      metadata: {},
       created_at: new Date().toISOString(),
     };
     setAssets(prev => [...prev, temp]);
@@ -168,10 +172,57 @@ export function usePlanWorkspace(planId: string | undefined) {
       toast({ variant: 'destructive', title: 'Error linking asset', description: error.message });
     } else if (data) {
       setAssets(prev => prev.map(a => a.id === temp.id ? (data as any) : a));
-      // Also mark the brief as created
       updateBriefStatus(briefId, 'created');
     }
   }, [planId, toast, updateBriefStatus]);
+
+  // Link an existing asset directly to a plan (no brief)
+  const linkAssetToPlan = useCallback(async (contentAssetId: string, assetType: string) => {
+    if (!planId) return;
+    const temp: PlanAsset = {
+      id: crypto.randomUUID(),
+      plan_id: planId,
+      asset_brief_id: null,
+      content_asset_id: contentAssetId,
+      asset_type: assetType,
+      status: 'created',
+      metadata: {},
+      created_at: new Date().toISOString(),
+    };
+    setAssets(prev => [...prev, temp]);
+
+    const { data, error } = await supabase
+      .from('plan_assets')
+      .insert({
+        plan_id: planId,
+        content_asset_id: contentAssetId,
+        asset_type: assetType,
+        status: 'created',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      setAssets(prev => prev.filter(a => a.id !== temp.id));
+      toast({ variant: 'destructive', title: 'Error linking asset', description: error.message });
+    } else if (data) {
+      setAssets(prev => prev.map(a => a.id === temp.id ? (data as any) : a));
+    }
+  }, [planId, toast]);
+
+  // Detach an asset from a plan
+  const detachAsset = useCallback(async (planAssetId: string) => {
+    const snapshot = [...assets];
+    setAssets(prev => prev.filter(a => a.id !== planAssetId));
+    const { error } = await supabase
+      .from('plan_assets')
+      .delete()
+      .eq('id', planAssetId);
+    if (error) {
+      setAssets(snapshot);
+      toast({ variant: 'destructive', title: 'Error detaching asset', description: error.message });
+    }
+  }, [assets, toast]);
 
   const hasCampaignPack = outputs.length > 0;
   const hasAssetBriefs = briefs.length > 0;
@@ -190,5 +241,7 @@ export function usePlanWorkspace(planId: string | undefined) {
     updateOutputStatus,
     updateBriefStatus,
     linkAssetToBrief,
+    linkAssetToPlan,
+    detachAsset,
   };
 }
