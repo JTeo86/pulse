@@ -5,7 +5,7 @@ import {
   ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2,
   AlertTriangle, Copy, Check, Loader2, FileText, Image, Calendar,
   Lightbulb, Pencil, Package, Play, TrendingUp, ArrowRight, Video,
-  RefreshCw
+  RefreshCw, Archive, ExternalLink, Unlink,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useEventPlanDetail, PLAN_STATUSES } from '@/hooks/use-events';
-import { usePlanWorkspace, OUTPUT_TYPE_LABELS, OUTPUT_SECTIONS, BRIEF_STATUS_LABELS } from '@/hooks/use-plan-workspace';
+import { usePlanWorkspace, OUTPUT_TYPE_LABELS, OUTPUT_SECTIONS, BRIEF_STATUS_LABELS, PlanAsset } from '@/hooks/use-plan-workspace';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -118,14 +118,6 @@ export default function EventPlanDetailPage() {
   useEffect(() => {
     if (plan) setTitleDraft(plan.title);
   }, [plan?.title]);
-
-  // Auto-advance to correct step on load
-  useEffect(() => {
-    if (workspace.loading || loading) return;
-    if (workspace.hasCampaignPack && activeStep === 'strategy') {
-      // Already has pack — show it
-    }
-  }, [workspace.loading, loading]);
 
   if (loading || workspace.loading) {
     return (
@@ -231,13 +223,8 @@ export default function EventPlanDetailPage() {
 
         {/* MAIN — Active Step Content */}
         <div className="min-w-0">
-          {/* Next Best Action */}
           {nextAction && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-6"
-            >
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
               <button
                 onClick={() => setActiveStep(nextAction.target)}
                 className="w-full flex items-center gap-4 p-4 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 transition-colors text-left group"
@@ -254,34 +241,16 @@ export default function EventPlanDetailPage() {
           )}
 
           {activeStep === 'strategy' && (
-            <StrategySection
-              plan={plan}
-              tasks={tasks}
-              brain={brain}
-              updateDecision={updateDecision}
-              toggleTask={toggleTask}
-              addTask={addTask}
-              deleteTask={deleteTask}
-              fetchAll={fetchAll}
-            />
+            <StrategySection plan={plan} tasks={tasks} brain={brain} updateDecision={updateDecision} toggleTask={toggleTask} addTask={addTask} deleteTask={deleteTask} fetchAll={fetchAll} />
           )}
           {activeStep === 'campaign_pack' && (
-            <CampaignPackSection
-              planId={planId!}
-              plan={plan}
-              brain={brain}
-              workspace={workspace}
-            />
+            <CampaignPackSection planId={planId!} plan={plan} brain={brain} workspace={workspace} />
           )}
           {activeStep === 'production' && (
-            <ProductionSection
-              planId={planId!}
-              plan={plan}
-              workspace={workspace}
-            />
+            <ProductionSection planId={planId!} plan={plan} workspace={workspace} />
           )}
           {activeStep === 'publish' && (
-            <PublishSection plan={plan} />
+            <PublishSection plan={plan} workspace={workspace} />
           )}
           {activeStep === 'revenue' && (
             <RevenueSection plan={plan} brain={brain} />
@@ -422,7 +391,6 @@ function StrategySection({
 
   return (
     <div className="space-y-6">
-      {/* AI Recommendation */}
       {rec && (
         <div className="card-elevated p-5 space-y-3">
           <div className="flex items-center gap-2">
@@ -443,10 +411,8 @@ function StrategySection({
         </div>
       )}
 
-      {/* Campaign Brief */}
       <div className="card-elevated p-5 space-y-4">
         <h3 className="font-medium">Campaign Brief</h3>
-
         {[
           { key: 'run_offer', label: 'Run promotional offer?' },
           { key: 'run_event_promo', label: 'Run event promotion?' },
@@ -458,51 +424,32 @@ function StrategySection({
             <Switch checked={!!decision[key]} onCheckedChange={v => handleToggle(key, v)} />
           </div>
         ))}
-
         <Separator />
-
         <div className="space-y-3">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs">Target audience</Label>
               <SaveIndicator status={audience.status} />
             </div>
-            <Input
-              placeholder="e.g., Date night couples, families, foodies..."
-              value={audience.value}
-              onChange={e => audience.onChange(e.target.value)}
-              className="text-sm"
-            />
+            <Input placeholder="e.g., Date night couples, families, foodies..." value={audience.value} onChange={e => audience.onChange(e.target.value)} className="text-sm" />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs">Campaign angle</Label>
               <SaveIndicator status={angle.status} />
             </div>
-            <Input
-              placeholder="e.g., Seasonal ingredients, indulgence, celebration..."
-              value={angle.value}
-              onChange={e => angle.onChange(e.target.value)}
-              className="text-sm"
-            />
+            <Input placeholder="e.g., Seasonal ingredients, indulgence, celebration..." value={angle.value} onChange={e => angle.onChange(e.target.value)} className="text-sm" />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-xs">Offer terms</Label>
               <SaveIndicator status={offerTerms.status} />
             </div>
-            <Textarea
-              placeholder="e.g., 2-for-1 cocktails 5-7pm..."
-              value={offerTerms.value}
-              onChange={e => offerTerms.onChange(e.target.value)}
-              rows={3}
-              className="text-sm"
-            />
+            <Textarea placeholder="e.g., 2-for-1 cocktails 5-7pm..." value={offerTerms.value} onChange={e => offerTerms.onChange(e.target.value)} rows={3} className="text-sm" />
           </div>
         </div>
       </div>
 
-      {/* Generate AI Strategy */}
       <div className="card-elevated p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -516,7 +463,6 @@ function StrategySection({
         </div>
       </div>
 
-      {/* Checklist */}
       <div className="card-elevated p-5 space-y-4">
         <h3 className="font-medium">Checklist</h3>
         <div className="space-y-2">
@@ -525,9 +471,7 @@ function StrategySection({
               <button onClick={() => toggleTask(task.id, !task.is_done)} className="shrink-0">
                 {task.is_done ? <CheckCircle2 className="w-5 h-5 text-success" /> : <Circle className="w-5 h-5 text-muted-foreground" />}
               </button>
-              <span className={`flex-1 text-sm ${task.is_done ? 'line-through text-muted-foreground' : ''}`}>
-                {task.title}
-              </span>
+              <span className={`flex-1 text-sm ${task.is_done ? 'line-through text-muted-foreground' : ''}`}>{task.title}</span>
               <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 h-7 w-7" onClick={() => deleteTask(task.id)}>
                 <Trash2 className="w-3 h-3" />
               </Button>
@@ -535,13 +479,7 @@ function StrategySection({
           ))}
         </div>
         <div className="flex gap-2">
-          <Input
-            placeholder="Add a task..."
-            value={newTaskTitle}
-            onChange={e => setNewTaskTitle(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-            className="flex-1"
-          />
+          <Input placeholder="Add a task..." value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddTask()} className="flex-1" />
           <Button size="sm" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
             <Plus className="w-3 h-3 mr-1" /> Add
           </Button>
@@ -551,9 +489,7 @@ function StrategySection({
       <div className="p-4 rounded-lg border border-warning/20 bg-warning/5">
         <div className="flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-          <p className="text-xs text-muted-foreground">
-            No fake discounts or invented claims. AI will use only the information you provide.
-          </p>
+          <p className="text-xs text-muted-foreground">No fake discounts or invented claims. AI will use only the information you provide.</p>
         </div>
       </div>
     </div>
@@ -593,8 +529,15 @@ function CampaignPackSection({ planId, plan, brain, workspace }: {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      toast({ title: 'Campaign Pack generated!', description: 'Copy and creative briefs saved to your plan.' });
-      // Refresh workspace to load persisted outputs + briefs
+      // Check atomic persistence
+      if (data.persisted) {
+        toast({
+          title: 'Campaign Pack generated!',
+          description: `${data.persisted.outputs} outputs and ${data.persisted.briefs} creative briefs saved.`,
+        });
+      } else {
+        toast({ title: 'Campaign Pack generated!', description: 'Copy and creative briefs saved to your plan.' });
+      }
       await workspace.fetchWorkspace();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message });
@@ -611,14 +554,15 @@ function CampaignPackSection({ planId, plan, brain, workspace }: {
 
   const coreCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.core_copy.includes(o.output_type));
   const emailCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.email.includes(o.output_type));
+  const visualCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.visual.includes(o.output_type));
   const otherCopy = workspace.outputs.filter(o =>
     !OUTPUT_SECTIONS.core_copy.includes(o.output_type) &&
-    !OUTPUT_SECTIONS.email.includes(o.output_type)
+    !OUTPUT_SECTIONS.email.includes(o.output_type) &&
+    !OUTPUT_SECTIONS.visual.includes(o.output_type)
   );
 
   return (
     <div className="space-y-8">
-      {/* Generator */}
       <div className="rounded-xl border border-accent/20 bg-gradient-to-br from-card to-card/60 p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-accent/15">
@@ -626,13 +570,10 @@ function CampaignPackSection({ planId, plan, brain, workspace }: {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground">Campaign Pack</h3>
-            <p className="text-xs text-muted-foreground">
-              Generate copy for all channels — captions, hooks, headlines, CTAs, email, and SMS.
-            </p>
+            <p className="text-xs text-muted-foreground">Generate copy for all channels — captions, hooks, headlines, CTAs, email, and SMS.</p>
           </div>
         </div>
 
-        {/* Strategy summary */}
         {(plan.decision?.offer_terms || plan.decision?.campaign_angle) && (
           <div className="rounded-lg bg-muted/20 border border-border/40 p-3 space-y-1">
             <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Strategy Context</p>
@@ -648,20 +589,10 @@ function CampaignPackSection({ planId, plan, brain, workspace }: {
         </Button>
       </div>
 
-      {/* Core Campaign Copy */}
-      {coreCopy.length > 0 && (
-        <OutputSection title="Core Campaign Copy" outputs={coreCopy} copied={copied} onCopy={handleCopy} />
-      )}
-
-      {/* Email Messaging */}
-      {emailCopy.length > 0 && (
-        <OutputSection title="Email Messaging" outputs={emailCopy} copied={copied} onCopy={handleCopy} />
-      )}
-
-      {/* Other outputs */}
-      {otherCopy.length > 0 && (
-        <OutputSection title="Additional Outputs" outputs={otherCopy} copied={copied} onCopy={handleCopy} />
-      )}
+      {coreCopy.length > 0 && <OutputSection title="Core Campaign Copy" outputs={coreCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
+      {emailCopy.length > 0 && <OutputSection title="Email Messaging" outputs={emailCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
+      {visualCopy.length > 0 && <OutputSection title="Visual Direction" outputs={visualCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
+      {otherCopy.length > 0 && <OutputSection title="Additional Outputs" outputs={otherCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
 
       {!workspace.hasCampaignPack && (
         <div className="text-center py-8 text-muted-foreground">
@@ -675,11 +606,12 @@ function CampaignPackSection({ planId, plan, brain, workspace }: {
 }
 
 /* Output Section Component */
-function OutputSection({ title, outputs, copied, onCopy }: {
+function OutputSection({ title, outputs, copied, onCopy, onStatusChange }: {
   title: string;
   outputs: Array<{ id: string; output_type: string; title: string; content: string; status: string }>;
   copied: string | null;
   onCopy: (text: string, id: string) => void;
+  onStatusChange: (id: string, status: string) => Promise<void>;
 }) {
   return (
     <div className="space-y-3">
@@ -692,7 +624,16 @@ function OutputSection({ title, outputs, copied, onCopy }: {
                 {OUTPUT_TYPE_LABELS[output.output_type] || output.title}
               </Badge>
               <div className="flex items-center gap-1.5">
-                <Badge variant="secondary" className="text-[10px]">{output.status}</Badge>
+                <Select value={output.status} onValueChange={v => onStatusChange(output.id, v)}>
+                  <SelectTrigger className="h-6 w-[90px] text-[10px] border-0 bg-transparent">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="published">Published</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -712,20 +653,53 @@ function OutputSection({ title, outputs, copied, onCopy }: {
 }
 
 /* ═══════════════════════════════════════════════════════
-   PRODUCTION SECTION
+   PRODUCTION SECTION — Real asset data
    ═══════════════════════════════════════════════════════ */
 function ProductionSection({ planId, plan, workspace }: {
   planId: string; plan: any; workspace: ReturnType<typeof usePlanWorkspace>;
 }) {
   const navigate = useNavigate();
+  const { currentVenue } = useVenue();
+  const [linkedAssetData, setLinkedAssetData] = useState<Record<string, any>>({});
 
-  const getRouteForBrief = (brief: { asset_type: string }) => {
-    if (brief.asset_type === 'reel') return '/studio/reel-creator';
+  // Fetch real asset metadata for linked assets
+  useEffect(() => {
+    const assetIds = workspace.assets
+      .map(a => a.content_asset_id)
+      .filter((id): id is string => !!id);
+
+    if (assetIds.length === 0) return;
+
+    (async () => {
+      const { data } = await supabase
+        .from('content_assets')
+        .select('id, title, asset_type, status, thumbnail_url, public_url, storage_path, created_at')
+        .in('id', assetIds);
+      if (data) {
+        const map: Record<string, any> = {};
+        for (const a of data) {
+          let resolvedUrl = a.public_url || a.thumbnail_url || '';
+          if (!resolvedUrl && a.storage_path) {
+            const { data: signed } = await supabase.storage
+              .from('venue-assets')
+              .createSignedUrl(a.storage_path, 3600);
+            resolvedUrl = signed?.signedUrl || '';
+          }
+          map[a.id] = { ...a, _resolvedUrl: resolvedUrl };
+        }
+        setLinkedAssetData(map);
+      }
+    })();
+  }, [workspace.assets]);
+
+  const getRouteForAsset = (assetType: string) => {
+    if (assetType === 'reel' || assetType === 'video') return '/studio/reel-creator';
     return '/studio/pro-photo';
   };
 
   return (
     <div className="space-y-6">
+      {/* Creative Briefs */}
       {workspace.briefs.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -734,7 +708,11 @@ function ProductionSection({ planId, plan, workspace }: {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {workspace.briefs.map(brief => {
-              const linkedAsset = workspace.assets.find(a => a.asset_brief_id === brief.id);
+              const linkedPlanAsset = workspace.assets.find(a => a.asset_brief_id === brief.id);
+              const realAsset = linkedPlanAsset?.content_asset_id
+                ? linkedAssetData[linkedPlanAsset.content_asset_id]
+                : null;
+
               return (
                 <div key={brief.id} className="card-elevated p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -754,15 +732,37 @@ function ProductionSection({ planId, plan, workspace }: {
                   {brief.intended_channel && (
                     <p className="text-[10px] text-muted-foreground">Channel: {brief.intended_channel}</p>
                   )}
-                  {linkedAsset ? (
-                    <Button size="sm" variant="outline" className="w-full text-xs gap-1.5"
-                      onClick={() => navigate(getRouteForBrief(brief))}
-                    >
-                      <CheckCircle2 className="w-3 h-3 text-success" /> View Asset
-                    </Button>
+
+                  {/* Linked asset preview */}
+                  {realAsset ? (
+                    <div className="rounded-lg border border-success/20 bg-success/5 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        {realAsset._resolvedUrl && (
+                          <img src={realAsset._resolvedUrl} alt={realAsset.title || ''} className="w-12 h-12 rounded object-cover" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{realAsset.title || `${realAsset.asset_type} asset`}</p>
+                          <p className="text-[10px] text-muted-foreground">{realAsset.status} • {format(new Date(realAsset.created_at), 'MMM d')}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="flex-1 text-xs gap-1"
+                          onClick={() => navigate(getRouteForAsset(realAsset.asset_type))}
+                        >
+                          <ExternalLink className="w-3 h-3" /> Open
+                        </Button>
+                        {linkedPlanAsset && (
+                          <Button size="sm" variant="ghost" className="text-xs gap-1 text-muted-foreground"
+                            onClick={() => workspace.detachAsset(linkedPlanAsset.id)}
+                          >
+                            <Unlink className="w-3 h-3" /> Detach
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <Button size="sm" variant="outline" className="w-full text-xs gap-1.5"
-                      onClick={() => navigate(getRouteForBrief(brief))}
+                      onClick={() => navigate(getRouteForAsset(brief.asset_type))}
                     >
                       <Plus className="w-3 h-3" /> Create in Studio
                     </Button>
@@ -779,6 +779,36 @@ function ProductionSection({ planId, plan, workspace }: {
           <p className="text-xs mt-1">Generate a Campaign Pack first — asset briefs will be created automatically.</p>
         </div>
       )}
+
+      {/* Linked assets without briefs */}
+      {workspace.assets.filter(a => !a.asset_brief_id && a.content_asset_id).length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-foreground">Linked Assets</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {workspace.assets
+              .filter(a => !a.asset_brief_id && a.content_asset_id)
+              .map(pa => {
+                const real = pa.content_asset_id ? linkedAssetData[pa.content_asset_id] : null;
+                return (
+                  <div key={pa.id} className="rounded-lg border border-border/50 bg-card/60 p-3 flex items-center gap-3">
+                    {real?._resolvedUrl && (
+                      <img src={real._resolvedUrl} alt="" className="w-10 h-10 rounded object-cover" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{real?.title || pa.asset_type}</p>
+                      <p className="text-[10px] text-muted-foreground">{pa.status}</p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7"
+                      onClick={() => workspace.detachAsset(pa.id)}
+                    >
+                      <Unlink className="w-3 h-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -786,8 +816,9 @@ function ProductionSection({ planId, plan, workspace }: {
 /* ═══════════════════════════════════════════════════════
    PUBLISH SECTION
    ═══════════════════════════════════════════════════════ */
-function PublishSection({ plan }: { plan: any }) {
+function PublishSection({ plan, workspace }: { plan: any; workspace: ReturnType<typeof usePlanWorkspace> }) {
   const navigate = useNavigate();
+  const approvedOutputs = workspace.outputs.filter(o => o.status === 'approved');
   const channels = [
     { name: 'Instagram Feed', icon: Image, suggested: 'Post 2-3 days before event' },
     { name: 'Instagram Stories', icon: Play, suggested: 'Daily during campaign window' },
@@ -796,6 +827,20 @@ function PublishSection({ plan }: { plan: any }) {
 
   return (
     <div className="space-y-6">
+      {/* Ready outputs */}
+      {approvedOutputs.length > 0 && (
+        <div className="card-elevated p-5 space-y-3">
+          <h3 className="font-medium text-sm">Ready to Publish ({approvedOutputs.length})</h3>
+          {approvedOutputs.map(o => (
+            <div key={o.id} className="flex items-center gap-3 p-2 rounded-lg bg-success/5 border border-success/20">
+              <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+              <span className="text-xs font-medium flex-1">{OUTPUT_TYPE_LABELS[o.output_type] || o.title}</span>
+              <Badge className="bg-success/20 text-success text-[10px] border-0">Approved</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="card-elevated p-5 space-y-4">
         <h3 className="font-medium">Publishing Schedule</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -808,12 +853,6 @@ function PublishSection({ plan }: { plan: any }) {
             <p className="text-sm font-medium">{STATUS_LABELS[plan.status] || plan.status}</p>
           </div>
         </div>
-        {plan.deployed_at && (
-          <div className="p-4 rounded-lg bg-success/5 border border-success/20">
-            <p className="text-[10px] uppercase tracking-wider text-success font-semibold mb-1">Deployed</p>
-            <p className="text-sm">{format(new Date(plan.deployed_at), 'MMMM dd, yyyy HH:mm')}</p>
-          </div>
-        )}
       </div>
 
       <div className="space-y-3">
