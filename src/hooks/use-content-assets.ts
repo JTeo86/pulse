@@ -199,13 +199,17 @@ export function useBulkDeleteAssets() {
   return useMutation({
     mutationFn: async (assets: ContentAsset[]) => {
       if (assets.length === 0) return;
+      const ids = assets.map((a) => a.id);
+      // Cascade: remove plan_assets and plan_publish_items links
+      await supabase.from('plan_assets').delete().in('content_asset_id', ids);
+      await supabase.from('plan_publish_items').delete().in('content_asset_id', ids);
+      // Remove storage objects
       const storagePaths = assets
         .map((a) => a.storage_path)
         .filter((p): p is string => !!p);
       if (storagePaths.length > 0) {
         await supabase.storage.from('venue-assets').remove(storagePaths);
       }
-      const ids = assets.map((a) => a.id);
       const { error } = await supabase.from('content_assets').delete().in('id', ids);
       if (error) throw error;
     },
