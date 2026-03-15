@@ -170,9 +170,15 @@ export function useDeleteAsset() {
 
   return useMutation({
     mutationFn: async (asset: ContentAsset) => {
+      // Remove plan_assets links first (cascade)
+      await supabase.from('plan_assets').delete().eq('content_asset_id', asset.id);
+      // Remove plan_publish_items links
+      await supabase.from('plan_publish_items').delete().eq('content_asset_id', asset.id);
+      // Remove storage object
       if (asset.storage_path) {
         await supabase.storage.from('venue-assets').remove([asset.storage_path]);
       }
+      // Remove the asset record
       const { error } = await supabase.from('content_assets').delete().eq('id', asset.id);
       if (error) throw error;
     },
@@ -193,13 +199,17 @@ export function useBulkDeleteAssets() {
   return useMutation({
     mutationFn: async (assets: ContentAsset[]) => {
       if (assets.length === 0) return;
+      const ids = assets.map((a) => a.id);
+      // Cascade: remove plan_assets and plan_publish_items links
+      await supabase.from('plan_assets').delete().in('content_asset_id', ids);
+      await supabase.from('plan_publish_items').delete().in('content_asset_id', ids);
+      // Remove storage objects
       const storagePaths = assets
         .map((a) => a.storage_path)
         .filter((p): p is string => !!p);
       if (storagePaths.length > 0) {
         await supabase.storage.from('venue-assets').remove(storagePaths);
       }
-      const ids = assets.map((a) => a.id);
       const { error } = await supabase.from('content_assets').delete().in('id', ids);
       if (error) throw error;
     },

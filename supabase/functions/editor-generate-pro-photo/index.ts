@@ -647,8 +647,9 @@ Deno.serve(async (req) => {
 
     // Content assets record with proper generation metadata
     const modeLabel = plan.mode.charAt(0).toUpperCase() + plan.mode.slice(1);
+    let outputAssetId: string | null = null;
     try {
-      await supabase.from('content_assets').insert({
+      const { data: contentAsset } = await supabase.from('content_assets').insert({
         venue_id,
         created_by: user.id,
         asset_type: 'image',
@@ -677,7 +678,8 @@ Deno.serve(async (req) => {
           edited_asset_id: editedAssetData?.id || null,
           upload_id: uploadId,
         },
-      });
+      }).select('id').single();
+      outputAssetId = contentAsset?.id || null;
     } catch (e) {
       console.warn('[PRO-PHOTO] content_assets insert error:', e);
     }
@@ -723,6 +725,7 @@ Deno.serve(async (req) => {
       model: 'google/gemini-2.5-flash-image',
       generation_time_ms: generationTimeMs,
       edited_asset_id: editedAssetData?.id || null,
+      output_asset_id: outputAssetId,
       generation_mode: plan.mode,
       generation_plan: plan,
     });

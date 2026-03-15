@@ -8,6 +8,8 @@ import {
   RefreshCw, Archive, ExternalLink, Unlink,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { ProductionSection } from '@/components/planner/ProductionSection';
+import { PublishSection } from '@/components/planner/PublishSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -250,7 +252,7 @@ export default function EventPlanDetailPage() {
             <ProductionSection planId={planId!} plan={plan} workspace={workspace} />
           )}
           {activeStep === 'publish' && (
-            <PublishSection plan={plan} workspace={workspace} />
+            <PublishSection planId={planId!} plan={plan} workspace={workspace} />
           )}
           {activeStep === 'revenue' && (
             <RevenueSection plan={plan} brain={brain} />
@@ -652,238 +654,8 @@ function OutputSection({ title, outputs, copied, onCopy, onStatusChange }: {
   );
 }
 
-/* ═══════════════════════════════════════════════════════
-   PRODUCTION SECTION — Real asset data
-   ═══════════════════════════════════════════════════════ */
-function ProductionSection({ planId, plan, workspace }: {
-  planId: string; plan: any; workspace: ReturnType<typeof usePlanWorkspace>;
-}) {
-  const navigate = useNavigate();
-  const { currentVenue } = useVenue();
-  const [linkedAssetData, setLinkedAssetData] = useState<Record<string, any>>({});
 
-  // Fetch real asset metadata for linked assets
-  useEffect(() => {
-    const assetIds = workspace.assets
-      .map(a => a.content_asset_id)
-      .filter((id): id is string => !!id);
 
-    if (assetIds.length === 0) return;
-
-    (async () => {
-      const { data } = await supabase
-        .from('content_assets')
-        .select('id, title, asset_type, status, thumbnail_url, public_url, storage_path, created_at')
-        .in('id', assetIds);
-      if (data) {
-        const map: Record<string, any> = {};
-        for (const a of data) {
-          let resolvedUrl = a.public_url || a.thumbnail_url || '';
-          if (!resolvedUrl && a.storage_path) {
-            const { data: signed } = await supabase.storage
-              .from('venue-assets')
-              .createSignedUrl(a.storage_path, 3600);
-            resolvedUrl = signed?.signedUrl || '';
-          }
-          map[a.id] = { ...a, _resolvedUrl: resolvedUrl };
-        }
-        setLinkedAssetData(map);
-      }
-    })();
-  }, [workspace.assets]);
-
-  const getRouteForAsset = (assetType: string) => {
-    if (assetType === 'reel' || assetType === 'video') return '/studio/reel-creator';
-    return '/studio/pro-photo';
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Creative Briefs */}
-      {workspace.briefs.length > 0 ? (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-foreground">Creative Briefs</h3>
-            <Badge variant="secondary" className="text-xs">{workspace.briefs.length} briefs</Badge>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {workspace.briefs.map(brief => {
-              const linkedPlanAsset = workspace.assets.find(a => a.asset_brief_id === brief.id);
-              const realAsset = linkedPlanAsset?.content_asset_id
-                ? linkedAssetData[linkedPlanAsset.content_asset_id]
-                : null;
-
-              return (
-                <div key={brief.id} className="card-elevated p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {brief.asset_type === 'reel' ? (
-                        <Video className="w-4 h-4 text-accent" />
-                      ) : (
-                        <Image className="w-4 h-4 text-accent" />
-                      )}
-                      <span className="text-sm font-medium">{brief.title}</span>
-                    </div>
-                    <Badge variant="outline" className="text-[10px]">
-                      {BRIEF_STATUS_LABELS[brief.status] || brief.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground line-clamp-3">{brief.brief}</p>
-                  {brief.intended_channel && (
-                    <p className="text-[10px] text-muted-foreground">Channel: {brief.intended_channel}</p>
-                  )}
-
-                  {/* Linked asset preview */}
-                  {realAsset ? (
-                    <div className="rounded-lg border border-success/20 bg-success/5 p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        {realAsset._resolvedUrl && (
-                          <img src={realAsset._resolvedUrl} alt={realAsset.title || ''} className="w-12 h-12 rounded object-cover" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">{realAsset.title || `${realAsset.asset_type} asset`}</p>
-                          <p className="text-[10px] text-muted-foreground">{realAsset.status} • {format(new Date(realAsset.created_at), 'MMM d')}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="flex-1 text-xs gap-1"
-                          onClick={() => navigate(getRouteForAsset(realAsset.asset_type))}
-                        >
-                          <ExternalLink className="w-3 h-3" /> Open
-                        </Button>
-                        {linkedPlanAsset && (
-                          <Button size="sm" variant="ghost" className="text-xs gap-1 text-muted-foreground"
-                            onClick={() => workspace.detachAsset(linkedPlanAsset.id)}
-                          >
-                            <Unlink className="w-3 h-3" /> Detach
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <Button size="sm" variant="outline" className="w-full text-xs gap-1.5"
-                      onClick={() => navigate(getRouteForAsset(brief.asset_type))}
-                    >
-                      <Plus className="w-3 h-3" /> Create in Studio
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="text-center py-12 text-muted-foreground">
-          <Image className="w-8 h-8 mx-auto opacity-40 mb-2" />
-          <p className="text-sm">No creative briefs yet.</p>
-          <p className="text-xs mt-1">Generate a Campaign Pack first — asset briefs will be created automatically.</p>
-        </div>
-      )}
-
-      {/* Linked assets without briefs */}
-      {workspace.assets.filter(a => !a.asset_brief_id && a.content_asset_id).length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-foreground">Linked Assets</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {workspace.assets
-              .filter(a => !a.asset_brief_id && a.content_asset_id)
-              .map(pa => {
-                const real = pa.content_asset_id ? linkedAssetData[pa.content_asset_id] : null;
-                return (
-                  <div key={pa.id} className="rounded-lg border border-border/50 bg-card/60 p-3 flex items-center gap-3">
-                    {real?._resolvedUrl && (
-                      <img src={real._resolvedUrl} alt="" className="w-10 h-10 rounded object-cover" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{real?.title || pa.asset_type}</p>
-                      <p className="text-[10px] text-muted-foreground">{pa.status}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"
-                      onClick={() => workspace.detachAsset(pa.id)}
-                    >
-                      <Unlink className="w-3 h-3" />
-                    </Button>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════
-   PUBLISH SECTION
-   ═══════════════════════════════════════════════════════ */
-function PublishSection({ plan, workspace }: { plan: any; workspace: ReturnType<typeof usePlanWorkspace> }) {
-  const navigate = useNavigate();
-  const approvedOutputs = workspace.outputs.filter(o => o.status === 'approved');
-  const channels = [
-    { name: 'Instagram Feed', icon: Image, suggested: 'Post 2-3 days before event' },
-    { name: 'Instagram Stories', icon: Play, suggested: 'Daily during campaign window' },
-    { name: 'Instagram Reels', icon: Video, suggested: 'Publish 5-7 days before event' },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Ready outputs */}
-      {approvedOutputs.length > 0 && (
-        <div className="card-elevated p-5 space-y-3">
-          <h3 className="font-medium text-sm">Ready to Publish ({approvedOutputs.length})</h3>
-          {approvedOutputs.map(o => (
-            <div key={o.id} className="flex items-center gap-3 p-2 rounded-lg bg-success/5 border border-success/20">
-              <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-              <span className="text-xs font-medium flex-1">{OUTPUT_TYPE_LABELS[o.output_type] || o.title}</span>
-              <Badge className="bg-success/20 text-success text-[10px] border-0">Approved</Badge>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="card-elevated p-5 space-y-4">
-        <h3 className="font-medium">Publishing Schedule</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 rounded-lg bg-muted/20 border border-border/50">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Event Date</p>
-            <p className="text-sm font-medium">{format(new Date(plan.starts_at), 'MMMM dd, yyyy')}</p>
-          </div>
-          <div className="p-4 rounded-lg bg-muted/20 border border-border/50">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Status</p>
-            <p className="text-sm font-medium">{STATUS_LABELS[plan.status] || plan.status}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-foreground">Suggested Channel Plan</h3>
-        <div className="space-y-2">
-          {channels.map(ch => (
-            <div key={ch.name} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card/60">
-              <div className="flex items-center gap-3">
-                <ch.icon className="w-4 h-4 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">{ch.name}</p>
-                  <p className="text-xs text-muted-foreground">{ch.suggested}</p>
-                </div>
-              </div>
-              <Badge variant="outline" className="text-[10px]">Pending</Badge>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <button
-        onClick={() => navigate('/content/scheduler')}
-        className="w-full p-5 rounded-xl border border-border/50 bg-card/60 hover:bg-card hover:border-border transition-colors text-left"
-      >
-        <Calendar className="w-5 h-5 text-accent mb-2" />
-        <p className="text-sm font-medium">Open Scheduler</p>
-        <p className="text-xs text-muted-foreground mt-1">Schedule content for publishing across channels</p>
-      </button>
-    </div>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════
    REVENUE SECTION

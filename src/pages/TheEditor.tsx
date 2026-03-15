@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, Camera, Wand2, Download,
@@ -83,6 +84,13 @@ export default function TheEditorPage() {
   const { toast } = useToast();
   const phaseFlags = usePhaseFlags();
   const videoEnabled = phaseFlags.video_enabled;
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Plan context from URL params (passed from Production workspace)
+  const planId = searchParams.get('plan_id');
+  const briefId = searchParams.get('brief_id');
+  const briefTitle = searchParams.get('brief_title');
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
@@ -180,11 +188,32 @@ export default function TheEditorPage() {
           style_sources: data.style_sources || [],
           edited_asset_id: data.edited_asset_id || null,
         });
+
+        // Auto-link to plan if we came from Production workspace
+        if (planId && data.output_asset_id) {
+          try {
+            await supabase.from('plan_assets').insert({
+              plan_id: planId,
+              asset_brief_id: briefId || null,
+              content_asset_id: data.output_asset_id,
+              asset_type: 'image',
+              status: 'created',
+              metadata: { source: 'pro_photo', brief_title: briefTitle || null },
+            });
+            // Update brief status if linked
+            if (briefId) {
+              await supabase.from('plan_asset_briefs').update({ status: 'created' }).eq('id', briefId);
+            }
+          } catch (linkErr) {
+            console.error('Failed to auto-link asset to plan:', linkErr);
+          }
+        }
       }
 
+      const backToPlan = planId ? ` Asset linked to campaign.` : '';
       toast({
         title: 'Pro Photo generated',
-        description: `Saved to Content Library. ${data?.reference_count > 0 ? `${data.reference_count} brand references used.` : 'AI-generated environment.'}`,
+        description: `Saved to Content Library.${backToPlan} ${data?.reference_count > 0 ? `${data.reference_count} brand references used.` : 'AI-generated environment.'}`,
       });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message || 'AI photo generation failed. Please try again.' });
@@ -271,6 +300,22 @@ export default function TheEditorPage() {
       transition={{ duration: 0.3 }}
       className="max-w-6xl mx-auto space-y-6"
     >
+      {/* Plan context banner */}
+      {planId && briefTitle && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent/5">
+          <ImageIcon className="w-4 h-4 text-accent shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground">Creating for campaign brief: <span className="text-accent">{briefTitle}</span></p>
+            <p className="text-[10px] text-muted-foreground">Asset will automatically link to your campaign plan.</p>
+          </div>
+          <button
+            onClick={() => navigate(`/content/planner/plan/${planId}`)}
+            className="text-xs text-accent hover:underline shrink-0"
+          >
+            ← Back to Plan
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

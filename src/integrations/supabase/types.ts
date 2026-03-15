@@ -1461,6 +1461,70 @@ export type Database = {
           },
         ]
       }
+      plan_publish_items: {
+        Row: {
+          caption: string | null
+          channel: string
+          content_asset_id: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          plan_asset_id: string | null
+          plan_id: string
+          publish_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          channel?: string
+          content_asset_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          plan_asset_id?: string | null
+          plan_id: string
+          publish_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          channel?: string
+          content_asset_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          plan_asset_id?: string | null
+          plan_id?: string
+          publish_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_publish_items_content_asset_id_fkey"
+            columns: ["content_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_publish_items_plan_asset_id_fkey"
+            columns: ["plan_asset_id"]
+            isOneToOne: false
+            referencedRelation: "plan_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_publish_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_workspace_snapshots: {
         Row: {
           plan_id: string
