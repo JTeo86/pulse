@@ -300,6 +300,22 @@ export default function TheEditorPage() {
       transition={{ duration: 0.3 }}
       className="max-w-6xl mx-auto space-y-6"
     >
+      {/* Plan context banner */}
+      {planId && briefTitle && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent/5">
+          <ImageIcon className="w-4 h-4 text-accent shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground">Creating for campaign brief: <span className="text-accent">{briefTitle}</span></p>
+            <p className="text-[10px] text-muted-foreground">Asset will automatically link to your campaign plan.</p>
+          </div>
+          <button
+            onClick={() => navigate(`/content/planner/plan/${planId}`)}
+            className="text-xs text-accent hover:underline shrink-0"
+          >
+            ← Back to Plan
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
