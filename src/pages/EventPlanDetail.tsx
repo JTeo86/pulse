@@ -8,6 +8,8 @@ import {
   RefreshCw, Archive, ExternalLink, Unlink,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { ProductionSection } from '@/components/planner/ProductionSection';
+import { PublishSection } from '@/components/planner/PublishSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
