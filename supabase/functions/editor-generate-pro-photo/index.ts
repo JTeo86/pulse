@@ -725,6 +725,7 @@ Deno.serve(async (req) => {
       model: 'google/gemini-2.5-flash-image',
       generation_time_ms: generationTimeMs,
       edited_asset_id: editedAssetData?.id || null,
+      output_asset_id: outputAssetId,
       generation_mode: plan.mode,
       generation_plan: plan,
     });
