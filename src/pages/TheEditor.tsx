@@ -188,11 +188,32 @@ export default function TheEditorPage() {
           style_sources: data.style_sources || [],
           edited_asset_id: data.edited_asset_id || null,
         });
+
+        // Auto-link to plan if we came from Production workspace
+        if (planId && data.output_asset_id) {
+          try {
+            await supabase.from('plan_assets').insert({
+              plan_id: planId,
+              asset_brief_id: briefId || null,
+              content_asset_id: data.output_asset_id,
+              asset_type: 'image',
+              status: 'created',
+              metadata: { source: 'pro_photo', brief_title: briefTitle || null },
+            });
+            // Update brief status if linked
+            if (briefId) {
+              await supabase.from('plan_asset_briefs').update({ status: 'created' }).eq('id', briefId);
+            }
+          } catch (linkErr) {
+            console.error('Failed to auto-link asset to plan:', linkErr);
+          }
+        }
       }
 
+      const backToPlan = planId ? ` Asset linked to campaign.` : '';
       toast({
         title: 'Pro Photo generated',
-        description: `Saved to Content Library. ${data?.reference_count > 0 ? `${data.reference_count} brand references used.` : 'AI-generated environment.'}`,
+        description: `Saved to Content Library.${backToPlan} ${data?.reference_count > 0 ? `${data.reference_count} brand references used.` : 'AI-generated environment.'}`,
       });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message || 'AI photo generation failed. Please try again.' });
