@@ -84,6 +84,13 @@ export default function TheEditorPage() {
   const { toast } = useToast();
   const phaseFlags = usePhaseFlags();
   const videoEnabled = phaseFlags.video_enabled;
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Plan context from URL params (passed from Production workspace)
+  const planId = searchParams.get('plan_id');
+  const briefId = searchParams.get('brief_id');
+  const briefTitle = searchParams.get('brief_title');
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
