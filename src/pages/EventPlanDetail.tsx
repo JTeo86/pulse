@@ -252,7 +252,7 @@ export default function EventPlanDetailPage() {
             <ProductionSection planId={planId!} plan={plan} workspace={workspace} />
           )}
           {activeStep === 'publish' && (
-            <PublishSection plan={plan} workspace={workspace} />
+            <PublishSection planId={planId!} plan={plan} workspace={workspace} />
           )}
           {activeStep === 'revenue' && (
             <RevenueSection plan={plan} brain={brain} />
