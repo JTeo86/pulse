@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, Camera, Wand2, Download,
