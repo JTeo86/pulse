@@ -59,7 +59,14 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
       if (data) {
         const map: Record<string, any> = {};
         for (const a of data) {
-          let resolvedUrl = a.public_url || a.thumbnail_url || '';
+          const isSignedUrl = (url?: string | null) =>
+            url?.includes('/object/sign/') || url?.includes('?token=');
+          let resolvedUrl = '';
+          if (a.public_url && !isSignedUrl(a.public_url)) {
+            resolvedUrl = a.public_url;
+          } else if (a.thumbnail_url && !isSignedUrl(a.thumbnail_url)) {
+            resolvedUrl = a.thumbnail_url;
+          }
           if (!resolvedUrl && a.storage_path) {
             const { data: signed } = await supabase.storage
               .from('venue-assets')
@@ -285,30 +292,30 @@ function BriefCard({
               </Badge>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="flex-1 text-xs gap-1" onClick={onOpenAsset}>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="min-w-0 flex-1 text-xs gap-1" onClick={onOpenAsset}>
               <ExternalLink className="w-3 h-3" /> Open
             </Button>
             <Button
               size="sm"
               variant={isApproved ? 'secondary' : 'default'}
-              className="flex-1 text-xs gap-1"
+              className="min-w-0 flex-1 text-xs gap-1"
               onClick={onApprove}
             >
               <CheckCircle2 className="w-3 h-3" />
               {isApproved ? 'Unapprove' : 'Approve'}
             </Button>
-            <Button size="sm" variant="ghost" className="text-xs gap-1 text-muted-foreground" onClick={onDetach}>
+            <Button size="sm" variant="ghost" className="flex-none text-xs gap-1 text-muted-foreground" onClick={onDetach}>
               <Unlink className="w-3 h-3" />
             </Button>
           </div>
         </div>
       ) : (
-        <div className="flex gap-2">
-          <Button size="sm" variant="default" className="flex-1 text-xs gap-1.5" onClick={onCreateInStudio}>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="default" className="min-w-0 flex-1 text-xs gap-1.5" onClick={onCreateInStudio}>
             <Plus className="w-3 h-3" /> Create in Studio
           </Button>
-          <Button size="sm" variant="outline" className="flex-1 text-xs gap-1.5" onClick={onAttachExisting}>
+          <Button size="sm" variant="outline" className="min-w-0 flex-1 text-xs gap-1.5" onClick={onAttachExisting}>
             <Link2 className="w-3 h-3" /> Attach Existing
           </Button>
         </div>

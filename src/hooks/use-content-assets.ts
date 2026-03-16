@@ -60,7 +60,9 @@ export function useContentAssets(assetType?: 'image' | 'video') {
       const assets = (data || []) as ContentAsset[];
       const resolved = await Promise.all(
         assets.map(async (asset) => {
-          if (asset.public_url) {
+          // Detect expired signed URLs — never trust them
+          const isSignedUrl = asset.public_url?.includes('/object/sign/') || asset.public_url?.includes('?token=');
+          if (asset.public_url && !isSignedUrl) {
             return { ...asset, _resolvedUrl: asset.public_url };
           }
           if (asset.storage_path) {
