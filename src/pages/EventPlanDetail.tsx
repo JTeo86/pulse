@@ -150,7 +150,9 @@ export default function EventPlanDetailPage() {
     setEditingTitle(false);
   };
 
-  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets);
+  const approvedAssets = workspace.assets.filter((a: any) => a.status === 'approved');
+  const approvedOutputs = workspace.outputs.filter((o: any) => o.status === 'approved');
+  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0, approvedAssets.length > 0, approvedOutputs.length > 0);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
