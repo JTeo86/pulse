@@ -250,16 +250,16 @@ function BriefCard({
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {brief.asset_type === 'reel' || brief.asset_type === 'video' ? (
-            <Video className="w-4 h-4 text-accent" />
+            <Video className="w-4 h-4 text-accent shrink-0" />
           ) : (
-            <Image className="w-4 h-4 text-accent" />
+            <Image className="w-4 h-4 text-accent shrink-0" />
           )}
-          <span className="text-sm font-medium">{brief.title}</span>
+          <span className="text-sm font-medium truncate">{brief.title}</span>
         </div>
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" className="text-[10px] shrink-0 whitespace-nowrap">
           {hasAsset ? (isApproved ? '✓ Approved' : 'Asset Created') : BRIEF_STATUS_LABELS[brief.status] || brief.status}
         </Badge>
       </div>
