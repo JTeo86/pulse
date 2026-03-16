@@ -59,7 +59,14 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
       if (data) {
         const map: Record<string, any> = {};
         for (const a of data) {
-          let resolvedUrl = a.public_url || a.thumbnail_url || '';
+          const isSignedUrl = (url?: string | null) =>
+            url?.includes('/object/sign/') || url?.includes('?token=');
+          let resolvedUrl = '';
+          if (a.public_url && !isSignedUrl(a.public_url)) {
+            resolvedUrl = a.public_url;
+          } else if (a.thumbnail_url && !isSignedUrl(a.thumbnail_url)) {
+            resolvedUrl = a.thumbnail_url;
+          }
           if (!resolvedUrl && a.storage_path) {
             const { data: signed } = await supabase.storage
               .from('venue-assets')
