@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Copy, Check, ExternalLink, Download, Clock, CheckCircle2,
   Archive, Pencil, Trash2, Bell, Image as ImageIcon, Video,
-  Mail, MessageSquare, Instagram, Play,
+  Mail, MessageSquare, Camera, Play,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
