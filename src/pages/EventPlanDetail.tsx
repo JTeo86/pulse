@@ -304,7 +304,9 @@ function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: a
     if (workspace.hasAssetBriefs)
       insights.push(`${workspace.briefs.length} creative briefs ready. Click "Create in Studio" to start producing.`);
   } else if (activeStep === 'publish') {
+    insights.push('Post Packs bundle your approved copy + assets into ready-to-post deliverables.');
     insights.push('Post Instagram Reels 5-7 days before the event for maximum reach.');
+    insights.push('TikTok content performs best when posted at peak hours — weekdays 7-9pm.');
     insights.push('Stories should run daily during the campaign window.');
   } else if (activeStep === 'revenue') {
     if (brain.revenueInsights.totalSignals > 0)
