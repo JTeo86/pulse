@@ -292,20 +292,20 @@ function BriefCard({
               </Badge>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" className="min-w-0 flex-1 text-xs gap-1" onClick={onOpenAsset}>
-              <ExternalLink className="w-3 h-3" /> Open
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-2 w-full">
+            <Button size="sm" variant="outline" className="w-full min-w-0 text-xs gap-1 h-8" onClick={onOpenAsset}>
+              <ExternalLink className="w-3 h-3 shrink-0" /> Open
             </Button>
             <Button
               size="sm"
               variant={isApproved ? 'secondary' : 'default'}
-              className="min-w-0 flex-1 text-xs gap-1"
+              className="w-full min-w-0 text-xs gap-1 h-8"
               onClick={onApprove}
             >
-              <CheckCircle2 className="w-3 h-3" />
+              <CheckCircle2 className="w-3 h-3 shrink-0" />
               {isApproved ? 'Unapprove' : 'Approve'}
             </Button>
-            <Button size="sm" variant="ghost" className="flex-none text-xs gap-1 text-muted-foreground" onClick={onDetach}>
+            <Button size="sm" variant="ghost" className="text-xs gap-1 text-muted-foreground h-8 w-8 p-0" onClick={onDetach}>
               <Unlink className="w-3 h-3" />
             </Button>
           </div>
