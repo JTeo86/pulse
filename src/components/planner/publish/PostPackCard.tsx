@@ -22,7 +22,7 @@ interface PostPackCardProps {
 }
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
-  instagram_feed: Instagram,
+  instagram_feed: Camera,
   instagram_stories: Play,
   instagram_reels: Video,
   tiktok: Video,
