@@ -53,6 +53,8 @@ function getStepStatus(
   hasCampaignPack: boolean,
   hasAssetBriefs: boolean,
   hasLinkedAssets: boolean,
+  publishPackCount?: number,
+  publishPostedCount?: number,
 ): 'not_started' | 'in_progress' | 'ready' | 'done' {
   const decision = plan?.decision || {};
   const hasStrategy = decision.run_offer || decision.run_event_promo || decision.run_menu_highlight ||
@@ -65,8 +67,12 @@ function getStepStatus(
       return hasCampaignPack ? 'done' : hasStrategy ? 'ready' : 'not_started';
     case 'production':
       return hasLinkedAssets ? 'done' : hasAssetBriefs ? 'ready' : 'not_started';
-    case 'publish':
-      return plan?.status === 'scheduled' || plan?.status === 'done' ? 'done' : 'not_started';
+    case 'publish': {
+      if ((publishPostedCount || 0) > 0) return 'done';
+      if ((publishPackCount || 0) > 0) return 'in_progress';
+      if (hasLinkedAssets && hasCampaignPack) return 'ready';
+      return 'not_started';
+    }
     case 'revenue':
       return 'not_started';
     default:
@@ -80,6 +86,9 @@ function getNextBestAction(
   hasCampaignPack: boolean,
   hasAssetBriefs: boolean,
   hasLinkedAssets: boolean,
+  publishPackCount?: number,
+  hasApprovedAssets?: boolean,
+  hasApprovedOutputs?: boolean,
 ): { label: string; description: string; target: WorkflowStep } | null {
   const decision = plan?.decision || {};
   const hasStrategy = decision.run_offer || decision.run_event_promo || decision.offer_terms || decision.campaign_angle;
@@ -90,8 +99,10 @@ function getNextBestAction(
     return { label: 'Generate Campaign Pack', description: 'Auto-generate copy and creative direction for all channels.', target: 'campaign_pack' };
   if (!hasLinkedAssets && hasAssetBriefs && activeStep !== 'production')
     return { label: 'Create Assets', description: 'Produce hero images and reels for your campaign.', target: 'production' };
-  if (plan?.status !== 'scheduled' && plan?.status !== 'done' && hasCampaignPack && activeStep !== 'publish')
-    return { label: 'Schedule & Publish', description: 'Set publishing dates and push to channels.', target: 'publish' };
+  if ((hasApprovedAssets || hasApprovedOutputs) && (publishPackCount || 0) === 0 && activeStep !== 'publish')
+    return { label: 'Create Post Packs', description: 'Assemble ready-to-post packs for Instagram, TikTok, Email and more.', target: 'publish' };
+  if ((publishPackCount || 0) > 0 && activeStep !== 'publish')
+    return { label: 'Review Post Packs', description: 'Copy captions, download assets, and post when ready.', target: 'publish' };
   return null;
 }
 
