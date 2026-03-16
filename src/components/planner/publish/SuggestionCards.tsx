@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import {
   Plus, Image as ImageIcon, Video, Mail, MessageSquare,
-  Instagram, Play, Sparkles,
+  Camera, Play, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
