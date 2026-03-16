@@ -204,7 +204,7 @@ export default function EventPlanDetailPage() {
         {/* LEFT — Progress Steps */}
         <div className="space-y-1">
           {WORKFLOW_STEPS.map((step) => {
-            const status = getStepStatus(step.id, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets);
+            const status = getStepStatus(step.id, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0, 0);
             const isActive = activeStep === step.id;
             return (
               <button
