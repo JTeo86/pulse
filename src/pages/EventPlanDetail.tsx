@@ -53,6 +53,8 @@ function getStepStatus(
   hasCampaignPack: boolean,
   hasAssetBriefs: boolean,
   hasLinkedAssets: boolean,
+  publishPackCount?: number,
+  publishPostedCount?: number,
 ): 'not_started' | 'in_progress' | 'ready' | 'done' {
   const decision = plan?.decision || {};
   const hasStrategy = decision.run_offer || decision.run_event_promo || decision.run_menu_highlight ||
@@ -65,8 +67,12 @@ function getStepStatus(
       return hasCampaignPack ? 'done' : hasStrategy ? 'ready' : 'not_started';
     case 'production':
       return hasLinkedAssets ? 'done' : hasAssetBriefs ? 'ready' : 'not_started';
-    case 'publish':
-      return plan?.status === 'scheduled' || plan?.status === 'done' ? 'done' : 'not_started';
+    case 'publish': {
+      if ((publishPostedCount || 0) > 0) return 'done';
+      if ((publishPackCount || 0) > 0) return 'in_progress';
+      if (hasLinkedAssets && hasCampaignPack) return 'ready';
+      return 'not_started';
+    }
     case 'revenue':
       return 'not_started';
     default:
@@ -80,6 +86,9 @@ function getNextBestAction(
   hasCampaignPack: boolean,
   hasAssetBriefs: boolean,
   hasLinkedAssets: boolean,
+  publishPackCount?: number,
+  hasApprovedAssets?: boolean,
+  hasApprovedOutputs?: boolean,
 ): { label: string; description: string; target: WorkflowStep } | null {
   const decision = plan?.decision || {};
   const hasStrategy = decision.run_offer || decision.run_event_promo || decision.offer_terms || decision.campaign_angle;
@@ -90,8 +99,10 @@ function getNextBestAction(
     return { label: 'Generate Campaign Pack', description: 'Auto-generate copy and creative direction for all channels.', target: 'campaign_pack' };
   if (!hasLinkedAssets && hasAssetBriefs && activeStep !== 'production')
     return { label: 'Create Assets', description: 'Produce hero images and reels for your campaign.', target: 'production' };
-  if (plan?.status !== 'scheduled' && plan?.status !== 'done' && hasCampaignPack && activeStep !== 'publish')
-    return { label: 'Schedule & Publish', description: 'Set publishing dates and push to channels.', target: 'publish' };
+  if ((hasApprovedAssets || hasApprovedOutputs) && (publishPackCount || 0) === 0 && activeStep !== 'publish')
+    return { label: 'Create Post Packs', description: 'Assemble ready-to-post packs for Instagram, TikTok, Email and more.', target: 'publish' };
+  if ((publishPackCount || 0) > 0 && activeStep !== 'publish')
+    return { label: 'Review Post Packs', description: 'Copy captions, download assets, and post when ready.', target: 'publish' };
   return null;
 }
 
@@ -139,7 +150,9 @@ export default function EventPlanDetailPage() {
     setEditingTitle(false);
   };
 
-  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets);
+  const approvedAssets = workspace.assets.filter((a: any) => a.status === 'approved');
+  const approvedOutputs = workspace.outputs.filter((o: any) => o.status === 'approved');
+  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0, approvedAssets.length > 0, approvedOutputs.length > 0);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
@@ -191,7 +204,7 @@ export default function EventPlanDetailPage() {
         {/* LEFT — Progress Steps */}
         <div className="space-y-1">
           {WORKFLOW_STEPS.map((step) => {
-            const status = getStepStatus(step.id, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets);
+            const status = getStepStatus(step.id, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0, 0);
             const isActive = activeStep === step.id;
             return (
               <button
@@ -291,7 +304,9 @@ function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: a
     if (workspace.hasAssetBriefs)
       insights.push(`${workspace.briefs.length} creative briefs ready. Click "Create in Studio" to start producing.`);
   } else if (activeStep === 'publish') {
+    insights.push('Post Packs bundle your approved copy + assets into ready-to-post deliverables.');
     insights.push('Post Instagram Reels 5-7 days before the event for maximum reach.');
+    insights.push('TikTok content performs best when posted at peak hours — weekdays 7-9pm.');
     insights.push('Stories should run daily during the campaign window.');
   } else if (activeStep === 'revenue') {
     if (brain.revenueInsights.totalSignals > 0)
