@@ -1469,10 +1469,14 @@ export type Database = {
           created_at: string
           id: string
           metadata: Json | null
+          pack_type: string
           plan_asset_id: string | null
           plan_id: string
+          posted_at: string | null
           publish_date: string | null
+          reminder_at: string | null
           status: string
+          title: string
           updated_at: string
         }
         Insert: {
@@ -1482,10 +1486,14 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          pack_type?: string
           plan_asset_id?: string | null
           plan_id: string
+          posted_at?: string | null
           publish_date?: string | null
+          reminder_at?: string | null
           status?: string
+          title?: string
           updated_at?: string
         }
         Update: {
@@ -1495,10 +1503,14 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          pack_type?: string
           plan_asset_id?: string | null
           plan_id?: string
+          posted_at?: string | null
           publish_date?: string | null
+          reminder_at?: string | null
           status?: string
+          title?: string
           updated_at?: string
         }
         Relationships: [
