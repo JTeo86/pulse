@@ -1,22 +1,19 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import {
-  Calendar, CheckCircle2, Image, Play, Video, Plus, Trash2,
-  Send, Clock, Pencil,
+  Calendar, CheckCircle2, Image, Plus, Package, Bell,
+  Clock, Archive, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { usePlanWorkspace, OUTPUT_TYPE_LABELS } from '@/hooks/use-plan-workspace';
-import { usePlanPublish, PUBLISH_CHANNELS, PlanPublishItem } from '@/hooks/use-plan-publish';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePlanWorkspace } from '@/hooks/use-plan-workspace';
+import { usePlanPublish, PlanPublishItem } from '@/hooks/use-plan-publish';
 import { supabase } from '@/integrations/supabase/client';
+import { generateSuggestedPacks, SuggestedPostPack } from './publish/post-pack-engine';
+import { PostPackCard } from './publish/PostPackCard';
+import { PostPackDialog } from './publish/PostPackDialog';
+import { SuggestionCards } from './publish/SuggestionCards';
 
 interface PublishSectionProps {
   planId: string;
@@ -24,27 +21,24 @@ interface PublishSectionProps {
   workspace: ReturnType<typeof usePlanWorkspace>;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  not_started: 'Idea', planned: 'Planned', in_production: 'In Production',
-  in_review: 'In Review', approved: 'Approved', scheduled: 'Scheduled',
-  done: 'Published', skipped: 'Skipped',
-};
-
 export function PublishSection({ planId, plan, workspace }: PublishSectionProps) {
-  const navigate = useNavigate();
   const publish = usePlanPublish(planId);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PlanPublishItem | null>(null);
+  const [activeSuggestion, setActiveSuggestion] = useState<SuggestedPostPack | null>(null);
   const [linkedAssetData, setLinkedAssetData] = useState<Record<string, any>>({});
 
-  // Approved assets ready for publishing
   const approvedAssets = workspace.assets.filter(a => a.status === 'approved');
   const approvedOutputs = workspace.outputs.filter(o => o.status === 'approved');
 
-  // Fetch thumbnails for approved assets
+  // Fetch resolved URLs for all content assets referenced by packs or approved assets
   useEffect(() => {
-    const ids = approvedAssets.map(a => a.content_asset_id).filter((id): id is string => !!id);
+    const allAssetIds = new Set<string>();
+    approvedAssets.forEach(a => { if (a.content_asset_id) allAssetIds.add(a.content_asset_id); });
+    publish.items.forEach(i => { if (i.content_asset_id) allAssetIds.add(i.content_asset_id); });
+    const ids = Array.from(allAssetIds);
     if (ids.length === 0) return;
+
     (async () => {
       const { data } = await supabase
         .from('content_assets')
@@ -53,7 +47,11 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
       if (data) {
         const map: Record<string, any> = {};
         for (const a of data) {
-          let url = a.public_url || a.thumbnail_url || '';
+          const isSignedUrl = (url?: string | null) =>
+            url?.includes('/object/sign/') || url?.includes('?token=');
+          let url = '';
+          if (a.public_url && !isSignedUrl(a.public_url)) url = a.public_url;
+          else if (a.thumbnail_url && !isSignedUrl(a.thumbnail_url)) url = a.thumbnail_url;
           if (!url && a.storage_path) {
             const { data: signed } = await supabase.storage.from('venue-assets').createSignedUrl(a.storage_path, 3600);
             url = signed?.signedUrl || '';
@@ -63,333 +61,233 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         setLinkedAssetData(map);
       }
     })();
-  }, [approvedAssets]);
+  }, [approvedAssets, publish.items]);
+
+  // Generate suggestions
+  const suggestions = useMemo(() => {
+    const existingChannels = publish.items
+      .filter(i => i.status !== 'archived')
+      .map(i => i.channel);
+    return generateSuggestedPacks(
+      approvedOutputs as any,
+      approvedAssets as any,
+      existingChannels,
+    );
+  }, [approvedOutputs, approvedAssets, publish.items]);
+
+  const handleCreateFromSuggestion = (suggestion: SuggestedPostPack) => {
+    setActiveSuggestion(suggestion);
+    setEditingItem(null);
+    setDialogOpen(true);
+  };
+
+  const handleCreateBlank = () => {
+    setActiveSuggestion(null);
+    setEditingItem(null);
+    setDialogOpen(true);
+  };
+
+  const handleEdit = (item: PlanPublishItem) => {
+    setEditingItem(item);
+    setActiveSuggestion(null);
+    setDialogOpen(true);
+  };
+
+  const handleSave = async (data: any) => {
+    if (editingItem) {
+      await publish.updatePublishItem(editingItem.id, data);
+    } else {
+      await publish.addPublishItem(data);
+    }
+    setDialogOpen(false);
+    setEditingItem(null);
+    setActiveSuggestion(null);
+  };
+
+  // Missing items warnings
+  const missingItems: string[] = [];
+  if (approvedOutputs.length === 0) missingItems.push('No approved copy — approve outputs in Campaign Pack');
+  if (approvedAssets.length === 0) missingItems.push('No approved assets — approve assets in Production');
+
+  const hasAnyPacks = publish.items.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* Approved outputs ready */}
-      {approvedOutputs.length > 0 && (
-        <div className="rounded-xl border border-success/20 bg-success/5 p-5 space-y-3">
-          <h3 className="font-medium text-sm flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-success" />
-            Ready Copy ({approvedOutputs.length})
-          </h3>
-          {approvedOutputs.map(o => (
-            <div key={o.id} className="flex items-center gap-3 p-2 rounded-lg bg-background/50 border border-success/10">
-              <span className="text-xs font-medium flex-1">{OUTPUT_TYPE_LABELS[o.output_type] || o.title}</span>
-              <Badge className="bg-success/20 text-success text-[10px] border-0">Approved</Badge>
-            </div>
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-serif font-medium">Post Packs</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Ready-to-post content packs for each channel. Copy, download, and post when reminded.
+          </p>
+        </div>
+        <Button size="sm" className="gap-2" onClick={handleCreateBlank}>
+          <Plus className="w-3 h-3" /> Create Pack
+        </Button>
+      </div>
+
+      {/* Missing items */}
+      {missingItems.length > 0 && (
+        <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-warning" />
+            <h3 className="text-xs font-semibold text-warning">Items needed for publishing</h3>
+          </div>
+          {missingItems.map((msg, i) => (
+            <p key={i} className="text-xs text-muted-foreground">• {msg}</p>
           ))}
         </div>
       )}
 
-      {/* Approved assets */}
-      {approvedAssets.length > 0 && (
-        <div className="rounded-xl border border-success/20 bg-success/5 p-5 space-y-3">
-          <h3 className="font-medium text-sm flex items-center gap-2">
-            <Image className="w-4 h-4 text-success" />
-            Approved Assets ({approvedAssets.length})
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {approvedAssets.map(pa => {
-              const real = pa.content_asset_id ? linkedAssetData[pa.content_asset_id] : null;
-              return (
-                <div key={pa.id} className="rounded-lg border border-success/20 bg-background/50 overflow-hidden">
-                  {real?._resolvedUrl ? (
-                    <img src={real._resolvedUrl} alt="" className="w-full aspect-square object-cover" />
-                  ) : (
-                    <div className="w-full aspect-square bg-muted flex items-center justify-center">
-                      <Image className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="p-2">
-                    <p className="text-[10px] font-medium truncate">{real?.title || pa.asset_type}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {/* Suggested packs */}
+      {suggestions.length > 0 && (
+        <SuggestionCards
+          suggestions={suggestions}
+          onCreatePack={handleCreateFromSuggestion}
+        />
       )}
 
-      {/* Schedule info */}
-      <div className="rounded-xl border bg-card p-5 space-y-4">
-        <h3 className="font-medium">Campaign Timeline</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 rounded-lg bg-muted/20 border border-border/50">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Event Date</p>
-            <p className="text-sm font-medium">{format(new Date(plan.starts_at), 'MMMM dd, yyyy')}</p>
+      {/* Campaign timeline */}
+      <div className="rounded-xl border bg-card p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Event</p>
+            <p className="text-sm font-medium">{format(new Date(plan.starts_at), 'MMM dd, yyyy')}</p>
           </div>
-          <div className="p-4 rounded-lg bg-muted/20 border border-border/50">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Status</p>
-            <p className="text-sm font-medium">{STATUS_LABELS[plan.status] || plan.status}</p>
+          <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Post Packs</p>
+            <p className="text-sm font-medium">{publish.items.filter(i => i.status !== 'archived').length} created</p>
+          </div>
+          <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Posted</p>
+            <p className="text-sm font-medium">{publish.completedPacks.filter(p => p.status === 'published').length} done</p>
           </div>
         </div>
       </div>
 
-      {/* Publish queue */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-foreground">Publish Queue</h3>
-          <Button size="sm" variant="outline" className="gap-2" onClick={() => setAddDialogOpen(true)}>
-            <Plus className="w-3 h-3" /> Schedule Post
-          </Button>
-        </div>
+      {/* Post pack lists */}
+      {hasAnyPacks ? (
+        <Tabs defaultValue="ready" className="space-y-4">
+          <TabsList className="bg-muted/50">
+            <TabsTrigger value="ready" className="gap-1.5 text-xs">
+              <Package className="w-3.5 h-3.5" />
+              Ready ({publish.readyPacks.length})
+            </TabsTrigger>
+            <TabsTrigger value="scheduled" className="gap-1.5 text-xs">
+              <Bell className="w-3.5 h-3.5" />
+              Scheduled ({publish.scheduledPacks.length})
+            </TabsTrigger>
+            <TabsTrigger value="posted" className="gap-1.5 text-xs">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Posted ({publish.completedPacks.length})
+            </TabsTrigger>
+          </TabsList>
 
-        {publish.items.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground rounded-xl border border-dashed border-border">
-            <Calendar className="w-6 h-6 mx-auto opacity-40 mb-2" />
-            <p className="text-sm">No posts scheduled yet.</p>
-            <p className="text-xs mt-1">Approve assets in Production, then add them to the publish queue.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {publish.items.map(item => (
-              <PublishItemRow
-                key={item.id}
-                item={item}
-                assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
-                onEdit={() => setEditingItem(item)}
-                onRemove={() => publish.removePublishItem(item.id)}
-                onStatusChange={(status) => publish.updatePublishItem(item.id, { status })}
+          <TabsContent value="ready">
+            {publish.readyPacks.length === 0 ? (
+              <EmptySection
+                icon={Package}
+                title="No ready post packs"
+                description="Create a post pack from the suggestions above or click 'Create Pack'"
               />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Suggested channel plan */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-foreground">Suggested Channel Plan</h3>
-        <div className="space-y-2">
-          {[
-            { name: 'Instagram Feed', suggested: 'Post 2-3 days before event', icon: Image },
-            { name: 'Instagram Stories', suggested: 'Daily during campaign window', icon: Play },
-            { name: 'Instagram Reels', suggested: 'Publish 5-7 days before event', icon: Video },
-          ].map(ch => (
-            <div key={ch.name} className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card/60">
-              <div className="flex items-center gap-3">
-                <ch.icon className="w-4 h-4 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">{ch.name}</p>
-                  <p className="text-xs text-muted-foreground">{ch.suggested}</p>
-                </div>
+            ) : (
+              <div className="space-y-3">
+                {publish.readyPacks.map(item => (
+                  <PostPackCard
+                    key={item.id}
+                    item={item}
+                    assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
+                    onEdit={() => handleEdit(item)}
+                    onMarkPosted={() => publish.markAsPosted(item.id)}
+                    onArchive={() => publish.archivePack(item.id)}
+                    onRemove={() => publish.removePublishItem(item.id)}
+                  />
+                ))}
               </div>
-              <Badge variant="outline" className="text-[10px]">
-                {publish.items.filter(i => i.channel === ch.name.toLowerCase().replace(/ /g, '_')).length > 0
-                  ? 'Scheduled' : 'Pending'}
-              </Badge>
-            </div>
-          ))}
-        </div>
-      </div>
+            )}
+          </TabsContent>
 
-      {/* Add/Edit dialog */}
-      <ScheduleDialog
-        open={addDialogOpen || !!editingItem}
-        onClose={() => { setAddDialogOpen(false); setEditingItem(null); }}
-        item={editingItem}
+          <TabsContent value="scheduled">
+            {publish.scheduledPacks.length === 0 ? (
+              <EmptySection
+                icon={Bell}
+                title="No scheduled packs"
+                description="Set a publish date and reminder when creating a post pack"
+              />
+            ) : (
+              <div className="space-y-3">
+                {publish.scheduledPacks.map(item => (
+                  <PostPackCard
+                    key={item.id}
+                    item={item}
+                    assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
+                    onEdit={() => handleEdit(item)}
+                    onMarkPosted={() => publish.markAsPosted(item.id)}
+                    onArchive={() => publish.archivePack(item.id)}
+                    onRemove={() => publish.removePublishItem(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="posted">
+            {publish.completedPacks.length === 0 ? (
+              <EmptySection
+                icon={CheckCircle2}
+                title="Nothing posted yet"
+                description="Post packs you mark as posted will appear here"
+              />
+            ) : (
+              <div className="space-y-3">
+                {publish.completedPacks.map(item => (
+                  <PostPackCard
+                    key={item.id}
+                    item={item}
+                    assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
+                    onEdit={() => handleEdit(item)}
+                    onMarkPosted={() => publish.markAsPosted(item.id)}
+                    onArchive={() => publish.archivePack(item.id)}
+                    onRemove={() => publish.removePublishItem(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <div className="text-center py-10 rounded-xl border border-dashed border-border">
+          <Package className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+          <p className="text-sm text-muted-foreground">No post packs yet.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {suggestions.length > 0
+              ? 'Click a suggestion above to get started, or create one manually.'
+              : 'Approve copy and assets first, then create post packs for each channel.'}
+          </p>
+        </div>
+      )}
+
+      {/* Dialog */}
+      <PostPackDialog
+        open={dialogOpen}
+        onClose={() => { setDialogOpen(false); setEditingItem(null); setActiveSuggestion(null); }}
+        editItem={editingItem}
+        suggestion={activeSuggestion}
         approvedAssets={approvedAssets}
         assetData={linkedAssetData}
         approvedOutputs={approvedOutputs}
-        onSave={async (data) => {
-          if (editingItem) {
-            await publish.updatePublishItem(editingItem.id, data);
-          } else {
-            await publish.addPublishItem({ ...data, plan_asset_id: undefined });
-          }
-          setAddDialogOpen(false);
-          setEditingItem(null);
-        }}
+        onSave={handleSave}
       />
     </div>
   );
 }
 
-/* ──────────────────────────────────────
-   PUBLISH ITEM ROW
-   ────────────────────────────────────── */
-function PublishItemRow({
-  item,
-  assetData,
-  onEdit,
-  onRemove,
-  onStatusChange,
-}: {
-  item: PlanPublishItem;
-  assetData: any;
-  onEdit: () => void;
-  onRemove: () => void;
-  onStatusChange: (status: string) => void;
-}) {
-  const channelLabel = PUBLISH_CHANNELS.find(c => c.value === item.channel)?.label || item.channel;
-  const statusColors: Record<string, string> = {
-    draft: 'bg-muted text-muted-foreground',
-    scheduled: 'bg-accent/10 text-accent',
-    published: 'bg-success/10 text-success',
-  };
-
+function EmptySection({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-card/60 group">
-      {assetData?._resolvedUrl ? (
-        <img src={assetData._resolvedUrl} alt="" className="w-10 h-10 rounded object-cover" />
-      ) : (
-        <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
-          <Send className="w-4 h-4 text-muted-foreground" />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium">{channelLabel}</p>
-        <p className="text-[10px] text-muted-foreground truncate">
-          {item.caption ? item.caption.slice(0, 60) + '...' : 'No caption'}
-          {item.publish_date && ` • ${format(new Date(item.publish_date), 'MMM d')}`}
-        </p>
-      </div>
-      <Badge className={`text-[10px] border-0 ${statusColors[item.status] || ''}`}>
-        {item.status === 'draft' ? 'Draft' : item.status === 'scheduled' ? 'Scheduled' : 'Published'}
-      </Badge>
-      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-          <Pencil className="w-3 h-3" />
-        </Button>
-        {item.status === 'draft' && (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onStatusChange('scheduled')}>
-            <Clock className="w-3 h-3" />
-          </Button>
-        )}
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRemove}>
-          <Trash2 className="w-3 h-3" />
-        </Button>
-      </div>
+    <div className="text-center py-8 text-muted-foreground">
+      <Icon className="w-6 h-6 mx-auto opacity-40 mb-2" />
+      <p className="text-sm">{title}</p>
+      <p className="text-xs mt-1">{description}</p>
     </div>
-  );
-}
-
-/* ──────────────────────────────────────
-   SCHEDULE DIALOG
-   ────────────────────────────────────── */
-function ScheduleDialog({
-  open,
-  onClose,
-  item,
-  approvedAssets,
-  assetData,
-  approvedOutputs,
-  onSave,
-}: {
-  open: boolean;
-  onClose: () => void;
-  item: PlanPublishItem | null;
-  approvedAssets: any[];
-  assetData: Record<string, any>;
-  approvedOutputs: any[];
-  onSave: (data: { channel: string; caption: string; publish_date?: string; content_asset_id?: string }) => Promise<void>;
-}) {
-  const [channel, setChannel] = useState(item?.channel || 'instagram_feed');
-  const [caption, setCaption] = useState(item?.caption || '');
-  const [publishDate, setPublishDate] = useState(item?.publish_date || '');
-  const [selectedAssetId, setSelectedAssetId] = useState(item?.content_asset_id || '');
-  const [saving, setSaving] = useState(false);
-
-  // Reset form when item changes
-  useEffect(() => {
-    setChannel(item?.channel || 'instagram_feed');
-    setCaption(item?.caption || '');
-    setPublishDate(item?.publish_date || '');
-    setSelectedAssetId(item?.content_asset_id || '');
-  }, [item, open]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave({
-      channel,
-      caption,
-      publish_date: publishDate || undefined,
-      content_asset_id: selectedAssetId || undefined,
-    });
-    setSaving(false);
-  };
-
-  // Pre-fill caption from approved outputs matching channel
-  const suggestCaption = () => {
-    const channelMap: Record<string, string> = {
-      instagram_feed: 'instagram_caption',
-      instagram_stories: 'story_text',
-      instagram_reels: 'reel_hook',
-      email: 'email_body',
-      sms: 'sms_push_notification',
-    };
-    const outputType = channelMap[channel];
-    const match = approvedOutputs.find(o => o.output_type === outputType) || approvedOutputs[0];
-    if (match) setCaption(match.content);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{item ? 'Edit Publish Item' : 'Schedule Post'}</DialogTitle>
-          <DialogDescription>Configure channel, caption, and publish date.</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs">Channel</Label>
-            <Select value={channel} onValueChange={setChannel}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PUBLISH_CHANNELS.map(ch => (
-                  <SelectItem key={ch.value} value={ch.value}>{ch.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {approvedAssets.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-xs">Asset</Label>
-              <Select value={selectedAssetId} onValueChange={setSelectedAssetId}>
-                <SelectTrigger><SelectValue placeholder="Select asset (optional)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">None</SelectItem>
-                  {approvedAssets.map(pa => {
-                    const real = pa.content_asset_id ? assetData[pa.content_asset_id] : null;
-                    return (
-                      <SelectItem key={pa.id} value={pa.content_asset_id || pa.id}>
-                        {real?.title || pa.asset_type}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Caption</Label>
-              {approvedOutputs.length > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs h-6" onClick={suggestCaption}>
-                  Auto-fill from copy
-                </Button>
-              )}
-            </div>
-            <Textarea value={caption} onChange={e => setCaption(e.target.value)} rows={4} placeholder="Post caption..." />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs">Publish Date</Label>
-            <Input type="date" value={publishDate} onChange={e => setPublishDate(e.target.value)} />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : item ? 'Update' : 'Add to Queue'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
