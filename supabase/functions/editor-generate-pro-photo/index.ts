@@ -31,9 +31,8 @@ async function uploadResultBuffer(
   const { ext, contentType } = sniffImage(buffer);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
   await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
-  const { data: signedData } = await supabase.storage.from('venue-assets').createSignedUrl(path, 86400);
-  const signedUrl = signedData?.signedUrl || '';
-  return { publicUrl: signedUrl, storagePath: path };
+  // Return only the permanent storage path — never persist signed URLs
+  return { publicUrl: '', storagePath: path };
 }
 
 async function resolveSourceImage(

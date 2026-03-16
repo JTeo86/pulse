@@ -311,11 +311,11 @@ function BriefCard({
           </div>
         </div>
       ) : (
-        <div className="flex gap-2">
-          <Button size="sm" variant="default" className="flex-1 text-xs gap-1.5" onClick={onCreateInStudio}>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="default" className="min-w-0 flex-1 text-xs gap-1.5" onClick={onCreateInStudio}>
             <Plus className="w-3 h-3" /> Create in Studio
           </Button>
-          <Button size="sm" variant="outline" className="flex-1 text-xs gap-1.5" onClick={onAttachExisting}>
+          <Button size="sm" variant="outline" className="min-w-0 flex-1 text-xs gap-1.5" onClick={onAttachExisting}>
             <Link2 className="w-3 h-3" /> Attach Existing
           </Button>
         </div>
