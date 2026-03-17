@@ -431,13 +431,13 @@ export function PostPackDialog({
               </Label>
             </div>
 
-            {/* Output switcher */}
-            {eligibleOutputs.length > 1 && (
+            {/* Output switcher — always show when outputs exist */}
+            {eligibleOutputs.length > 0 && (
               <Select value={selectedOutputId} onValueChange={handleOutputChange}>
                 <SelectTrigger className="h-8 text-xs">
                   <div className="flex items-center gap-1.5">
                     <Sparkles className="w-3 h-3 text-accent shrink-0" />
-                    <SelectValue placeholder="Switch copy source" />
+                    <SelectValue placeholder="Choose caption from Campaign Pack" />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
@@ -445,7 +445,9 @@ export function PostPackDialog({
                     <SelectItem key={o.id} value={o.id}>
                       <span className="flex items-center gap-1.5">
                         {OUTPUT_TYPE_LABELS[o.output_type] || o.output_type}
-                        {o.status === 'approved' && <Check className="w-3 h-3 text-success" />}
+                        <span className={`text-[10px] ${o.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
+                          {o.status === 'approved' ? '✓ Approved' : o.status === 'generated' ? 'Generated' : o.status}
+                        </span>
                       </span>
                     </SelectItem>
                   ))}
@@ -453,10 +455,11 @@ export function PostPackDialog({
               </Select>
             )}
 
-            {selectedOutputId && (
-              <Badge variant="outline" className="text-[10px] gap-1">
-                Source: {OUTPUT_TYPE_LABELS[approvedOutputs.find((o: any) => o.id === selectedOutputId)?.output_type || ''] || 'Copy output'}
-              </Badge>
+            {eligibleOutputs.length === 0 && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span>No Campaign Pack outputs yet. Generate copy in Campaign Pack first.</span>
+              </div>
             )}
 
             <Textarea
