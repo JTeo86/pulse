@@ -145,14 +145,19 @@ export function PostPackDialog({
   const [saving, setSaving] = useState(false);
   const [titleManuallyEdited, setTitleManuallyEdited] = useState(false);
 
-  // Eligible outputs for the current channel (ordered by relevance)
+  // Eligible outputs for the current channel (ordered: approved+matching first, then matching, then rest)
   const eligibleOutputs = useMemo(() => {
     const copyTypes = CHANNEL_COPY_MAP[channel] || [];
-    const preferred = copyTypes
-      .map(ct => approvedOutputs.find((o: any) => o.output_type === ct))
+    const approvedMatching = copyTypes
+      .map(ct => approvedOutputs.find((o: any) => o.output_type === ct && o.status === 'approved'))
       .filter(Boolean);
-    const rest = approvedOutputs.filter((o: any) => !preferred.some((p: any) => p.id === o.id));
-    return [...preferred, ...rest];
+    const anyMatching = copyTypes
+      .map(ct => approvedOutputs.find((o: any) => o.output_type === ct && !approvedMatching.some((am: any) => am.id === o.id)))
+      .filter(Boolean);
+    const rest = approvedOutputs.filter((o: any) =>
+      !approvedMatching.some((p: any) => p.id === o.id) && !anyMatching.some((p: any) => p.id === o.id)
+    );
+    return [...approvedMatching, ...anyMatching, ...rest];
   }, [channel, approvedOutputs]);
 
   // Auto-assemble when dialog opens or channel changes (for new packs only)
