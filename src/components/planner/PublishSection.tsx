@@ -38,7 +38,7 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
   // Fetch resolved URLs for all content assets referenced by packs or approved assets
   useEffect(() => {
     const allAssetIds = new Set<string>();
-    approvedAssets.forEach(a => { if (a.content_asset_id) allAssetIds.add(a.content_asset_id); });
+    allPlanAssets.forEach(a => { if (a.content_asset_id) allAssetIds.add(a.content_asset_id); });
     publish.items.forEach(i => { if (i.content_asset_id) allAssetIds.add(i.content_asset_id); });
     const ids = Array.from(allAssetIds);
     if (ids.length === 0) return;
