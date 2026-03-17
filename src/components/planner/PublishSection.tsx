@@ -65,7 +65,7 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         setLinkedAssetData(map);
       }
     })();
-  }, [approvedAssets, publish.items]);
+  }, [allPlanAssets, publish.items]);
 
   // Generate suggestions
   const suggestions = useMemo(() => {
