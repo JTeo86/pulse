@@ -46,7 +46,7 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
     (async () => {
       const { data } = await supabase
         .from('content_assets')
-        .select('id, title, asset_type, public_url, thumbnail_url, storage_path')
+        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, created_at')
         .in('id', ids);
       if (data) {
         const map: Record<string, any> = {};
