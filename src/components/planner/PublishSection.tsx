@@ -278,9 +278,9 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         editItem={editingItem}
         suggestion={activeSuggestion}
         planTitle={plan?.title || ''}
-        approvedAssets={approvedAssets}
+        approvedAssets={allPlanAssets}
         assetData={linkedAssetData}
-        approvedOutputs={approvedOutputs}
+        approvedOutputs={allPlanOutputs}
         onSave={handleSave}
       />
     </div>

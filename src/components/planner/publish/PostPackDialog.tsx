@@ -302,10 +302,7 @@ export function PostPackDialog({
             <Label className="text-xs font-semibold">Channel</Label>
             <Select value={channel} onValueChange={handleChannelChange}>
               <SelectTrigger className="h-9 text-sm">
-                <div className="flex items-center gap-2">
-                  <ChannelIcon className="w-3.5 h-3.5" />
-                  <SelectValue />
-                </div>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {PUBLISH_CHANNELS.map(ch => {
