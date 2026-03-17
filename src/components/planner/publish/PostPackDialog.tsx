@@ -75,13 +75,23 @@ function buildPackTitle(planTitle: string, channelValue: string): string {
   return base;
 }
 
-/** Find best caption for a channel from approved outputs */
+/** Find best caption for a channel from plan outputs (prefer approved, then any) */
 function findBestCaption(channel: string, outputs: any[]): { content: string; outputType: string; outputId: string } | null {
   const copyTypes = CHANNEL_COPY_MAP[channel] || [];
+  // First: approved + matching type
+  for (const copyType of copyTypes) {
+    const match = outputs.find((o: any) => o.output_type === copyType && o.status === 'approved');
+    if (match) return { content: match.content, outputType: match.output_type, outputId: match.id };
+  }
+  // Second: any status + matching type
   for (const copyType of copyTypes) {
     const match = outputs.find((o: any) => o.output_type === copyType);
     if (match) return { content: match.content, outputType: match.output_type, outputId: match.id };
   }
+  // Fallback: any approved
+  const approved = outputs.find((o: any) => o.status === 'approved');
+  if (approved) return { content: approved.content, outputType: approved.output_type, outputId: approved.id };
+  // Fallback: first available
   if (outputs.length > 0) {
     const fb = outputs[0];
     return { content: fb.content, outputType: fb.output_type, outputId: fb.id };
@@ -89,13 +99,23 @@ function findBestCaption(channel: string, outputs: any[]): { content: string; ou
   return null;
 }
 
-/** Find best asset for a channel from approved plan assets */
+/** Find best asset for a channel from plan assets (prefer approved, then created/any) */
 function findBestAsset(channel: string, assets: any[]): { contentAssetId: string; planAssetId: string } | null {
   const assetTypes = CHANNEL_ASSET_MAP[channel] || [];
+  // First: approved + matching type
+  for (const assetType of assetTypes) {
+    const match = assets.find((a: any) => a.asset_type === assetType && a.content_asset_id && a.status === 'approved');
+    if (match) return { contentAssetId: match.content_asset_id, planAssetId: match.id };
+  }
+  // Second: any status + matching type
   for (const assetType of assetTypes) {
     const match = assets.find((a: any) => a.asset_type === assetType && a.content_asset_id);
     if (match) return { contentAssetId: match.content_asset_id, planAssetId: match.id };
   }
+  // Fallback: any approved with content
+  const approved = assets.find((a: any) => a.content_asset_id && a.status === 'approved');
+  if (approved) return { contentAssetId: approved.content_asset_id, planAssetId: approved.id };
+  // Fallback: any with content
   const fb = assets.find((a: any) => a.content_asset_id);
   if (fb) return { contentAssetId: fb.content_asset_id, planAssetId: fb.id };
   return null;
