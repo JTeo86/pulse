@@ -28,6 +28,10 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
   const [activeSuggestion, setActiveSuggestion] = useState<SuggestedPostPack | null>(null);
   const [linkedAssetData, setLinkedAssetData] = useState<Record<string, any>>({});
 
+  // All plan-linked assets & outputs (not just approved) — dialog handles preference ordering
+  const allPlanAssets = workspace.assets.filter(a => a.content_asset_id);
+  const allPlanOutputs = workspace.outputs;
+  // Keep approved-only refs for suggestions engine
   const approvedAssets = workspace.assets.filter(a => a.status === 'approved');
   const approvedOutputs = workspace.outputs.filter(o => o.status === 'approved');
 
