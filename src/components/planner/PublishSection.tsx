@@ -28,13 +28,17 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
   const [activeSuggestion, setActiveSuggestion] = useState<SuggestedPostPack | null>(null);
   const [linkedAssetData, setLinkedAssetData] = useState<Record<string, any>>({});
 
+  // All plan-linked assets & outputs (not just approved) — dialog handles preference ordering
+  const allPlanAssets = workspace.assets.filter(a => a.content_asset_id);
+  const allPlanOutputs = workspace.outputs;
+  // Keep approved-only refs for suggestions engine
   const approvedAssets = workspace.assets.filter(a => a.status === 'approved');
   const approvedOutputs = workspace.outputs.filter(o => o.status === 'approved');
 
   // Fetch resolved URLs for all content assets referenced by packs or approved assets
   useEffect(() => {
     const allAssetIds = new Set<string>();
-    approvedAssets.forEach(a => { if (a.content_asset_id) allAssetIds.add(a.content_asset_id); });
+    allPlanAssets.forEach(a => { if (a.content_asset_id) allAssetIds.add(a.content_asset_id); });
     publish.items.forEach(i => { if (i.content_asset_id) allAssetIds.add(i.content_asset_id); });
     const ids = Array.from(allAssetIds);
     if (ids.length === 0) return;
@@ -42,7 +46,7 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
     (async () => {
       const { data } = await supabase
         .from('content_assets')
-        .select('id, title, asset_type, public_url, thumbnail_url, storage_path')
+        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, created_at')
         .in('id', ids);
       if (data) {
         const map: Record<string, any> = {};
@@ -61,7 +65,7 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         setLinkedAssetData(map);
       }
     })();
-  }, [approvedAssets, publish.items]);
+  }, [allPlanAssets, publish.items]);
 
   // Generate suggestions
   const suggestions = useMemo(() => {
@@ -274,9 +278,9 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         editItem={editingItem}
         suggestion={activeSuggestion}
         planTitle={plan?.title || ''}
-        approvedAssets={approvedAssets}
+        approvedAssets={allPlanAssets}
         assetData={linkedAssetData}
-        approvedOutputs={approvedOutputs}
+        approvedOutputs={allPlanOutputs}
         onSave={handleSave}
       />
     </div>

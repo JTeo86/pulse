@@ -75,13 +75,23 @@ function buildPackTitle(planTitle: string, channelValue: string): string {
   return base;
 }
 
-/** Find best caption for a channel from approved outputs */
+/** Find best caption for a channel from plan outputs (prefer approved, then any) */
 function findBestCaption(channel: string, outputs: any[]): { content: string; outputType: string; outputId: string } | null {
   const copyTypes = CHANNEL_COPY_MAP[channel] || [];
+  // First: approved + matching type
+  for (const copyType of copyTypes) {
+    const match = outputs.find((o: any) => o.output_type === copyType && o.status === 'approved');
+    if (match) return { content: match.content, outputType: match.output_type, outputId: match.id };
+  }
+  // Second: any status + matching type
   for (const copyType of copyTypes) {
     const match = outputs.find((o: any) => o.output_type === copyType);
     if (match) return { content: match.content, outputType: match.output_type, outputId: match.id };
   }
+  // Fallback: any approved
+  const approved = outputs.find((o: any) => o.status === 'approved');
+  if (approved) return { content: approved.content, outputType: approved.output_type, outputId: approved.id };
+  // Fallback: first available
   if (outputs.length > 0) {
     const fb = outputs[0];
     return { content: fb.content, outputType: fb.output_type, outputId: fb.id };
@@ -89,13 +99,23 @@ function findBestCaption(channel: string, outputs: any[]): { content: string; ou
   return null;
 }
 
-/** Find best asset for a channel from approved plan assets */
+/** Find best asset for a channel from plan assets (prefer approved, then created/any) */
 function findBestAsset(channel: string, assets: any[]): { contentAssetId: string; planAssetId: string } | null {
   const assetTypes = CHANNEL_ASSET_MAP[channel] || [];
+  // First: approved + matching type
+  for (const assetType of assetTypes) {
+    const match = assets.find((a: any) => a.asset_type === assetType && a.content_asset_id && a.status === 'approved');
+    if (match) return { contentAssetId: match.content_asset_id, planAssetId: match.id };
+  }
+  // Second: any status + matching type
   for (const assetType of assetTypes) {
     const match = assets.find((a: any) => a.asset_type === assetType && a.content_asset_id);
     if (match) return { contentAssetId: match.content_asset_id, planAssetId: match.id };
   }
+  // Fallback: any approved with content
+  const approved = assets.find((a: any) => a.content_asset_id && a.status === 'approved');
+  if (approved) return { contentAssetId: approved.content_asset_id, planAssetId: approved.id };
+  // Fallback: any with content
   const fb = assets.find((a: any) => a.content_asset_id);
   if (fb) return { contentAssetId: fb.content_asset_id, planAssetId: fb.id };
   return null;
@@ -125,14 +145,19 @@ export function PostPackDialog({
   const [saving, setSaving] = useState(false);
   const [titleManuallyEdited, setTitleManuallyEdited] = useState(false);
 
-  // Eligible outputs for the current channel (ordered by relevance)
+  // Eligible outputs for the current channel (ordered: approved+matching first, then matching, then rest)
   const eligibleOutputs = useMemo(() => {
     const copyTypes = CHANNEL_COPY_MAP[channel] || [];
-    const preferred = copyTypes
-      .map(ct => approvedOutputs.find((o: any) => o.output_type === ct))
+    const approvedMatching = copyTypes
+      .map(ct => approvedOutputs.find((o: any) => o.output_type === ct && o.status === 'approved'))
       .filter(Boolean);
-    const rest = approvedOutputs.filter((o: any) => !preferred.some((p: any) => p.id === o.id));
-    return [...preferred, ...rest];
+    const anyMatching = copyTypes
+      .map(ct => approvedOutputs.find((o: any) => o.output_type === ct && !approvedMatching.some((am: any) => am.id === o.id)))
+      .filter(Boolean);
+    const rest = approvedOutputs.filter((o: any) =>
+      !approvedMatching.some((p: any) => p.id === o.id) && !anyMatching.some((p: any) => p.id === o.id)
+    );
+    return [...approvedMatching, ...anyMatching, ...rest];
   }, [channel, approvedOutputs]);
 
   // Auto-assemble when dialog opens or channel changes (for new packs only)
@@ -302,10 +327,7 @@ export function PostPackDialog({
             <Label className="text-xs font-semibold">Channel</Label>
             <Select value={channel} onValueChange={handleChannelChange}>
               <SelectTrigger className="h-9 text-sm">
-                <div className="flex items-center gap-2">
-                  <ChannelIcon className="w-3.5 h-3.5" />
-                  <SelectValue />
-                </div>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {PUBLISH_CHANNELS.map(ch => {
@@ -341,7 +363,10 @@ export function PostPackDialog({
           {/* 3. Asset from Production */}
           {!isSms && (
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Asset from Production</Label>
+              <Label className="text-xs font-semibold">
+                Asset
+                <span className="font-normal text-muted-foreground ml-1">from Production</span>
+              </Label>
               {approvedAssets.length > 0 ? (
                 <div className="space-y-2">
                   <Select value={selectedAssetId} onValueChange={v => {
@@ -349,14 +374,21 @@ export function PostPackDialog({
                     const pa = approvedAssets.find((a: any) => (a.content_asset_id || a.id) === v);
                     if (pa) setSelectedPlanAssetId(pa.id);
                   }}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choose approved asset" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choose asset from Production" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">None</SelectItem>
                       {approvedAssets.map((pa: any) => {
                         const real = pa.content_asset_id ? assetData[pa.content_asset_id] : null;
+                        const statusLabel = pa.status === 'approved' ? '✓ Approved' : pa.status === 'created' ? 'Created' : pa.status;
                         return (
                           <SelectItem key={pa.id} value={pa.content_asset_id || pa.id}>
-                            {real?.title || pa.asset_type} — {pa.asset_type} {pa.status === 'approved' ? '✓' : ''}
+                            <span className="flex items-center gap-2">
+                              <span className="truncate">{real?.title || pa.asset_type}</span>
+                              <span className="text-[10px] text-muted-foreground capitalize shrink-0">· {pa.asset_type}</span>
+                              <span className={`text-[10px] shrink-0 ${pa.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
+                                {statusLabel}
+                              </span>
+                            </span>
                           </SelectItem>
                         );
                       })}
@@ -389,7 +421,7 @@ export function PostPackDialog({
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
                   <ImageIcon className="w-4 h-4 shrink-0" />
-                  <span>No approved assets yet. Approve assets in Production first.</span>
+                  <span>No linked assets yet. Create or attach assets in Production first.</span>
                 </div>
               )}
             </div>
@@ -404,13 +436,13 @@ export function PostPackDialog({
               </Label>
             </div>
 
-            {/* Output switcher */}
-            {eligibleOutputs.length > 1 && (
+            {/* Output switcher — always show when outputs exist */}
+            {eligibleOutputs.length > 0 && (
               <Select value={selectedOutputId} onValueChange={handleOutputChange}>
                 <SelectTrigger className="h-8 text-xs">
                   <div className="flex items-center gap-1.5">
                     <Sparkles className="w-3 h-3 text-accent shrink-0" />
-                    <SelectValue placeholder="Switch copy source" />
+                    <SelectValue placeholder="Choose caption from Campaign Pack" />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
@@ -418,7 +450,9 @@ export function PostPackDialog({
                     <SelectItem key={o.id} value={o.id}>
                       <span className="flex items-center gap-1.5">
                         {OUTPUT_TYPE_LABELS[o.output_type] || o.output_type}
-                        {o.status === 'approved' && <Check className="w-3 h-3 text-success" />}
+                        <span className={`text-[10px] ${o.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
+                          {o.status === 'approved' ? '✓ Approved' : o.status === 'generated' ? 'Generated' : o.status}
+                        </span>
                       </span>
                     </SelectItem>
                   ))}
@@ -426,10 +460,11 @@ export function PostPackDialog({
               </Select>
             )}
 
-            {selectedOutputId && (
-              <Badge variant="outline" className="text-[10px] gap-1">
-                Source: {OUTPUT_TYPE_LABELS[approvedOutputs.find((o: any) => o.id === selectedOutputId)?.output_type || ''] || 'Copy output'}
-              </Badge>
+            {eligibleOutputs.length === 0 && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span>No Campaign Pack outputs yet. Generate copy in Campaign Pack first.</span>
+              </div>
             )}
 
             <Textarea
