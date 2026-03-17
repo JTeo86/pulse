@@ -273,6 +273,7 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         onClose={() => { setDialogOpen(false); setEditingItem(null); setActiveSuggestion(null); }}
         editItem={editingItem}
         suggestion={activeSuggestion}
+        planTitle={plan?.title || ''}
         approvedAssets={approvedAssets}
         assetData={linkedAssetData}
         approvedOutputs={approvedOutputs}
