@@ -358,7 +358,10 @@ export function PostPackDialog({
           {/* 3. Asset from Production */}
           {!isSms && (
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Asset from Production</Label>
+              <Label className="text-xs font-semibold">
+                Asset
+                <span className="font-normal text-muted-foreground ml-1">from Production</span>
+              </Label>
               {approvedAssets.length > 0 ? (
                 <div className="space-y-2">
                   <Select value={selectedAssetId} onValueChange={v => {
@@ -366,14 +369,21 @@ export function PostPackDialog({
                     const pa = approvedAssets.find((a: any) => (a.content_asset_id || a.id) === v);
                     if (pa) setSelectedPlanAssetId(pa.id);
                   }}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choose approved asset" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choose asset from Production" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">None</SelectItem>
                       {approvedAssets.map((pa: any) => {
                         const real = pa.content_asset_id ? assetData[pa.content_asset_id] : null;
+                        const statusLabel = pa.status === 'approved' ? '✓ Approved' : pa.status === 'created' ? 'Created' : pa.status;
                         return (
                           <SelectItem key={pa.id} value={pa.content_asset_id || pa.id}>
-                            {real?.title || pa.asset_type} — {pa.asset_type} {pa.status === 'approved' ? '✓' : ''}
+                            <span className="flex items-center gap-2">
+                              <span className="truncate">{real?.title || pa.asset_type}</span>
+                              <span className="text-[10px] text-muted-foreground capitalize shrink-0">· {pa.asset_type}</span>
+                              <span className={`text-[10px] shrink-0 ${pa.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
+                                {statusLabel}
+                              </span>
+                            </span>
                           </SelectItem>
                         );
                       })}
@@ -406,7 +416,7 @@ export function PostPackDialog({
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
                   <ImageIcon className="w-4 h-4 shrink-0" />
-                  <span>No approved assets yet. Approve assets in Production first.</span>
+                  <span>No linked assets yet. Create or attach assets in Production first.</span>
                 </div>
               )}
             </div>
