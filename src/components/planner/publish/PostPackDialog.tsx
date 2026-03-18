@@ -376,7 +376,7 @@ export function PostPackDialog({
                   }}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choose asset from Production" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {approvedAssets.map((pa: any) => {
                         const real = pa.content_asset_id ? assetData[pa.content_asset_id] : null;
                         const statusLabel = pa.status === 'approved' ? '✓ Approved' : pa.status === 'created' ? 'Created' : pa.status;
