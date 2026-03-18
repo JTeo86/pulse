@@ -317,7 +317,7 @@ export function PostPackDialog({
           <DialogDescription>
             {editItem
               ? 'Update this post pack before publishing.'
-              : 'Pulse auto-assembled this pack from your approved copy and assets. Review and save.'}
+              : 'Pulse assembled this pack from your content. Review, tweak, and save.'}
           </DialogDescription>
         </DialogHeader>
 
