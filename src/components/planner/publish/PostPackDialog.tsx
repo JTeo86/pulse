@@ -381,7 +381,7 @@ export function PostPackDialog({
                       <SelectItem value="none">None</SelectItem>
                       {approvedAssets.map((pa: any) => {
                         const real = pa.content_asset_id ? assetData[pa.content_asset_id] : null;
-                        const statusLabel = pa.status === 'approved' ? '✓ Approved' : pa.status === 'created' ? 'Created' : pa.status;
+                        const statusLabel = pa.status === 'approved' ? '★ Preferred' : pa.status === 'created' ? 'Created' : pa.status;
                         return (
                           <SelectItem key={pa.id} value={pa.content_asset_id || pa.id}>
                             <span className="flex items-center gap-2">
