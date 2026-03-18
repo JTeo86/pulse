@@ -130,14 +130,14 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         </Button>
       </div>
 
-      {/* Missing items */}
-      {missingItems.length > 0 && (
-        <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 space-y-2">
+      {/* Helpful hints (not blockers) */}
+      {hints.length > 0 && (
+        <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-warning" />
-            <h3 className="text-xs font-semibold text-warning">Items needed for publishing</h3>
+            <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-xs font-semibold text-muted-foreground">Tips</h3>
           </div>
-          {missingItems.map((msg, i) => (
+          {hints.map((msg, i) => (
             <p key={i} className="text-xs text-muted-foreground">• {msg}</p>
           ))}
         </div>
