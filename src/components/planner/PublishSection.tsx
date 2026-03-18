@@ -28,12 +28,12 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
   const [activeSuggestion, setActiveSuggestion] = useState<SuggestedPostPack | null>(null);
   const [linkedAssetData, setLinkedAssetData] = useState<Record<string, any>>({});
 
-  // All plan-linked assets & outputs (not just approved) — dialog handles preference ordering
+  // All plan-linked assets & outputs — dialog uses preference ordering (starred first)
   const allPlanAssets = workspace.assets.filter(a => a.content_asset_id);
   const allPlanOutputs = workspace.outputs;
-  // Keep approved-only refs for suggestions engine
-  const approvedAssets = workspace.assets.filter(a => a.status === 'approved');
-  const approvedOutputs = workspace.outputs.filter(o => o.status === 'approved');
+  // For suggestions: use all available content (prefer starred/approved but don't gate on it)
+  const availableAssets = workspace.assets.filter(a => a.content_asset_id);
+  const availableOutputs = workspace.outputs;
 
   // Fetch resolved URLs for all content assets referenced by packs or approved assets
   useEffect(() => {
@@ -67,17 +67,17 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
     })();
   }, [allPlanAssets, publish.items]);
 
-  // Generate suggestions
+  // Generate suggestions from all available content (not just approved)
   const suggestions = useMemo(() => {
     const existingChannels = publish.items
       .filter(i => i.status !== 'archived')
       .map(i => i.channel);
     return generateSuggestedPacks(
-      approvedOutputs as any,
-      approvedAssets as any,
+      availableOutputs as any,
+      availableAssets as any,
       existingChannels,
     );
-  }, [approvedOutputs, approvedAssets, publish.items]);
+  }, [availableOutputs, availableAssets, publish.items]);
 
   const handleCreateFromSuggestion = (suggestion: SuggestedPostPack) => {
     setActiveSuggestion(suggestion);
@@ -108,10 +108,10 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
     setActiveSuggestion(null);
   };
 
-  // Missing items warnings
-  const missingItems: string[] = [];
-  if (approvedOutputs.length === 0) missingItems.push('No approved copy — approve outputs in Campaign Pack');
-  if (approvedAssets.length === 0) missingItems.push('No approved assets — approve assets in Production');
+  // Helpful hints (not blockers)
+  const hints: string[] = [];
+  if (availableOutputs.length === 0) hints.push('No copy generated yet — generate content in the Create step first.');
+  if (availableAssets.length === 0 && availableOutputs.length > 0) hints.push('No assets linked yet — create or attach assets in the Create step.');
 
   const hasAnyPacks = publish.items.length > 0;
 
@@ -130,14 +130,14 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
         </Button>
       </div>
 
-      {/* Missing items */}
-      {missingItems.length > 0 && (
-        <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 space-y-2">
+      {/* Helpful hints (not blockers) */}
+      {hints.length > 0 && (
+        <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-warning" />
-            <h3 className="text-xs font-semibold text-warning">Items needed for publishing</h3>
+            <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-xs font-semibold text-muted-foreground">Tips</h3>
           </div>
-          {missingItems.map((msg, i) => (
+          {hints.map((msg, i) => (
             <p key={i} className="text-xs text-muted-foreground">• {msg}</p>
           ))}
         </div>

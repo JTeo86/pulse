@@ -35,77 +35,67 @@ export interface SuggestedPostPack {
 }
 
 /**
- * Given approved outputs and approved plan assets, suggest post packs for each channel.
+ * Given available outputs and plan assets, suggest post packs for each channel.
+ * Prefers starred/approved items, but works with any available content.
  */
 export function generateSuggestedPacks(
-  approvedOutputs: ApprovedOutput[],
-  approvedAssets: ApprovedAsset[],
+  outputs: ApprovedOutput[],
+  assets: ApprovedAsset[],
   existingChannels: string[],
 ): SuggestedPostPack[] {
   const suggestions: SuggestedPostPack[] = [];
 
   for (const channel of PUBLISH_CHANNELS) {
-    // Skip channels that already have a post pack
     if (existingChannels.includes(channel.value)) continue;
 
     const copyTypes = CHANNEL_COPY_MAP[channel.value] || [];
     const assetTypes = CHANNEL_ASSET_MAP[channel.value] || [];
     const prefersVideo = assetTypes.includes('reel') || assetTypes.includes('video');
 
-    // Find best matching copy
+    // Find best copy: starred/approved first, then any matching, then fallback
     let bestCaption = '';
     let captionSource: string | null = null;
     for (const copyType of copyTypes) {
-      const match = approvedOutputs.find(o => o.output_type === copyType);
-      if (match) {
-        bestCaption = match.content;
-        captionSource = match.output_type;
-        break;
+      const starred = outputs.find(o => o.output_type === copyType && o.status === 'approved');
+      if (starred) { bestCaption = starred.content; captionSource = starred.output_type; break; }
+    }
+    if (!bestCaption) {
+      for (const copyType of copyTypes) {
+        const match = outputs.find(o => o.output_type === copyType);
+        if (match) { bestCaption = match.content; captionSource = match.output_type; break; }
       }
     }
-
-    // Fallback: try any approved output
-    if (!bestCaption && approvedOutputs.length > 0) {
-      const fallback = approvedOutputs[0];
-      bestCaption = fallback.content;
-      captionSource = fallback.output_type;
+    if (!bestCaption && outputs.length > 0) {
+      const fb = outputs.find(o => o.status === 'approved') || outputs[0];
+      bestCaption = fb.content;
+      captionSource = fb.output_type;
     }
 
-    // Find best matching asset
+    // Find best asset: starred first, then any matching, then fallback
     let bestAssetId: string | null = null;
     let bestPlanAssetId: string | null = null;
     for (const assetType of assetTypes) {
-      const match = approvedAssets.find(
-        a => a.asset_type === assetType && a.content_asset_id
-      );
-      if (match) {
-        bestAssetId = match.content_asset_id;
-        bestPlanAssetId = match.id;
-        break;
+      const starred = assets.find(a => a.asset_type === assetType && a.content_asset_id && a.status === 'approved');
+      if (starred) { bestAssetId = starred.content_asset_id; bestPlanAssetId = starred.id; break; }
+    }
+    if (!bestAssetId) {
+      for (const assetType of assetTypes) {
+        const match = assets.find(a => a.asset_type === assetType && a.content_asset_id);
+        if (match) { bestAssetId = match.content_asset_id; bestPlanAssetId = match.id; break; }
       }
     }
-
-    // Fallback: any approved asset with content
-    if (!bestAssetId && approvedAssets.length > 0) {
-      const fallback = approvedAssets.find(a => a.content_asset_id);
-      if (fallback) {
-        bestAssetId = fallback.content_asset_id;
-        bestPlanAssetId = fallback.id;
-      }
+    if (!bestAssetId) {
+      const fb = assets.find(a => a.content_asset_id && a.status === 'approved') || assets.find(a => a.content_asset_id);
+      if (fb) { bestAssetId = fb.content_asset_id; bestPlanAssetId = fb.id; }
     }
 
-    // Only suggest if we have at least a caption or an asset
     if (!bestCaption && !bestAssetId) continue;
 
     const packType = channel.category === 'direct' ? 'direct' : 'social';
     let reason = '';
-    if (bestCaption && bestAssetId) {
-      reason = 'Approved copy and asset matched';
-    } else if (bestCaption) {
-      reason = 'Approved copy available';
-    } else {
-      reason = 'Approved asset available';
-    }
+    if (bestCaption && bestAssetId) reason = 'Copy and asset matched';
+    else if (bestCaption) reason = 'Copy available';
+    else reason = 'Asset available';
 
     suggestions.push({
       channel: channel.value,

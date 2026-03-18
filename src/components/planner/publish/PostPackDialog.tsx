@@ -317,7 +317,7 @@ export function PostPackDialog({
           <DialogDescription>
             {editItem
               ? 'Update this post pack before publishing.'
-              : 'Pulse auto-assembled this pack from your approved copy and assets. Review and save.'}
+              : 'Pulse assembled this pack from your content. Review, tweak, and save.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -365,7 +365,7 @@ export function PostPackDialog({
             <div className="space-y-2">
               <Label className="text-xs font-semibold">
                 Asset
-                <span className="font-normal text-muted-foreground ml-1">from Production</span>
+                <span className="font-normal text-muted-foreground ml-1">from Create</span>
               </Label>
               {approvedAssets.length > 0 ? (
                 <div className="space-y-2">
@@ -381,13 +381,13 @@ export function PostPackDialog({
                       <SelectItem value="none">None</SelectItem>
                       {approvedAssets.map((pa: any) => {
                         const real = pa.content_asset_id ? assetData[pa.content_asset_id] : null;
-                        const statusLabel = pa.status === 'approved' ? '✓ Approved' : pa.status === 'created' ? 'Created' : pa.status;
+                        const statusLabel = pa.status === 'approved' ? '★ Preferred' : pa.status === 'created' ? 'Created' : pa.status;
                         return (
                           <SelectItem key={pa.id} value={pa.content_asset_id || pa.id}>
                             <span className="flex items-center gap-2">
                               <span className="truncate">{real?.title || pa.asset_type}</span>
                               <span className="text-[10px] text-muted-foreground capitalize shrink-0">· {pa.asset_type}</span>
-                              <span className={`text-[10px] shrink-0 ${pa.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
+                              <span className={`text-[10px] shrink-0 ${pa.status === 'approved' ? 'text-warning' : 'text-muted-foreground'}`}>
                                 {statusLabel}
                               </span>
                             </span>
@@ -423,7 +423,7 @@ export function PostPackDialog({
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
                   <ImageIcon className="w-4 h-4 shrink-0" />
-                  <span>No linked assets yet. Create or attach assets in Production first.</span>
+                  <span>No linked assets yet. Create or attach assets in the Create step first.</span>
                 </div>
               )}
             </div>
@@ -434,7 +434,7 @@ export function PostPackDialog({
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold">
                 {isEmail ? 'Email Content' : isSms ? 'Message' : 'Caption'}
-                <span className="font-normal text-muted-foreground ml-1">from Campaign Pack</span>
+                <span className="font-normal text-muted-foreground ml-1">from Create</span>
               </Label>
             </div>
 
@@ -452,8 +452,8 @@ export function PostPackDialog({
                     <SelectItem key={o.id} value={o.id}>
                       <span className="flex items-center gap-1.5">
                         {OUTPUT_TYPE_LABELS[o.output_type] || o.output_type}
-                        <span className={`text-[10px] ${o.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
-                          {o.status === 'approved' ? '✓ Approved' : o.status === 'generated' ? 'Generated' : o.status}
+                        <span className={`text-[10px] ${o.status === 'approved' ? 'text-warning' : 'text-muted-foreground'}`}>
+                          {o.status === 'approved' ? '★ Preferred' : o.status === 'generated' ? 'Generated' : o.status}
                         </span>
                       </span>
                     </SelectItem>
@@ -465,7 +465,7 @@ export function PostPackDialog({
             {eligibleOutputs.length === 0 && (
               <div className="flex items-center gap-2 p-2.5 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span>No Campaign Pack outputs yet. Generate copy in Campaign Pack first.</span>
+                <span>No copy outputs yet. Generate content in the Create step first.</span>
               </div>
             )}
 
