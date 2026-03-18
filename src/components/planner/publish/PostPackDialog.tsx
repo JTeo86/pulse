@@ -452,8 +452,8 @@ export function PostPackDialog({
                     <SelectItem key={o.id} value={o.id}>
                       <span className="flex items-center gap-1.5">
                         {OUTPUT_TYPE_LABELS[o.output_type] || o.output_type}
-                        <span className={`text-[10px] ${o.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
-                          {o.status === 'approved' ? '✓ Approved' : o.status === 'generated' ? 'Generated' : o.status}
+                        <span className={`text-[10px] ${o.status === 'approved' ? 'text-warning' : 'text-muted-foreground'}`}>
+                          {o.status === 'approved' ? '★ Preferred' : o.status === 'generated' ? 'Generated' : o.status}
                         </span>
                       </span>
                     </SelectItem>
