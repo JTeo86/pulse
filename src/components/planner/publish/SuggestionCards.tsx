@@ -32,7 +32,7 @@ export function SuggestionCards({ suggestions, onCreatePack }: SuggestionCardsPr
         <Badge variant="secondary" className="text-[10px]">{suggestions.length} available</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Pulse assembled these from your approved copy and assets. Click to create a post pack.
+        Pulse assembled these from your content. Click to create a post pack.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {suggestions.map((suggestion, i) => {

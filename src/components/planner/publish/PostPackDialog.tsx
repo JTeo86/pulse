@@ -465,7 +465,7 @@ export function PostPackDialog({
             {eligibleOutputs.length === 0 && (
               <div className="flex items-center gap-2 p-2.5 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span>No Campaign Pack outputs yet. Generate copy in Campaign Pack first.</span>
+                <span>No copy outputs yet. Generate content in the Create step first.</span>
               </div>
             )}
 
