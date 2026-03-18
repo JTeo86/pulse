@@ -434,7 +434,7 @@ export function PostPackDialog({
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold">
                 {isEmail ? 'Email Content' : isSms ? 'Message' : 'Caption'}
-                <span className="font-normal text-muted-foreground ml-1">from Campaign Pack</span>
+                <span className="font-normal text-muted-foreground ml-1">from Create</span>
               </Label>
             </div>
 
