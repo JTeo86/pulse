@@ -365,7 +365,7 @@ export function PostPackDialog({
             <div className="space-y-2">
               <Label className="text-xs font-semibold">
                 Asset
-                <span className="font-normal text-muted-foreground ml-1">from Production</span>
+                <span className="font-normal text-muted-foreground ml-1">from Create</span>
               </Label>
               {approvedAssets.length > 0 ? (
                 <div className="space-y-2">
