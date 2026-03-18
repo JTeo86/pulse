@@ -423,7 +423,7 @@ export function PostPackDialog({
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
                   <ImageIcon className="w-4 h-4 shrink-0" />
-                  <span>No linked assets yet. Create or attach assets in Production first.</span>
+                  <span>No linked assets yet. Create or attach assets in the Create step first.</span>
                 </div>
               )}
             </div>
