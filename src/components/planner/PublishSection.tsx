@@ -108,10 +108,10 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
     setActiveSuggestion(null);
   };
 
-  // Missing items warnings
-  const missingItems: string[] = [];
-  if (approvedOutputs.length === 0) missingItems.push('No approved copy — approve outputs in Campaign Pack');
-  if (approvedAssets.length === 0) missingItems.push('No approved assets — approve assets in Production');
+  // Helpful hints (not blockers)
+  const hints: string[] = [];
+  if (availableOutputs.length === 0) hints.push('No copy generated yet — generate content in the Create step first.');
+  if (availableAssets.length === 0 && availableOutputs.length > 0) hints.push('No assets linked yet — create or attach assets in the Create step.');
 
   const hasAnyPacks = publish.items.length > 0;
 
