@@ -28,12 +28,12 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
   const [activeSuggestion, setActiveSuggestion] = useState<SuggestedPostPack | null>(null);
   const [linkedAssetData, setLinkedAssetData] = useState<Record<string, any>>({});
 
-  // All plan-linked assets & outputs (not just approved) — dialog handles preference ordering
+  // All plan-linked assets & outputs — dialog uses preference ordering (starred first)
   const allPlanAssets = workspace.assets.filter(a => a.content_asset_id);
   const allPlanOutputs = workspace.outputs;
-  // Keep approved-only refs for suggestions engine
-  const approvedAssets = workspace.assets.filter(a => a.status === 'approved');
-  const approvedOutputs = workspace.outputs.filter(o => o.status === 'approved');
+  // For suggestions: use all available content (prefer starred/approved but don't gate on it)
+  const availableAssets = workspace.assets.filter(a => a.content_asset_id);
+  const availableOutputs = workspace.outputs;
 
   // Fetch resolved URLs for all content assets referenced by packs or approved assets
   useEffect(() => {
