@@ -369,14 +369,16 @@ export function PostPackDialog({
               </Label>
               {approvedAssets.length > 0 ? (
                 <div className="space-y-2">
-                  <Select value={selectedAssetId} onValueChange={v => {
-                    setSelectedAssetId(v);
-                    const pa = approvedAssets.find((a: any) => (a.content_asset_id || a.id) === v);
+                  <Select value={selectedAssetId || "none"} onValueChange={v => {
+                    const val = v === "none" ? "" : v;
+                    setSelectedAssetId(val);
+                    const pa = approvedAssets.find((a: any) => (a.content_asset_id || a.id) === val);
                     if (pa) setSelectedPlanAssetId(pa.id);
+                    else setSelectedPlanAssetId('');
                   }}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Choose asset from Production" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {approvedAssets.map((pa: any) => {
                         const real = pa.content_asset_id ? assetData[pa.content_asset_id] : null;
                         const statusLabel = pa.status === 'approved' ? '✓ Approved' : pa.status === 'created' ? 'Created' : pa.status;
