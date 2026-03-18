@@ -67,17 +67,17 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
     })();
   }, [allPlanAssets, publish.items]);
 
-  // Generate suggestions
+  // Generate suggestions from all available content (not just approved)
   const suggestions = useMemo(() => {
     const existingChannels = publish.items
       .filter(i => i.status !== 'archived')
       .map(i => i.channel);
     return generateSuggestedPacks(
-      approvedOutputs as any,
-      approvedAssets as any,
+      availableOutputs as any,
+      availableAssets as any,
       existingChannels,
     );
-  }, [approvedOutputs, approvedAssets, publish.items]);
+  }, [availableOutputs, availableAssets, publish.items]);
 
   const handleCreateFromSuggestion = (suggestion: SuggestedPostPack) => {
     setActiveSuggestion(suggestion);
