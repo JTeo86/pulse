@@ -387,7 +387,7 @@ export function PostPackDialog({
                             <span className="flex items-center gap-2">
                               <span className="truncate">{real?.title || pa.asset_type}</span>
                               <span className="text-[10px] text-muted-foreground capitalize shrink-0">· {pa.asset_type}</span>
-                              <span className={`text-[10px] shrink-0 ${pa.status === 'approved' ? 'text-success' : 'text-muted-foreground'}`}>
+                              <span className={`text-[10px] shrink-0 ${pa.status === 'approved' ? 'text-warning' : 'text-muted-foreground'}`}>
                                 {statusLabel}
                               </span>
                             </span>
