@@ -3,12 +3,12 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2,
-  AlertTriangle, Copy, Check, Loader2, FileText, Image, Calendar,
-  Lightbulb, Pencil, Package, Play, TrendingUp, ArrowRight, Video,
-  RefreshCw, Archive, ExternalLink, Unlink,
+  AlertTriangle, Loader2, Calendar,
+  Lightbulb, Pencil, TrendingUp, ArrowRight,
+  PenTool, Send,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ProductionSection } from '@/components/planner/ProductionSection';
+import { CreateSection } from '@/components/planner/CreateSection';
 import { PublishSection } from '@/components/planner/PublishSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useEventPlanDetail, PLAN_STATUSES } from '@/hooks/use-events';
-import { usePlanWorkspace, OUTPUT_TYPE_LABELS, OUTPUT_SECTIONS, BRIEF_STATUS_LABELS, PlanAsset } from '@/hooks/use-plan-workspace';
+import { usePlanWorkspace, OUTPUT_TYPE_LABELS, OUTPUT_SECTIONS } from '@/hooks/use-plan-workspace';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -35,14 +35,12 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 /* ══════════════════════════════════════════════════════════
-   WORKFLOW STEPS
+   WORKFLOW STEPS — simplified 3-step model
    ══════════════════════════════════════════════════════════ */
 const WORKFLOW_STEPS = [
-  { id: 'strategy', label: 'Strategy', icon: Lightbulb },
-  { id: 'campaign_pack', label: 'Campaign Pack', icon: Package },
-  { id: 'production', label: 'Production', icon: Image },
-  { id: 'publish', label: 'Publish', icon: Calendar },
-  { id: 'revenue', label: 'Revenue', icon: TrendingUp },
+  { id: 'plan', label: 'Plan', icon: Lightbulb },
+  { id: 'create', label: 'Create', icon: PenTool },
+  { id: 'post', label: 'Post', icon: Send },
 ] as const;
 
 type WorkflowStep = typeof WORKFLOW_STEPS[number]['id'];
@@ -61,20 +59,18 @@ function getStepStatus(
     decision.offer_terms || decision.target_audience || decision.campaign_angle;
 
   switch (step) {
-    case 'strategy':
+    case 'plan':
       return hasStrategy ? 'done' : 'not_started';
-    case 'campaign_pack':
-      return hasCampaignPack ? 'done' : hasStrategy ? 'ready' : 'not_started';
-    case 'production':
-      return hasLinkedAssets ? 'done' : hasAssetBriefs ? 'ready' : 'not_started';
-    case 'publish': {
+    case 'create':
+      if (hasLinkedAssets && hasCampaignPack) return 'done';
+      if (hasCampaignPack || hasAssetBriefs) return 'in_progress';
+      return hasStrategy ? 'ready' : 'not_started';
+    case 'post': {
       if ((publishPostedCount || 0) > 0) return 'done';
       if ((publishPackCount || 0) > 0) return 'in_progress';
-      if (hasLinkedAssets && hasCampaignPack) return 'ready';
+      if (hasCampaignPack) return 'ready';
       return 'not_started';
     }
-    case 'revenue':
-      return 'not_started';
     default:
       return 'not_started';
   }
@@ -87,27 +83,21 @@ function getNextBestAction(
   hasAssetBriefs: boolean,
   hasLinkedAssets: boolean,
   publishPackCount?: number,
-  hasApprovedAssets?: boolean,
-  hasApprovedOutputs?: boolean,
 ): { label: string; description: string; target: WorkflowStep } | null {
   const decision = plan?.decision || {};
   const hasStrategy = decision.run_offer || decision.run_event_promo || decision.offer_terms || decision.campaign_angle;
 
-  if (!hasStrategy && activeStep !== 'strategy')
-    return { label: 'Complete Strategy', description: 'Define your campaign objectives and offer terms.', target: 'strategy' };
-  if (!hasCampaignPack && activeStep !== 'campaign_pack')
-    return { label: 'Generate Campaign Pack', description: 'Auto-generate copy and creative direction for all channels.', target: 'campaign_pack' };
-  if (!hasLinkedAssets && hasAssetBriefs && activeStep !== 'production')
-    return { label: 'Create Assets', description: 'Produce hero images and reels for your campaign.', target: 'production' };
-  if ((hasApprovedAssets || hasApprovedOutputs) && (publishPackCount || 0) === 0 && activeStep !== 'publish')
-    return { label: 'Create Post Packs', description: 'Assemble ready-to-post packs for Instagram, TikTok, Email and more.', target: 'publish' };
-  if ((publishPackCount || 0) > 0 && activeStep !== 'publish')
-    return { label: 'Review Post Packs', description: 'Copy captions, download assets, and post when ready.', target: 'publish' };
+  if (!hasStrategy && activeStep !== 'plan')
+    return { label: 'Define your campaign', description: 'Set your objective, audience, and offer to get started.', target: 'plan' };
+  if (!hasCampaignPack && hasStrategy && activeStep !== 'create')
+    return { label: 'Generate content', description: 'Create copy, captions, and asset briefs for your campaign.', target: 'create' };
+  if (hasCampaignPack && (publishPackCount || 0) === 0 && activeStep !== 'post')
+    return { label: 'Create Post Packs', description: 'Package your content for Instagram, TikTok, Email and more.', target: 'post' };
   return null;
 }
 
 /* ══════════════════════════════════════════════════════════
-   MAIN PAGE — Workflow Shell
+   MAIN PAGE — 3-step Workflow Shell
    ══════════════════════════════════════════════════════════ */
 export default function EventPlanDetailPage() {
   const { planId } = useParams<{ planId: string }>();
@@ -124,9 +114,10 @@ export default function EventPlanDetailPage() {
 
   const workspace = usePlanWorkspace(planId);
 
-  const [activeStep, setActiveStep] = useState<WorkflowStep>('strategy');
+  const [activeStep, setActiveStep] = useState<WorkflowStep>('plan');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [showRevenue, setShowRevenue] = useState(false);
 
   useEffect(() => {
     if (plan) setTitleDraft(plan.title);
@@ -150,9 +141,7 @@ export default function EventPlanDetailPage() {
     setEditingTitle(false);
   };
 
-  const approvedAssets = workspace.assets.filter((a: any) => a.status === 'approved');
-  const approvedOutputs = workspace.outputs.filter((o: any) => o.status === 'approved');
-  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0, approvedAssets.length > 0, approvedOutputs.length > 0);
+  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
@@ -200,7 +189,7 @@ export default function EventPlanDetailPage() {
       </div>
 
       {/* Workflow Shell */}
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_260px] gap-6">
         {/* LEFT — Progress Steps */}
         <div className="space-y-1">
           {WORKFLOW_STEPS.map((step) => {
@@ -209,16 +198,16 @@ export default function EventPlanDetailPage() {
             return (
               <button
                 key={step.id}
-                onClick={() => setActiveStep(step.id)}
+                onClick={() => { setActiveStep(step.id); setShowRevenue(false); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors text-sm ${
-                  isActive
+                  isActive && !showRevenue
                     ? 'bg-accent/10 text-foreground font-medium border border-accent/20'
                     : 'hover:bg-muted/30 text-muted-foreground'
                 }`}
               >
                 <div className={`p-1 rounded ${
                   status === 'done' ? 'text-success' :
-                  status === 'ready' ? 'text-accent' :
+                  status === 'ready' || status === 'in_progress' ? 'text-accent' :
                   'text-muted-foreground/50'
                 }`}>
                   {status === 'done' ? (
@@ -234,14 +223,31 @@ export default function EventPlanDetailPage() {
               </button>
             );
           })}
+
+          <Separator className="my-2" />
+
+          {/* Revenue — secondary */}
+          <button
+            onClick={() => setShowRevenue(true)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors text-sm ${
+              showRevenue
+                ? 'bg-accent/10 text-foreground font-medium border border-accent/20'
+                : 'hover:bg-muted/30 text-muted-foreground'
+            }`}
+          >
+            <div className="p-1 rounded text-muted-foreground/50">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+            <span>Revenue</span>
+          </button>
         </div>
 
         {/* MAIN — Active Step Content */}
         <div className="min-w-0">
-          {nextAction && (
+          {nextAction && !showRevenue && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
               <button
-                onClick={() => setActiveStep(nextAction.target)}
+                onClick={() => { setActiveStep(nextAction.target); setShowRevenue(false); }}
                 className="w-full flex items-center gap-4 p-4 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 transition-colors text-left group"
               >
                 <div className="p-2 rounded-lg bg-accent/15 shrink-0">
@@ -255,26 +261,26 @@ export default function EventPlanDetailPage() {
             </motion.div>
           )}
 
-          {activeStep === 'strategy' && (
-            <StrategySection plan={plan} tasks={tasks} brain={brain} updateDecision={updateDecision} toggleTask={toggleTask} addTask={addTask} deleteTask={deleteTask} fetchAll={fetchAll} />
-          )}
-          {activeStep === 'campaign_pack' && (
-            <CampaignPackSection planId={planId!} plan={plan} brain={brain} workspace={workspace} />
-          )}
-          {activeStep === 'production' && (
-            <ProductionSection planId={planId!} plan={plan} workspace={workspace} />
-          )}
-          {activeStep === 'publish' && (
-            <PublishSection planId={planId!} plan={plan} workspace={workspace} />
-          )}
-          {activeStep === 'revenue' && (
+          {showRevenue ? (
             <RevenueSection plan={plan} brain={brain} />
+          ) : (
+            <>
+              {activeStep === 'plan' && (
+                <PlanSection plan={plan} tasks={tasks} brain={brain} updateDecision={updateDecision} toggleTask={toggleTask} addTask={addTask} deleteTask={deleteTask} fetchAll={fetchAll} />
+              )}
+              {activeStep === 'create' && (
+                <CreateSection planId={planId!} plan={plan} brain={brain} workspace={workspace} />
+              )}
+              {activeStep === 'post' && (
+                <PublishSection planId={planId!} plan={plan} workspace={workspace} />
+              )}
+            </>
           )}
         </div>
 
         {/* RIGHT — Lily Assistant */}
         <div className="space-y-4">
-          <LilyPanel plan={plan} brain={brain} activeStep={activeStep} workspace={workspace} />
+          <LilyPanel plan={plan} brain={brain} activeStep={showRevenue ? 'revenue' : activeStep} workspace={workspace} />
         </div>
       </div>
     </motion.div>
@@ -284,30 +290,32 @@ export default function EventPlanDetailPage() {
 /* ═══════════════════════════════════════════════════════
    LILY ASSISTANT PANEL
    ═══════════════════════════════════════════════════════ */
-function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: any; activeStep: WorkflowStep; workspace: any }) {
+function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: any; activeStep: string; workspace: any }) {
   const insights: string[] = [];
 
-  if (activeStep === 'strategy') {
+  if (activeStep === 'plan') {
     if (!plan.decision?.offer_terms)
       insights.push('Campaigns with specific offers typically perform 40% better in hospitality.');
     if (!plan.decision?.target_audience)
       insights.push('Define your target audience to get more relevant copy and creative direction.');
     if (brain.recentPlans.length > 0)
-      insights.push(`You have ${brain.recentPlans.length} recent plans. Build on what\'s working.`);
-  } else if (activeStep === 'campaign_pack') {
+      insights.push(`You have ${brain.recentPlans.length} recent plans. Build on what's working.`);
+  } else if (activeStep === 'create') {
     if (!workspace.hasCampaignPack)
-      insights.push('Generate your Campaign Pack to get copy for Instagram, Stories, Reels, Email, and SMS in one click.');
-    else
-      insights.push(`${workspace.outputs.length} copy outputs ready. Review, edit and approve them for your campaign.`);
-  } else if (activeStep === 'production') {
-    insights.push('Hero images with food styling and natural light perform best on Instagram.');
-    if (workspace.hasAssetBriefs)
-      insights.push(`${workspace.briefs.length} creative briefs ready. Click "Create in Studio" to start producing.`);
-  } else if (activeStep === 'publish') {
-    insights.push('Post Packs bundle your approved copy + assets into ready-to-post deliverables.');
+      insights.push('Generate content to get captions, hooks, email copy, and creative briefs in one click.');
+    else {
+      const starredCopy = workspace.outputs.filter((o: any) => o.status === 'approved').length;
+      const starredAssets = workspace.assets.filter((a: any) => a.status === 'approved').length;
+      insights.push(`${workspace.outputs.length} copy outputs and ${workspace.briefs.length} asset briefs available.`);
+      if (starredCopy > 0 || starredAssets > 0)
+        insights.push(`${starredCopy + starredAssets} items starred as preferred — these will be used first in Post Packs.`);
+      else
+        insights.push('Star your favourite copy and assets — Pulse will use them first when building Post Packs.');
+    }
+  } else if (activeStep === 'post') {
+    insights.push('Post Packs bundle your content into ready-to-post deliverables for each channel.');
     insights.push('Post Instagram Reels 5-7 days before the event for maximum reach.');
     insights.push('TikTok content performs best when posted at peak hours — weekdays 7-9pm.');
-    insights.push('Stories should run daily during the campaign window.');
   } else if (activeStep === 'revenue') {
     if (brain.revenueInsights.totalSignals > 0)
       insights.push(`${brain.revenueInsights.totalSignals} revenue signals tracked across your campaigns.`);
@@ -332,9 +340,9 @@ function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: a
 }
 
 /* ═══════════════════════════════════════════════════════
-   STRATEGY SECTION
+   PLAN SECTION (was Strategy)
    ═══════════════════════════════════════════════════════ */
-function StrategySection({
+function PlanSection({
   plan, tasks, brain, updateDecision, toggleTask, addTask, deleteTask, fetchAll,
 }: {
   plan: any; tasks: any[]; brain: any;
@@ -430,6 +438,7 @@ function StrategySection({
 
       <div className="card-elevated p-5 space-y-4">
         <h3 className="font-medium">Campaign Brief</h3>
+        <p className="text-xs text-muted-foreground">What are you promoting? Define the essentials and Pulse will handle the rest.</p>
         {[
           { key: 'run_offer', label: 'Run promotional offer?' },
           { key: 'run_event_promo', label: 'Run event promotion?' },
@@ -514,166 +523,7 @@ function StrategySection({
 }
 
 /* ═══════════════════════════════════════════════════════
-   CAMPAIGN PACK SECTION
-   ═══════════════════════════════════════════════════════ */
-function CampaignPackSection({ planId, plan, brain, workspace }: {
-  planId: string; plan: any; brain: any; workspace: ReturnType<typeof usePlanWorkspace>;
-}) {
-  const { currentVenue } = useVenue();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [generating, setGenerating] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  const handleGeneratePack = async () => {
-    if (!currentVenue || !user) return;
-    setGenerating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-copy', {
-        body: {
-          venue_id: currentVenue.id,
-          module: 'campaign',
-          goal: 'campaign_pack',
-          inputs: {
-            plan_id: planId,
-            plan_title: plan.title,
-            plan_strategy: plan.decision || {},
-            brain_context: buildStrategyContext(brain, plan),
-            format: 'campaign_pack',
-          },
-        },
-      });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      // Check atomic persistence
-      if (data.persisted) {
-        toast({
-          title: 'Campaign Pack generated!',
-          description: `${data.persisted.outputs} outputs and ${data.persisted.briefs} creative briefs saved.`,
-        });
-      } else {
-        toast({ title: 'Campaign Pack generated!', description: 'Copy and creative briefs saved to your plan.' });
-      }
-      await workspace.fetchWorkspace();
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Generation failed', description: err.message });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
-  };
-
-  const coreCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.core_copy.includes(o.output_type));
-  const emailCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.email.includes(o.output_type));
-  const visualCopy = workspace.outputs.filter(o => OUTPUT_SECTIONS.visual.includes(o.output_type));
-  const otherCopy = workspace.outputs.filter(o =>
-    !OUTPUT_SECTIONS.core_copy.includes(o.output_type) &&
-    !OUTPUT_SECTIONS.email.includes(o.output_type) &&
-    !OUTPUT_SECTIONS.visual.includes(o.output_type)
-  );
-
-  return (
-    <div className="space-y-8">
-      <div className="rounded-xl border border-accent/20 bg-gradient-to-br from-card to-card/60 p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-accent/15">
-            <Package className="w-5 h-5 text-accent" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Campaign Pack</h3>
-            <p className="text-xs text-muted-foreground">Generate copy for all channels — captions, hooks, headlines, CTAs, email, and SMS.</p>
-          </div>
-        </div>
-
-        {(plan.decision?.offer_terms || plan.decision?.campaign_angle) && (
-          <div className="rounded-lg bg-muted/20 border border-border/40 p-3 space-y-1">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Strategy Context</p>
-            {plan.decision?.campaign_angle && <p className="text-xs text-foreground">Angle: {plan.decision.campaign_angle}</p>}
-            {plan.decision?.offer_terms && <p className="text-xs text-foreground">Offer: {plan.decision.offer_terms}</p>}
-            {plan.decision?.target_audience && <p className="text-xs text-foreground">Audience: {plan.decision.target_audience}</p>}
-          </div>
-        )}
-
-        <Button onClick={handleGeneratePack} disabled={generating} className="gap-2">
-          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {generating ? 'Generating Campaign Pack...' : workspace.hasCampaignPack ? 'Regenerate Campaign Pack' : 'Generate Campaign Pack'}
-        </Button>
-      </div>
-
-      {coreCopy.length > 0 && <OutputSection title="Core Campaign Copy" outputs={coreCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
-      {emailCopy.length > 0 && <OutputSection title="Email Messaging" outputs={emailCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
-      {visualCopy.length > 0 && <OutputSection title="Visual Direction" outputs={visualCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
-      {otherCopy.length > 0 && <OutputSection title="Additional Outputs" outputs={otherCopy} copied={copied} onCopy={handleCopy} onStatusChange={workspace.updateOutputStatus} />}
-
-      {!workspace.hasCampaignPack && (
-        <div className="text-center py-8 text-muted-foreground">
-          <Package className="w-8 h-8 mx-auto opacity-40 mb-2" />
-          <p className="text-sm">No campaign pack generated yet.</p>
-          <p className="text-xs mt-1">Complete your Strategy, then generate your Campaign Pack above.</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* Output Section Component */
-function OutputSection({ title, outputs, copied, onCopy, onStatusChange }: {
-  title: string;
-  outputs: Array<{ id: string; output_type: string; title: string; content: string; status: string }>;
-  copied: string | null;
-  onCopy: (text: string, id: string) => void;
-  onStatusChange: (id: string, status: string) => Promise<void>;
-}) {
-  return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-medium text-foreground">{title}</h3>
-      <div className="grid gap-2">
-        {outputs.map(output => (
-          <div key={output.id} className="p-4 rounded-lg bg-muted/20 border border-border/50 hover:border-border transition-colors group">
-            <div className="flex items-center justify-between mb-2">
-              <Badge variant="outline" className="text-[10px]">
-                {OUTPUT_TYPE_LABELS[output.output_type] || output.title}
-              </Badge>
-              <div className="flex items-center gap-1.5">
-                <Select value={output.status} onValueChange={v => onStatusChange(output.id, v)}>
-                  <SelectTrigger className="h-6 w-[90px] text-[10px] border-0 bg-transparent">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="draft">Draft</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="published">Published</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => onCopy(output.content, output.id)}
-                >
-                  {copied === output.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                </Button>
-              </div>
-            </div>
-            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{output.content}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-
-
-
-/* ═══════════════════════════════════════════════════════
-   REVENUE SECTION
+   REVENUE SECTION (secondary)
    ═══════════════════════════════════════════════════════ */
 function RevenueSection({ plan, brain }: { plan: any; brain: any }) {
   return (
