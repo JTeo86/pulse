@@ -326,7 +326,7 @@ function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: a
         insights.push('Star your favourite copy and assets — Pulse will use them first when building Post Packs.');
     }
   } else if (activeStep === 'post') {
-    insights.push('Post Packs bundle your content into ready-to-post deliverables for each channel.');
+    insights.push('Post Packs bundle your campaign content into channel-ready posts. Add them to your Content Calendar when ready.');
     insights.push('Post Instagram Reels 5-7 days before the event for maximum reach.');
     insights.push('TikTok content performs best when posted at peak hours — weekdays 7-9pm.');
   } else if (activeStep === 'revenue') {

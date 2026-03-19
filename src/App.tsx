@@ -126,7 +126,8 @@ function AppRoutes() {
         <Route path="/content/library" element={<BrandLibrary />} />
         <Route path="/content/planner" element={<Planner />} />
         <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
-        <Route path="/content/scheduler" element={<ContentScheduler />} />
+        <Route path="/content/calendar" element={<ContentScheduler />} />
+        <Route path="/content/scheduler" element={<Navigate to="/content/calendar" replace />} />
         <Route path="/content/campaigns" element={<Navigate to="/content/planner" replace />} />
         <Route path="/content/copywriter" element={<Navigate to="/content/planner" replace />} />
         <Route path="/copywriter" element={<Navigate to="/content/planner" replace />} />

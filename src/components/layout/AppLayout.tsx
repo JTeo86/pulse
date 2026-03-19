@@ -112,7 +112,7 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 const quickActions = [
   { name: 'Generate Photo', href: '/studio/pro-photo', icon: Camera },
   { name: 'Create Reel', href: '/studio/reel-creator', icon: Film },
-  { name: 'Schedule Post', href: '/content/scheduler', icon: Calendar },
+  { name: 'Add to Calendar', href: '/content/calendar', icon: Calendar },
   { name: 'Respond to Reviews', href: '/reputation/reviews', icon: MessageSquareText },
   { name: 'Upload Dish', href: '/studio/pro-photo', icon: Plus },
 ];
