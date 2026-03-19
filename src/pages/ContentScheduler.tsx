@@ -1,16 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Plus, Image, MoreVertical, Megaphone, Trash2, ExternalLink } from 'lucide-react';
+import { Calendar, Clock, Image } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
+import { CalendarContentCard } from '@/components/calendar/CalendarContentCard';
 import {
   DropdownMenu,
   DropdownMenuContent,
