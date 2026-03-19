@@ -1,18 +1,15 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Copy, Check, ExternalLink, Download, Clock, CheckCircle2,
   Archive, Pencil, Trash2, Bell, Image as ImageIcon, Video,
-  Mail, MessageSquare, Camera, Play, CalendarPlus,
+  Mail, MessageSquare, Camera, Play, Calendar,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PlanPublishItem, PACK_STATUS_CONFIG, PUBLISH_CHANNELS } from '@/hooks/use-plan-publish';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { useVenue } from '@/lib/venue-context';
 
 interface PostPackCardProps {
   item: PlanPublishItem;
@@ -54,12 +51,9 @@ export function PostPackCard({
   onStatusChange,
 }: PostPackCardProps) {
   const { toast } = useToast();
-  const navigate = useNavigate();
-  const { currentVenue } = useVenue();
   const [captionCopied, setCaptionCopied] = useState(false);
-  const [addingToCalendar, setAddingToCalendar] = useState(false);
 
-  const isSentToCalendar = item.status === 'sent_to_calendar' || !!(item.metadata as any)?.calendar_item_id;
+  const hasCalendarItem = !!(item.metadata as any)?.calendar_item_id;
 
   const channel = PUBLISH_CHANNELS.find(c => c.value === item.channel);
   const channelLabel = channel?.label || item.channel;
@@ -103,44 +97,6 @@ export function PostPackCard({
     }
   };
 
-  const handleAddToCalendar = async () => {
-    if (!currentVenue || isSentToCalendar) return;
-    setAddingToCalendar(true);
-    try {
-      const { data, error } = await supabase
-        .from('content_items')
-        .insert({
-          venue_id: currentVenue.id,
-          caption_final: item.caption || null,
-          media_master_url: assetData?._resolvedUrl || null,
-          scheduled_for: item.publish_date || null,
-          status: item.publish_date ? 'scheduled' : 'draft',
-          intent: item.channel,
-          asset_type: assetData?.asset_type || 'image',
-        } as any)
-        .select('id')
-        .single();
-
-      if (error) throw error;
-
-      // Update pack metadata with calendar link
-      await supabase
-        .from('plan_publish_items')
-        .update({ 
-          status: 'sent_to_calendar',
-          metadata: { ...(item.metadata || {}), calendar_item_id: data.id, plan_title: planTitle },
-        } as any)
-        .eq('id', item.id);
-
-      toast({ title: 'Added to Content Calendar' });
-      onStatusChange?.();
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Failed to add to calendar', description: err.message });
-    } finally {
-      setAddingToCalendar(false);
-    }
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -152,6 +108,11 @@ export function PostPackCard({
         <ChannelIcon className="w-4 h-4" />
         <span className="text-xs font-semibold tracking-wide uppercase">{channelLabel}</span>
         <div className="ml-auto flex items-center gap-2">
+          {hasCalendarItem && (
+            <Badge variant="outline" className="text-[10px] gap-1 border-0 text-success">
+              <Calendar className="w-3 h-3" /> In Calendar
+            </Badge>
+          )}
           {item.reminder_at && (
             <Badge variant="outline" className="text-[10px] gap-1 border-0">
               <Bell className="w-3 h-3" />
@@ -254,23 +215,6 @@ export function PostPackCard({
           )}
 
           <div className="ml-auto flex items-center gap-1">
-            {!isPosted && !isSentToCalendar && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs gap-1.5"
-                onClick={handleAddToCalendar}
-                disabled={addingToCalendar}
-              >
-                <CalendarPlus className="w-3 h-3" />
-                {addingToCalendar ? 'Adding…' : 'Add to Calendar'}
-              </Button>
-            )}
-            {isSentToCalendar && !isPosted && (
-              <Badge variant="outline" className="text-[10px] gap-1 text-success border-success/30">
-                <CheckCircle2 className="w-3 h-3" /> In Calendar
-              </Badge>
-            )}
             {!isPosted && (
               <>
                 <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5" onClick={onEdit}>
