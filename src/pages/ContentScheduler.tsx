@@ -1,50 +1,78 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Image } from 'lucide-react';
+import { Calendar, Clock, Image, Trash2, CheckSquare } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarContentCard } from '@/components/calendar/CalendarContentCard';
-
-interface ScheduledItem {
-  id: string;
-  caption_final: string | null;
-  caption_draft: string | null;
-  media_master_url: string | null;
-  scheduled_for: string | null;
-  status: string | null;
-  intent: string | null;
-  created_at: string;
-  source_plan_publish_item_id: string | null;
-  source_plan_title: string | null;
-}
+import { CalendarContentCard, type ScheduledItem } from '@/components/calendar/CalendarContentCard';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function ContentScheduler() {
   const { currentVenue } = useVenue();
   const { toast } = useToast();
   const [items, setItems] = useState<ScheduledItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
 
   const fetchScheduled = useCallback(async () => {
     if (!currentVenue) return;
     setLoading(true);
+
+    // Query content_items and join plan_publish_items to get the plan_id for campaign routing
     const { data } = await supabase
       .from('content_items')
-      .select('id, caption_final, caption_draft, media_master_url, scheduled_for, status, intent, created_at, source_plan_publish_item_id, source_plan_title')
+      .select(`
+        id, caption_final, caption_draft, media_master_url, scheduled_for,
+        status, intent, created_at, source_plan_publish_item_id, source_plan_title,
+        plan_publish_items!content_items_source_plan_publish_item_id_fkey ( plan_id )
+      `)
       .eq('venue_id', currentVenue.id)
       .in('status', ['scheduled', 'draft', 'published'])
       .order('scheduled_for', { ascending: true, nullsFirst: false });
 
-    setItems((data as ScheduledItem[]) || []);
+    const mapped: ScheduledItem[] = (data || []).map((row: any) => ({
+      id: row.id,
+      caption_final: row.caption_final,
+      caption_draft: row.caption_draft,
+      media_master_url: row.media_master_url,
+      scheduled_for: row.scheduled_for,
+      status: row.status,
+      intent: row.intent,
+      created_at: row.created_at,
+      source_plan_publish_item_id: row.source_plan_publish_item_id,
+      source_plan_title: row.source_plan_title,
+      source_plan_id: row.plan_publish_items?.plan_id || null,
+    }));
+
+    setItems(mapped);
     setLoading(false);
   }, [currentVenue]);
 
   useEffect(() => { fetchScheduled(); }, [fetchScheduled]);
 
+  // Reset selection when leaving selection mode
+  useEffect(() => {
+    if (!selectionMode) setSelectedIds(new Set());
+  }, [selectionMode]);
+
   const handleDelete = async (item: ScheduledItem) => {
     setItems(prev => prev.filter(i => i.id !== item.id));
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(item.id); return next; });
 
     const { error } = await supabase
       .from('content_items')
@@ -57,38 +85,90 @@ export default function ContentScheduler() {
       return;
     }
 
+    // Reset linked Post Pack if campaign-linked
     if (item.source_plan_publish_item_id) {
-      const { data: packData, error: packError } = await supabase
-        .from('plan_publish_items')
-        .select('metadata')
-        .eq('id', item.source_plan_publish_item_id)
-        .single();
-
-      if (packError) {
-        toast({ variant: 'destructive', title: 'Calendar item deleted, but pack sync failed', description: packError.message });
-        return;
-      }
-
-      const meta = ((packData?.metadata as Record<string, any>) || {});
-      delete meta.calendar_item_id;
-
-      const { error: resetError } = await supabase
-        .from('plan_publish_items')
-        .update({ status: 'ready', metadata: meta } as any)
-        .eq('id', item.source_plan_publish_item_id);
-
-      if (resetError) {
-        toast({ variant: 'destructive', title: 'Calendar item deleted, but pack sync failed', description: resetError.message });
-        return;
-      }
+      await resetLinkedPostPack(item.source_plan_publish_item_id);
     }
 
     toast({ title: 'Removed from calendar' });
   };
 
+  /** Reset a linked post pack: clear its calendar_item_id and set status back to ready */
+  const resetLinkedPostPack = async (publishItemId: string) => {
+    const { data: packData, error: packError } = await supabase
+      .from('plan_publish_items')
+      .select('metadata')
+      .eq('id', publishItemId)
+      .single();
+
+    if (packError) return; // Pack may have been deleted
+
+    const meta = { ...((packData?.metadata as Record<string, any>) || {}) };
+    delete meta.calendar_item_id;
+
+    await supabase
+      .from('plan_publish_items')
+      .update({ status: 'ready', metadata: meta } as any)
+      .eq('id', publishItemId);
+  };
+
+  const handleBulkDelete = async () => {
+    const idsToDelete = Array.from(selectedIds);
+    const itemsToDelete = items.filter(i => idsToDelete.includes(i.id));
+
+    // Optimistic UI update
+    setItems(prev => prev.filter(i => !idsToDelete.includes(i.id)));
+    setSelectedIds(new Set());
+    setBulkDeleteOpen(false);
+    setSelectionMode(false);
+
+    // Delete all content_items
+    const { error } = await supabase
+      .from('content_items')
+      .delete()
+      .in('id', idsToDelete);
+
+    if (error) {
+      toast({ variant: 'destructive', title: 'Bulk delete failed', description: error.message });
+      fetchScheduled();
+      return;
+    }
+
+    // Reset linked Post Packs for campaign items
+    const linkedPackIds = itemsToDelete
+      .map(i => i.source_plan_publish_item_id)
+      .filter((id): id is string => !!id);
+
+    for (const packId of linkedPackIds) {
+      await resetLinkedPostPack(packId);
+    }
+
+    toast({ title: `Deleted ${idsToDelete.length} item${idsToDelete.length > 1 ? 's' : ''}` });
+  };
+
+  const toggleSelect = (id: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
   const scheduledItems = items.filter((i) => i.status === 'scheduled' && i.scheduled_for);
   const draftItems = items.filter((i) => i.status === 'draft');
   const publishedItems = items.filter((i) => i.status === 'published');
+
+  const selectableItems = [...scheduledItems, ...publishedItems];
+  const allSelectableSelected = selectableItems.length > 0 && selectableItems.every(i => selectedIds.has(i.id));
+
+  const toggleSelectAll = () => {
+    if (allSelectableSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableItems.map(i => i.id)));
+    }
+  };
 
   return (
     <motion.div
@@ -97,10 +177,58 @@ export default function ContentScheduler() {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      <PageHeader
-        title="Content Calendar"
-        description="Manage all scheduled and draft posts for your venue — including campaign posts and one-off content."
-      />
+      <div className="flex items-center justify-between gap-4">
+        <PageHeader
+          title="Content Calendar"
+          description="Manage all scheduled and draft posts for your venue — including campaign posts and one-off content."
+        />
+        {items.length > 0 && (
+          <div className="flex items-center gap-2 shrink-0">
+            {selectionMode ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-xs"
+                  onClick={toggleSelectAll}
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  {allSelectableSelected ? 'Deselect All' : 'Select All'}
+                </Button>
+                {selectedIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="gap-1.5 text-xs"
+                    onClick={() => setBulkDeleteOpen(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete ({selectedIds.size})
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs"
+                  onClick={() => setSelectionMode(false)}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-xs"
+                onClick={() => setSelectionMode(true)}
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                Select
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -122,7 +250,14 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {scheduledItems.map((item) => (
-                  <CalendarContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                  <CalendarContentCard
+                    key={item.id}
+                    item={item}
+                    onDelete={() => handleDelete(item)}
+                    selectable={selectionMode}
+                    selected={selectedIds.has(item.id)}
+                    onSelectChange={(checked) => toggleSelect(item.id, checked)}
+                  />
                 ))}
               </div>
             </section>
@@ -136,7 +271,11 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {draftItems.map((item) => (
-                  <CalendarContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                  <CalendarContentCard
+                    key={item.id}
+                    item={item}
+                    onDelete={() => handleDelete(item)}
+                  />
                 ))}
               </div>
             </section>
@@ -150,13 +289,44 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {publishedItems.map((item) => (
-                  <CalendarContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                  <CalendarContentCard
+                    key={item.id}
+                    item={item}
+                    onDelete={() => handleDelete(item)}
+                    selectable={selectionMode}
+                    selected={selectedIds.has(item.id)}
+                    onSelectChange={(checked) => toggleSelect(item.id, checked)}
+                  />
                 ))}
               </div>
             </section>
           )}
         </div>
       )}
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the selected items from your Content Calendar.
+              {Array.from(selectedIds).some(id => items.find(i => i.id === id)?.source_plan_publish_item_id) && (
+                <> Campaign-linked items will be unlinked from the calendar but the campaign plan will remain intact.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleBulkDelete}
+            >
+              Delete {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }
