@@ -46,13 +46,20 @@ const CHANNEL_COLORS: Record<string, string> = {
 export function PostPackCard({
   item,
   assetData,
+  planTitle,
   onEdit,
   onMarkPosted,
   onArchive,
   onRemove,
+  onStatusChange,
 }: PostPackCardProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { currentVenue } = useVenue();
   const [captionCopied, setCaptionCopied] = useState(false);
+  const [addingToCalendar, setAddingToCalendar] = useState(false);
+
+  const isSentToCalendar = item.status === 'sent_to_calendar' || !!(item.metadata as any)?.calendar_item_id;
 
   const channel = PUBLISH_CHANNELS.find(c => c.value === item.channel);
   const channelLabel = channel?.label || item.channel;
