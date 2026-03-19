@@ -278,7 +278,7 @@ export default function EventPlanDetailPage() {
                 <CreateSection planId={planId!} plan={plan} brain={brain} workspace={workspace} />
               )}
               {activeStep === 'post' && (
-                <PublishSection planId={planId!} plan={plan} workspace={workspace} />
+                <PublishSection planId={planId!} plan={plan} workspace={workspace} publish={publish} />
               )}
             </>
           )}

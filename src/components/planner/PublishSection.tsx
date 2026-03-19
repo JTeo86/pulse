@@ -20,10 +20,10 @@ interface PublishSectionProps {
   planId: string;
   plan: any;
   workspace: ReturnType<typeof usePlanWorkspace>;
+  publish: ReturnType<typeof usePlanPublish>;
 }
 
-export function PublishSection({ planId, plan, workspace }: PublishSectionProps) {
-  const publish = usePlanPublish(planId);
+export function PublishSection({ planId, plan, workspace, publish }: PublishSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PlanPublishItem | null>(null);
   const [activeSuggestion, setActiveSuggestion] = useState<SuggestedPostPack | null>(null);
