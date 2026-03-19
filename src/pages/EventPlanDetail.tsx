@@ -114,6 +114,11 @@ export default function EventPlanDetailPage() {
   } = useEventPlanDetail(planId);
 
   const workspace = usePlanWorkspace(planId);
+  const publish = usePlanPublish(planId);
+
+  const activePacks = publish.items.filter(i => i.status !== 'archived');
+  const publishPackCount = activePacks.length;
+  const publishPostedCount = activePacks.filter(i => i.status === 'published').length;
 
   const [activeStep, setActiveStep] = useState<WorkflowStep>('plan');
   const [editingTitle, setEditingTitle] = useState(false);
