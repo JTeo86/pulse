@@ -160,6 +160,7 @@ function AppSidebar() {
   const isCollapsed = state === 'collapsed';
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+  const { dueCount } = useTodaysActions();
   const galleryFlags = useGalleryFlags();
 
   const studioNavigation = [
