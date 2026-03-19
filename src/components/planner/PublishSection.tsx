@@ -99,10 +99,12 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
   };
 
   const handleSave = async (data: any) => {
+    // Resolve asset URL for calendar sync
+    const assetUrl = data.content_asset_id ? linkedAssetData[data.content_asset_id]?._resolvedUrl : null;
     if (editingItem) {
-      await publish.updatePublishItem(editingItem.id, data);
+      await publish.updatePublishItem(editingItem.id, data, assetUrl, plan?.title);
     } else {
-      await publish.addPublishItem(data);
+      await publish.addPublishItem(data, assetUrl, plan?.title);
     }
     setDialogOpen(false);
     setEditingItem(null);
@@ -221,19 +223,22 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
               />
             ) : (
               <div className="space-y-3">
-                {publish.readyPacks.map(item => (
-                  <PostPackCard
-                    key={item.id}
-                    item={item}
-                    planTitle={plan?.title}
-                    assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
-                    onEdit={() => handleEdit(item)}
-                    onMarkPosted={() => publish.markAsPosted(item.id)}
-                    onArchive={() => publish.archivePack(item.id)}
-                    onRemove={() => publish.removePublishItem(item.id)}
-                    onStatusChange={() => publish.fetchItems()}
-                  />
-                ))}
+                {publish.readyPacks.map(item => {
+                  const asset = item.content_asset_id ? linkedAssetData[item.content_asset_id] : null;
+                  return (
+                    <PostPackCard
+                      key={item.id}
+                      item={item}
+                      planTitle={plan?.title}
+                      assetData={asset}
+                      onEdit={() => handleEdit(item)}
+                      onMarkPosted={() => publish.markAsPosted(item.id, asset?._resolvedUrl, plan?.title)}
+                      onArchive={() => publish.archivePack(item.id)}
+                      onRemove={() => publish.removePublishItem(item.id)}
+                      onStatusChange={() => publish.fetchItems()}
+                    />
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -247,19 +252,22 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
               />
             ) : (
               <div className="space-y-3">
-                {publish.scheduledPacks.map(item => (
-                  <PostPackCard
-                    key={item.id}
-                    item={item}
-                    planTitle={plan?.title}
-                    assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
-                    onEdit={() => handleEdit(item)}
-                    onMarkPosted={() => publish.markAsPosted(item.id)}
-                    onArchive={() => publish.archivePack(item.id)}
-                    onRemove={() => publish.removePublishItem(item.id)}
-                    onStatusChange={() => publish.fetchItems()}
-                  />
-                ))}
+                {publish.scheduledPacks.map(item => {
+                  const asset = item.content_asset_id ? linkedAssetData[item.content_asset_id] : null;
+                  return (
+                    <PostPackCard
+                      key={item.id}
+                      item={item}
+                      planTitle={plan?.title}
+                      assetData={asset}
+                      onEdit={() => handleEdit(item)}
+                      onMarkPosted={() => publish.markAsPosted(item.id, asset?._resolvedUrl, plan?.title)}
+                      onArchive={() => publish.archivePack(item.id)}
+                      onRemove={() => publish.removePublishItem(item.id)}
+                      onStatusChange={() => publish.fetchItems()}
+                    />
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -273,19 +281,22 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
               />
             ) : (
               <div className="space-y-3">
-                {publish.completedPacks.map(item => (
-                  <PostPackCard
-                    key={item.id}
-                    item={item}
-                    planTitle={plan?.title}
-                    assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
-                    onEdit={() => handleEdit(item)}
-                    onMarkPosted={() => publish.markAsPosted(item.id)}
-                    onArchive={() => publish.archivePack(item.id)}
-                    onRemove={() => publish.removePublishItem(item.id)}
-                    onStatusChange={() => publish.fetchItems()}
-                  />
-                ))}
+                {publish.completedPacks.map(item => {
+                  const asset = item.content_asset_id ? linkedAssetData[item.content_asset_id] : null;
+                  return (
+                    <PostPackCard
+                      key={item.id}
+                      item={item}
+                      planTitle={plan?.title}
+                      assetData={asset}
+                      onEdit={() => handleEdit(item)}
+                      onMarkPosted={() => publish.markAsPosted(item.id, asset?._resolvedUrl, plan?.title)}
+                      onArchive={() => publish.archivePack(item.id)}
+                      onRemove={() => publish.removePublishItem(item.id)}
+                      onStatusChange={() => publish.fetchItems()}
+                    />
+                  );
+                })}
               </div>
             )}
           </TabsContent>

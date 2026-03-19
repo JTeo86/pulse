@@ -535,6 +535,8 @@ export type Database = {
           media_master_url: string | null
           media_variants: Json | null
           scheduled_for: string | null
+          source_plan_publish_item_id: string | null
+          source_plan_title: string | null
           status: string | null
           updated_at: string
           upload_id: string | null
@@ -555,6 +557,8 @@ export type Database = {
           media_master_url?: string | null
           media_variants?: Json | null
           scheduled_for?: string | null
+          source_plan_publish_item_id?: string | null
+          source_plan_title?: string | null
           status?: string | null
           updated_at?: string
           upload_id?: string | null
@@ -575,6 +579,8 @@ export type Database = {
           media_master_url?: string | null
           media_variants?: Json | null
           scheduled_for?: string | null
+          source_plan_publish_item_id?: string | null
+          source_plan_title?: string | null
           status?: string | null
           updated_at?: string
           upload_id?: string | null
@@ -583,6 +589,13 @@ export type Database = {
           venue_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "content_items_source_plan_publish_item_id_fkey"
+            columns: ["source_plan_publish_item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_publish_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "content_items_upload_id_fkey"
             columns: ["upload_id"]

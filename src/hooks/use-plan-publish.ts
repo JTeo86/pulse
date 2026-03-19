@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useVenue } from '@/lib/venue-context';
 
 export interface PlanPublishItem {
   id: string;
@@ -64,8 +65,23 @@ export const CHANNEL_ASSET_MAP: Record<string, string[]> = {
   sms: [],
 };
 
+/** Map pack status → calendar item status */
+function packStatusToCalendarStatus(packStatus: string): string {
+  switch (packStatus) {
+    case 'scheduled':
+    case 'reminded':
+    case 'sent_to_calendar':
+      return 'scheduled';
+    case 'published':
+      return 'published';
+    default:
+      return 'draft';
+  }
+}
+
 export function usePlanPublish(planId: string | undefined) {
   const { toast } = useToast();
+  const { currentVenue } = useVenue();
   const [items, setItems] = useState<PlanPublishItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -82,6 +98,56 @@ export function usePlanPublish(planId: string | undefined) {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
+  /** Create or update the linked content_items calendar record */
+  const syncCalendarItem = useCallback(async (
+    packItem: PlanPublishItem,
+    resolvedAssetUrl?: string | null,
+    planTitle?: string,
+  ) => {
+    if (!currentVenue) return;
+    const calendarItemId = (packItem.metadata as any)?.calendar_item_id;
+    const calendarStatus = packStatusToCalendarStatus(packItem.status);
+
+    const payload: Record<string, any> = {
+      venue_id: currentVenue.id,
+      caption_final: packItem.caption || null,
+      media_master_url: resolvedAssetUrl || null,
+      scheduled_for: packItem.publish_date || null,
+      status: calendarStatus,
+      intent: packItem.channel,
+      source_plan_publish_item_id: packItem.id,
+      source_plan_title: planTitle || (packItem.metadata as any)?.plan_title || null,
+    };
+
+    if (calendarItemId) {
+      // Update existing calendar item
+      await supabase
+        .from('content_items')
+        .update(payload as any)
+        .eq('id', calendarItemId);
+    } else {
+      // Create new calendar item
+      const { data, error } = await supabase
+        .from('content_items')
+        .insert(payload as any)
+        .select('id')
+        .single();
+
+      if (!error && data) {
+        // Store calendar_item_id back on the pack
+        const newMeta = { ...(packItem.metadata || {}), calendar_item_id: data.id, plan_title: planTitle };
+        await supabase
+          .from('plan_publish_items')
+          .update({ metadata: newMeta } as any)
+          .eq('id', packItem.id);
+        // Update local state
+        setItems(prev => prev.map(i =>
+          i.id === packItem.id ? { ...i, metadata: newMeta } : i
+        ));
+      }
+    }
+  }, [currentVenue]);
+
   const addPublishItem = useCallback(async (params: {
     content_asset_id?: string;
     plan_asset_id?: string;
@@ -93,7 +159,7 @@ export function usePlanPublish(planId: string | undefined) {
     reminder_at?: string;
     status?: string;
     metadata?: Record<string, any>;
-  }) => {
+  }, resolvedAssetUrl?: string | null, planTitle?: string) => {
     if (!planId) return;
     const { data, error } = await supabase
       .from('plan_publish_items')
@@ -115,13 +181,23 @@ export function usePlanPublish(planId: string | undefined) {
     if (error) {
       toast({ variant: 'destructive', title: 'Error creating post pack', description: error.message });
     } else if (data) {
-      setItems(prev => [...prev, data as PlanPublishItem]);
-      toast({ title: 'Post pack created' });
+      const packItem = data as PlanPublishItem;
+      setItems(prev => [...prev, packItem]);
+      // Auto-create linked calendar item
+      await syncCalendarItem(packItem, resolvedAssetUrl, planTitle);
+      toast({ title: 'Post pack created & added to calendar' });
     }
     return data as PlanPublishItem | undefined;
-  }, [planId, toast]);
+  }, [planId, toast, syncCalendarItem]);
 
-  const updatePublishItem = useCallback(async (itemId: string, updates: Partial<PlanPublishItem>) => {
+  const updatePublishItem = useCallback(async (
+    itemId: string,
+    updates: Partial<PlanPublishItem>,
+    resolvedAssetUrl?: string | null,
+    planTitle?: string,
+  ) => {
+    const updatedItem = items.find(i => i.id === itemId);
+    const merged = updatedItem ? { ...updatedItem, ...updates } : null;
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...updates } : i));
     const { error } = await supabase
       .from('plan_publish_items')
@@ -130,10 +206,17 @@ export function usePlanPublish(planId: string | undefined) {
     if (error) {
       toast({ variant: 'destructive', title: 'Error updating', description: error.message });
       fetchItems();
+    } else if (merged) {
+      // Sync calendar item
+      await syncCalendarItem(merged as PlanPublishItem, resolvedAssetUrl, planTitle);
     }
-  }, [fetchItems, toast]);
+  }, [fetchItems, toast, items, syncCalendarItem]);
 
   const removePublishItem = useCallback(async (itemId: string) => {
+    // Also remove linked calendar item
+    const item = items.find(i => i.id === itemId);
+    const calendarItemId = (item?.metadata as any)?.calendar_item_id;
+
     setItems(prev => prev.filter(i => i.id !== itemId));
     const { error } = await supabase
       .from('plan_publish_items')
@@ -143,20 +226,33 @@ export function usePlanPublish(planId: string | undefined) {
       toast({ variant: 'destructive', title: 'Error removing', description: error.message });
       fetchItems();
     }
-  }, [fetchItems, toast]);
 
-  const markAsPosted = useCallback(async (itemId: string) => {
+    // Clean up calendar item
+    if (calendarItemId) {
+      await supabase.from('content_items').delete().eq('id', calendarItemId);
+    }
+  }, [fetchItems, toast, items]);
+
+  const markAsPosted = useCallback(async (itemId: string, resolvedAssetUrl?: string | null, planTitle?: string) => {
     const now = new Date().toISOString();
     await updatePublishItem(itemId, {
       status: 'published',
       posted_at: now,
-    } as any);
+    } as any, resolvedAssetUrl, planTitle);
     toast({ title: 'Marked as posted ✓' });
   }, [updatePublishItem, toast]);
 
   const archivePack = useCallback(async (itemId: string) => {
+    // Archive the calendar item too
+    const item = items.find(i => i.id === itemId);
+    const calendarItemId = (item?.metadata as any)?.calendar_item_id;
+
     await updatePublishItem(itemId, { status: 'archived' } as any);
-  }, [updatePublishItem]);
+
+    if (calendarItemId) {
+      await supabase.from('content_items').delete().eq('id', calendarItemId);
+    }
+  }, [updatePublishItem, items]);
 
   // Grouped by status
   const readyPacks = items.filter(i => i.status === 'draft' || i.status === 'ready');
