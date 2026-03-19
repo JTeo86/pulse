@@ -28,6 +28,8 @@ import { usePulseBrain, buildStrategyContext } from '@/hooks/use-pulse-brain';
 import { useAutosaveField } from '@/hooks/use-optimistic-mutation';
 import { SaveIndicator } from '@/components/ui/save-indicator';
 import { supabase } from '@/integrations/supabase/client';
+import { useRevenueFeedback, useVenueLearningSignals } from '@/hooks/use-revenue-feedback';
+import { RevenueFeedbackCard } from '@/components/planner/RevenueFeedbackCard';
 
 const STATUS_LABELS: Record<string, string> = {
   not_started: 'Idea', planned: 'Planned', in_production: 'In Production',
