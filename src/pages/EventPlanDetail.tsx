@@ -275,7 +275,7 @@ export default function EventPlanDetailPage() {
           )}
 
           {showRevenue ? (
-            <RevenueSection plan={plan} brain={brain} />
+            <RevenueSection plan={plan} brain={brain} planId={planId!} feedback={feedback} hasPostedPacks={hasPostedPacks} onFeedbackSubmitted={refetchFeedback} learningSummary={learningSummary} />
           ) : (
             <>
               {activeStep === 'plan' && (
