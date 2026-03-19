@@ -252,19 +252,22 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
               />
             ) : (
               <div className="space-y-3">
-                {publish.scheduledPacks.map(item => (
-                  <PostPackCard
-                    key={item.id}
-                    item={item}
-                    planTitle={plan?.title}
-                    assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
-                    onEdit={() => handleEdit(item)}
-                    onMarkPosted={() => publish.markAsPosted(item.id)}
-                    onArchive={() => publish.archivePack(item.id)}
-                    onRemove={() => publish.removePublishItem(item.id)}
-                    onStatusChange={() => publish.fetchItems()}
-                  />
-                ))}
+                {publish.scheduledPacks.map(item => {
+                  const asset = item.content_asset_id ? linkedAssetData[item.content_asset_id] : null;
+                  return (
+                    <PostPackCard
+                      key={item.id}
+                      item={item}
+                      planTitle={plan?.title}
+                      assetData={asset}
+                      onEdit={() => handleEdit(item)}
+                      onMarkPosted={() => publish.markAsPosted(item.id, asset?._resolvedUrl, plan?.title)}
+                      onArchive={() => publish.archivePack(item.id)}
+                      onRemove={() => publish.removePublishItem(item.id)}
+                      onStatusChange={() => publish.fetchItems()}
+                    />
+                  );
+                })}
               </div>
             )}
           </TabsContent>
