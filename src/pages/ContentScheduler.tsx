@@ -142,7 +142,7 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {draftItems.map((item) => (
-                  <ContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                  <CalendarContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
                 ))}
               </div>
             </section>
