@@ -386,6 +386,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
   const galleryFlags = useGalleryFlags();
+  const { dueCount: mobileDueCount } = useTodaysActions();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
