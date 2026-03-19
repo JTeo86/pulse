@@ -254,6 +254,23 @@ export function PostPackCard({
           )}
 
           <div className="ml-auto flex items-center gap-1">
+            {!isPosted && !isSentToCalendar && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5"
+                onClick={handleAddToCalendar}
+                disabled={addingToCalendar}
+              >
+                <CalendarPlus className="w-3 h-3" />
+                {addingToCalendar ? 'Adding…' : 'Add to Calendar'}
+              </Button>
+            )}
+            {isSentToCalendar && !isPosted && (
+              <Badge variant="outline" className="text-[10px] gap-1 text-success border-success/30">
+                <CheckCircle2 className="w-3 h-3" /> In Calendar
+              </Badge>
+            )}
             {!isPosted && (
               <>
                 <Button size="sm" variant="ghost" className="h-8 text-xs gap-1.5" onClick={onEdit}>
