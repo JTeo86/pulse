@@ -72,8 +72,10 @@ export default function Home() {
       {/* Today's Opportunities — reviews, approvals, verifications */}
       <TodaysOpportunities />
 
-      {/* Pulse Action Feed */}
-      <ActionFeed actions={actions} loading={actionsLoading} onActionsChange={setActions} />
+      {/* Pulse Action Feed — only show when real actions exist */}
+      {!actionsLoading && actions.length > 0 && (
+        <ActionFeed actions={actions} loading={actionsLoading} onActionsChange={setActions} />
+      )}
 
       {/* Referral Network Cards (conditional) */}
       <ReferralHomeCards />

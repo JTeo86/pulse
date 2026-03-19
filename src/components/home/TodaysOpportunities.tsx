@@ -120,7 +120,7 @@ export function TodaysOpportunities() {
           title: `Approve ${pendingPlanTasks} marketing task${pendingPlanTasks > 1 ? 's' : ''}`,
           description: 'Weekly marketing plan tasks pending',
           count: pendingPlanTasks,
-          route: '/home',
+          route: '/content/planner',
           actionLabel: 'Review Plan',
           priority: 'medium',
         });
