@@ -54,7 +54,6 @@ export default function ContentScheduler() {
   useEffect(() => { fetchScheduled(); }, [fetchScheduled]);
 
   const handleDelete = async (item: ScheduledItem) => {
-    // Optimistic removal
     setItems(prev => prev.filter(i => i.id !== item.id));
 
     const { error } = await supabase
@@ -64,34 +63,33 @@ export default function ContentScheduler() {
 
     if (error) {
       toast({ variant: 'destructive', title: 'Failed to delete', description: error.message });
-      fetchScheduled(); // revert
+      fetchScheduled();
       return;
     }
 
-    // If campaign-linked, reset the pack status back to 'ready'
     if (item.source_plan_publish_item_id) {
-      await supabase
-        .from('plan_publish_items')
-        .update({
-          status: 'ready',
-          metadata: supabase.rpc ? {} : {},
-        } as any)
-        .eq('id', item.source_plan_publish_item_id);
-
-      // Clear the calendar_item_id from pack metadata
-      const { data: packData } = await supabase
+      const { data: packData, error: packError } = await supabase
         .from('plan_publish_items')
         .select('metadata')
         .eq('id', item.source_plan_publish_item_id)
         .single();
 
-      if (packData) {
-        const meta = (packData.metadata as Record<string, any>) || {};
-        delete meta.calendar_item_id;
-        await supabase
-          .from('plan_publish_items')
-          .update({ status: 'ready', metadata: meta } as any)
-          .eq('id', item.source_plan_publish_item_id);
+      if (packError) {
+        toast({ variant: 'destructive', title: 'Calendar item deleted, but pack sync failed', description: packError.message });
+        return;
+      }
+
+      const meta = ((packData?.metadata as Record<string, any>) || {});
+      delete meta.calendar_item_id;
+
+      const { error: resetError } = await supabase
+        .from('plan_publish_items')
+        .update({ status: 'ready', metadata: meta } as any)
+        .eq('id', item.source_plan_publish_item_id);
+
+      if (resetError) {
+        toast({ variant: 'destructive', title: 'Calendar item deleted, but pack sync failed', description: resetError.message });
+        return;
       }
     }
 
