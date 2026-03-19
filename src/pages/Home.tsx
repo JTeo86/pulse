@@ -3,12 +3,11 @@ import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
 import { RevenueHero } from '@/components/home/RevenueHero';
 import { TodaysOpportunities } from '@/components/home/TodaysOpportunities';
-import { WeeklyMarketingPlan } from '@/components/home/WeeklyMarketingPlan';
-import { TopPerformingContent } from '@/components/home/TopPerformingContent';
-import { IndustryInsight } from '@/components/home/IndustryInsight';
-import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
-import { RecentActivity } from '@/components/home/RecentActivity';
+import { TodaysActionsPanel } from '@/components/home/TodaysActionsPanel';
 import { ActionFeed } from '@/components/home/ActionFeed';
+import { RecentActivity } from '@/components/home/RecentActivity';
+import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
+import { useTodaysActions } from '@/hooks/use-todays-actions';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -26,6 +25,7 @@ interface ActionItem {
 
 export default function Home() {
   const { currentVenue } = useVenue();
+  const { actions: todaysActions, isLoading: todaysLoading, markPosted } = useTodaysActions();
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [actionsLoading, setActionsLoading] = useState(true);
 
@@ -59,26 +59,24 @@ export default function Home() {
         description="Your daily command center — see what needs attention and take action."
       />
 
-      {/* Revenue Hero */}
+      {/* Revenue Snapshot */}
       <RevenueHero />
 
-      {/* Today's Opportunities */}
+      {/* Today's Actions — posting reminders from campaigns */}
+      <TodaysActionsPanel
+        actions={todaysActions}
+        loading={todaysLoading}
+        onMarkPosted={markPosted}
+      />
+
+      {/* Today's Opportunities — reviews, approvals, verifications */}
       <TodaysOpportunities />
 
-      {/* Action Feed */}
+      {/* Pulse Action Feed */}
       <ActionFeed actions={actions} loading={actionsLoading} onActionsChange={setActions} />
-
-      {/* Weekly Marketing Plan */}
-      <WeeklyMarketingPlan />
-
-      {/* Top Performing Content */}
-      <TopPerformingContent />
 
       {/* Referral Network Cards (conditional) */}
       <ReferralHomeCards />
-
-      {/* Industry Insight */}
-      <IndustryInsight />
 
       {/* Recent Activity */}
       <RecentActivity />

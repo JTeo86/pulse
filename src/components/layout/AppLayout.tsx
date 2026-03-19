@@ -31,6 +31,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
 import { useReferralAccess } from '@/hooks/use-referral-access';
 import { useGalleryFlags } from '@/hooks/use-gallery-flags';
+import { useTodaysActions } from '@/hooks/use-todays-actions';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
@@ -159,6 +160,7 @@ function AppSidebar() {
   const isCollapsed = state === 'collapsed';
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
+  const { dueCount } = useTodaysActions();
   const galleryFlags = useGalleryFlags();
 
   const studioNavigation = [
@@ -307,12 +309,19 @@ function AppSidebar() {
       )}
 
       <SidebarContent className="py-2">
-        {/* Home - Top level item */}
+        {/* Home - Top level item with alert badge */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
               <SidebarMenuItem>
-                <NavItemComponent item={homeItem} />
+                <div className="relative">
+                  <NavItemComponent item={homeItem} />
+                  {dueCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 pointer-events-none">
+                      {dueCount > 9 ? '9+' : dueCount}
+                    </span>
+                  )}
+                </div>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
@@ -377,6 +386,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isPlatformAdmin = usePlatformAdmin();
   const { venueHasAccess: hasReferralAccess } = useReferralAccess();
   const galleryFlags = useGalleryFlags();
+  const { dueCount: mobileDueCount } = useTodaysActions();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -406,8 +416,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Mobile Header */}
         <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">
           <div className="flex items-center justify-between px-4 h-14">
-            <Link to="/home" className="font-serif text-lg font-medium">
+            <Link to="/home" className="font-serif text-lg font-medium relative">
               Pulse<span className="text-accent">.</span>
+              {mobileDueCount > 0 && (
+                <span className="absolute -top-1 -right-4 flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-0.5">
+                  {mobileDueCount > 9 ? '9+' : mobileDueCount}
+                </span>
+              )}
             </Link>
             <div className="flex items-center gap-2">
               {/* Quick Create Button - Mobile */}
