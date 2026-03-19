@@ -309,12 +309,19 @@ function AppSidebar() {
       )}
 
       <SidebarContent className="py-2">
-        {/* Home - Top level item */}
+        {/* Home - Top level item with alert badge */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
               <SidebarMenuItem>
-                <NavItemComponent item={homeItem} />
+                <div className="relative">
+                  <NavItemComponent item={homeItem} />
+                  {dueCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 pointer-events-none">
+                      {dueCount > 9 ? '9+' : dueCount}
+                    </span>
+                  )}
+                </div>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
