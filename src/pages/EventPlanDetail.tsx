@@ -10,6 +10,7 @@ import {
 import { format } from 'date-fns';
 import { CreateSection } from '@/components/planner/CreateSection';
 import { PublishSection } from '@/components/planner/PublishSection';
+import { usePlanPublish } from '@/hooks/use-plan-publish';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -66,8 +67,10 @@ function getStepStatus(
       if (hasCampaignPack || hasAssetBriefs) return 'in_progress';
       return hasStrategy ? 'ready' : 'not_started';
     case 'post': {
-      if ((publishPostedCount || 0) > 0) return 'done';
-      if ((publishPackCount || 0) > 0) return 'in_progress';
+      const packs = publishPackCount || 0;
+      const posted = publishPostedCount || 0;
+      if (packs > 0 && posted === packs) return 'done';
+      if (packs > 0) return 'in_progress';
       if (hasCampaignPack) return 'ready';
       return 'not_started';
     }
@@ -113,6 +116,11 @@ export default function EventPlanDetailPage() {
   } = useEventPlanDetail(planId);
 
   const workspace = usePlanWorkspace(planId);
+  const publish = usePlanPublish(planId);
+
+  const activePacks = publish.items.filter(i => i.status !== 'archived');
+  const publishPackCount = activePacks.length;
+  const publishPostedCount = activePacks.filter(i => i.status === 'published').length;
 
   const [activeStep, setActiveStep] = useState<WorkflowStep>('plan');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -141,7 +149,7 @@ export default function EventPlanDetailPage() {
     setEditingTitle(false);
   };
 
-  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0);
+  const nextAction = getNextBestAction(activeStep, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, publishPackCount);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
@@ -193,7 +201,7 @@ export default function EventPlanDetailPage() {
         {/* LEFT — Progress Steps */}
         <div className="space-y-1">
           {WORKFLOW_STEPS.map((step) => {
-            const status = getStepStatus(step.id, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, 0, 0);
+            const status = getStepStatus(step.id, plan, workspace.hasCampaignPack, workspace.hasAssetBriefs, workspace.hasLinkedAssets, publishPackCount, publishPostedCount);
             const isActive = activeStep === step.id;
             return (
               <button
@@ -272,7 +280,7 @@ export default function EventPlanDetailPage() {
                 <CreateSection planId={planId!} plan={plan} brain={brain} workspace={workspace} />
               )}
               {activeStep === 'post' && (
-                <PublishSection planId={planId!} plan={plan} workspace={workspace} />
+                <PublishSection planId={planId!} plan={plan} workspace={workspace} publish={publish} />
               )}
             </>
           )}
