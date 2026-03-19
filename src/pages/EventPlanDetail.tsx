@@ -67,8 +67,10 @@ function getStepStatus(
       if (hasCampaignPack || hasAssetBriefs) return 'in_progress';
       return hasStrategy ? 'ready' : 'not_started';
     case 'post': {
-      if ((publishPostedCount || 0) > 0) return 'done';
-      if ((publishPackCount || 0) > 0) return 'in_progress';
+      const packs = publishPackCount || 0;
+      const posted = publishPostedCount || 0;
+      if (packs > 0 && posted === packs) return 'done';
+      if (packs > 0) return 'in_progress';
       if (hasCampaignPack) return 'ready';
       return 'not_started';
     }
