@@ -99,10 +99,12 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
   };
 
   const handleSave = async (data: any) => {
+    // Resolve asset URL for calendar sync
+    const assetUrl = data.content_asset_id ? linkedAssetData[data.content_asset_id]?._resolvedUrl : null;
     if (editingItem) {
-      await publish.updatePublishItem(editingItem.id, data);
+      await publish.updatePublishItem(editingItem.id, data, assetUrl, plan?.title);
     } else {
-      await publish.addPublishItem(data);
+      await publish.addPublishItem(data, assetUrl, plan?.title);
     }
     setDialogOpen(false);
     setEditingItem(null);
