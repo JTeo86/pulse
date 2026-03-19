@@ -39,6 +39,7 @@ export const PACK_STATUS_CONFIG: Record<string, { label: string; color: string }
   ready: { label: 'Ready', color: 'bg-info/10 text-info' },
   scheduled: { label: 'Scheduled', color: 'bg-accent/10 text-accent' },
   reminded: { label: 'Reminder Sent', color: 'bg-warning/10 text-warning' },
+  sent_to_calendar: { label: 'In Calendar', color: 'bg-success/10 text-success' },
   published: { label: 'Posted', color: 'bg-success/10 text-success' },
   archived: { label: 'Archived', color: 'bg-muted text-muted-foreground' },
 };
