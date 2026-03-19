@@ -31,7 +31,7 @@ export const PUBLISH_CHANNELS = [
 
 export type PublishChannel = typeof PUBLISH_CHANNELS[number]['value'];
 
-export const PACK_STATUSES = ['draft', 'ready', 'scheduled', 'reminded', 'published', 'archived'] as const;
+export const PACK_STATUSES = ['draft', 'ready', 'scheduled', 'reminded', 'sent_to_calendar', 'published', 'archived'] as const;
 export type PackStatus = typeof PACK_STATUSES[number];
 
 export const PACK_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
