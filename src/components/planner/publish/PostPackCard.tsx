@@ -103,6 +103,44 @@ export function PostPackCard({
     }
   };
 
+  const handleAddToCalendar = async () => {
+    if (!currentVenue || isSentToCalendar) return;
+    setAddingToCalendar(true);
+    try {
+      const { data, error } = await supabase
+        .from('content_items')
+        .insert({
+          venue_id: currentVenue.id,
+          caption_final: item.caption || null,
+          media_master_url: assetData?._resolvedUrl || null,
+          scheduled_for: item.publish_date || null,
+          status: item.publish_date ? 'scheduled' : 'draft',
+          intent: item.channel,
+          asset_type: assetData?.asset_type || 'image',
+        } as any)
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      // Update pack metadata with calendar link
+      await supabase
+        .from('plan_publish_items')
+        .update({ 
+          status: 'sent_to_calendar',
+          metadata: { ...(item.metadata || {}), calendar_item_id: data.id, plan_title: planTitle },
+        } as any)
+        .eq('id', item.id);
+
+      toast({ title: 'Added to Content Calendar' });
+      onStatusChange?.();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Failed to add to calendar', description: err.message });
+    } finally {
+      setAddingToCalendar(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
