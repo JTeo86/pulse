@@ -65,6 +65,19 @@ export const CHANNEL_ASSET_MAP: Record<string, string[]> = {
   sms: [],
 };
 
+/** Valid content_items.intent values per DB constraint */
+const VALID_CALENDAR_INTENTS = ['standard', 'announcement', 'event', 'menu_update', 'seasonal'] as const;
+type CalendarIntent = typeof VALID_CALENDAR_INTENTS[number];
+
+/** Map a pack channel to a valid content_items intent */
+function resolveCalendarIntent(channel: string, metadata?: Record<string, any>): CalendarIntent {
+  const hint = metadata?.calendar_intent as string | undefined;
+  if (hint && (VALID_CALENDAR_INTENTS as readonly string[]).includes(hint)) {
+    return hint as CalendarIntent;
+  }
+  return 'standard';
+}
+
 function packStatusToCalendarStatus(packStatus: string): string {
   switch (packStatus) {
     case 'scheduled':
