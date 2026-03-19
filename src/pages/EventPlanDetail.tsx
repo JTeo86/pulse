@@ -119,10 +119,13 @@ export default function EventPlanDetailPage() {
 
   const workspace = usePlanWorkspace(planId);
   const publish = usePlanPublish(planId);
+  const { feedback, loading: feedbackLoading, refetch: refetchFeedback } = useRevenueFeedback(planId);
+  const { summary: learningSummary } = useVenueLearningSignals(currentVenue?.id);
 
   const activePacks = publish.items.filter(i => i.status !== 'archived');
   const publishPackCount = activePacks.length;
   const publishPostedCount = activePacks.filter(i => i.status === 'published').length;
+  const hasPostedPacks = publishPostedCount > 0;
 
   const [activeStep, setActiveStep] = useState<WorkflowStep>('plan');
   const [editingTitle, setEditingTitle] = useState(false);
