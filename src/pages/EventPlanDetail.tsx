@@ -43,7 +43,7 @@ const STATUS_LABELS: Record<string, string> = {
 const WORKFLOW_STEPS = [
   { id: 'plan', label: 'Plan', icon: Lightbulb },
   { id: 'create', label: 'Create', icon: PenTool },
-  { id: 'post', label: 'Post', icon: Send },
+  { id: 'post', label: 'Post Packs', icon: Send },
 ] as const;
 
 type WorkflowStep = typeof WORKFLOW_STEPS[number]['id'];
