@@ -133,6 +133,25 @@ export function usePlanPublish(planId: string | undefined) {
     fetchItems();
   }, [fetchItems]);
 
+  const resolveAssetUrl = useCallback(async (contentAssetId: string | null): Promise<string | null> => {
+    if (!contentAssetId) return null;
+    const { data } = await supabase
+      .from('content_assets')
+      .select('public_url, thumbnail_url, storage_path')
+      .eq('id', contentAssetId)
+      .single();
+    if (!data) return null;
+    const isSignedUrl = (url?: string | null) =>
+      url?.includes('/object/sign/') || url?.includes('?token=');
+    if (data.public_url && !isSignedUrl(data.public_url)) return data.public_url;
+    if (data.thumbnail_url && !isSignedUrl(data.thumbnail_url)) return data.thumbnail_url;
+    if (data.storage_path) {
+      const { data: signed } = await supabase.storage.from('venue-assets').createSignedUrl(data.storage_path, 3600);
+      return signed?.signedUrl || null;
+    }
+    return null;
+  }, []);
+
   const syncCalendarItem = useCallback(async (
     packItem: PlanPublishItem,
     resolvedAssetUrl?: string | null,
@@ -142,13 +161,19 @@ export function usePlanPublish(planId: string | undefined) {
       return null;
     }
 
+    // Auto-resolve asset URL if not provided
+    let mediaUrl = resolvedAssetUrl || null;
+    if (!mediaUrl && packItem.content_asset_id) {
+      mediaUrl = await resolveAssetUrl(packItem.content_asset_id);
+    }
+
     const calendarItemId = packItem.metadata?.calendar_item_id as string | undefined;
     const calendarStatus = packStatusToCalendarStatus(packItem.status);
     const payload = {
       venue_id: currentVenue.id,
       caption_final: packItem.caption || null,
       caption_draft: packItem.caption || null,
-      media_master_url: resolvedAssetUrl || null,
+      media_master_url: mediaUrl,
       scheduled_for: packItem.publish_date || null,
       status: calendarStatus,
       intent: resolveCalendarIntent(packItem.channel, packItem.metadata as Record<string, any>),
