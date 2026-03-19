@@ -31,6 +31,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
 import { useReferralAccess } from '@/hooks/use-referral-access';
 import { useGalleryFlags } from '@/hooks/use-gallery-flags';
+import { useTodaysActions } from '@/hooks/use-todays-actions';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
