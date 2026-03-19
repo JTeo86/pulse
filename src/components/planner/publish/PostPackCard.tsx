@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Copy, Check, ExternalLink, Download, Clock, CheckCircle2,
   Archive, Pencil, Trash2, Bell, Image as ImageIcon, Video,
-  Mail, MessageSquare, Camera, Play,
+  Mail, MessageSquare, Camera, Play, CalendarPlus,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { PlanPublishItem, PACK_STATUS_CONFIG, PUBLISH_CHANNELS } from '@/hooks/use-plan-publish';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useVenue } from '@/lib/venue-context';
 
 interface PostPackCardProps {
   item: PlanPublishItem;
