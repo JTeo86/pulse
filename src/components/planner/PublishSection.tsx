@@ -115,6 +115,13 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
 
   const hasAnyPacks = publish.items.length > 0;
 
+  // Real posting progress
+  const activePacks = publish.items.filter(i => i.status !== 'archived');
+  const totalPacks = activePacks.length;
+  const postedPacks = activePacks.filter(i => i.status === 'published').length;
+  const allPosted = totalPacks > 0 && postedPacks === totalPacks;
+  const progressPercent = totalPacks > 0 ? Math.round((postedPacks / totalPacks) * 100) : 0;
+
   return (
     <div className="space-y-6">
       {/* Section header */}
@@ -129,6 +136,23 @@ export function PublishSection({ planId, plan, workspace }: PublishSectionProps)
           <Plus className="w-3 h-3" /> Create Pack
         </Button>
       </div>
+
+      {/* Posting progress */}
+      {totalPacks > 0 && (
+        <div className="rounded-xl border bg-card p-4 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Posting Progress</p>
+            <span className="text-xs font-medium text-foreground">{postedPacks} / {totalPacks} published</span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+          {allPosted && (
+            <div className="flex items-center gap-2 pt-1">
+              <CheckCircle2 className="w-4 h-4 text-success" />
+              <p className="text-sm font-medium text-success">Campaign posting completed</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Helpful hints (not blockers) */}
       {hints.length > 0 && (
