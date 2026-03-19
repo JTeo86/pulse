@@ -160,7 +160,7 @@ export function usePlanPublish(planId: string | undefined) {
 
   // Grouped by status
   const readyPacks = items.filter(i => i.status === 'draft' || i.status === 'ready');
-  const scheduledPacks = items.filter(i => i.status === 'scheduled' || i.status === 'reminded');
+  const scheduledPacks = items.filter(i => i.status === 'scheduled' || i.status === 'reminded' || i.status === 'sent_to_calendar');
   const completedPacks = items.filter(i => i.status === 'published' || i.status === 'archived');
 
   return {

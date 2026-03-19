@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Plus, Image, MoreVertical, Send } from 'lucide-react';
+import { Calendar, Clock, Plus, Image, MoreVertical, Megaphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
@@ -23,7 +23,10 @@ interface ScheduledItem {
   media_master_url: string | null;
   scheduled_for: string | null;
   status: string | null;
+  intent: string | null;
   created_at: string;
+  /** Set by plan_publish_items metadata when sent to calendar */
+  plan_title?: string | null;
 }
 
 export default function ContentScheduler() {
@@ -42,7 +45,7 @@ export default function ContentScheduler() {
         .eq('venue_id', currentVenue.id)
         .in('status', ['scheduled', 'draft'])
         .order('scheduled_for', { ascending: true, nullsFirst: false });
-      
+
       setItems((data as ScheduledItem[]) || []);
       setLoading(false);
     };
@@ -61,8 +64,8 @@ export default function ContentScheduler() {
       className="space-y-6"
     >
       <PageHeader
-        title="Content Scheduler"
-        description="Plan and schedule your social content. See what's coming up and manage your queue."
+        title="Content Calendar"
+        description="Manage all scheduled and draft posts for your venue — including campaign posts and one-off content."
       />
 
       {loading ? (
@@ -72,8 +75,8 @@ export default function ContentScheduler() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={Calendar}
-          title="No scheduled content"
-          description="Create content in the Studio and schedule it for publishing."
+          title="No content on your calendar"
+          description="Create content in the Studio or build Post Packs in the Planner to populate your calendar."
         />
       ) : (
         <div className="space-y-8">
@@ -114,6 +117,7 @@ export default function ContentScheduler() {
 
 function ContentCard({ item }: { item: ScheduledItem }) {
   const caption = item.caption_final || item.caption_draft || 'No caption';
+  const isCampaignLinked = !!(item as any).plan_title || item.intent;
 
   return (
     <Card className="overflow-hidden group">
@@ -133,9 +137,9 @@ function ContentCard({ item }: { item: ScheduledItem }) {
         <div className="absolute top-2 right-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                size="icon" 
-                variant="secondary" 
+              <Button
+                size="icon"
+                variant="secondary"
                 className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <MoreVertical className="w-4 h-4" />
@@ -153,7 +157,7 @@ function ContentCard({ item }: { item: ScheduledItem }) {
 
       {/* Content */}
       <CardContent className="p-3">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <Badge variant={item.status === 'scheduled' ? 'default' : 'secondary'}>
             {item.status}
           </Badge>
@@ -163,6 +167,21 @@ function ContentCard({ item }: { item: ScheduledItem }) {
             </span>
           )}
         </div>
+
+        {/* Campaign source label */}
+        {isCampaignLinked ? (
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Megaphone className="w-3 h-3 text-accent shrink-0" />
+            <span className="text-[10px] font-medium text-accent truncate">
+              From Campaign{(item as any).plan_title ? `: ${(item as any).plan_title}` : ''}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-[10px] font-medium text-muted-foreground">One-off Post</span>
+          </div>
+        )}
+
         <p className="text-sm text-muted-foreground line-clamp-2">{caption}</p>
       </CardContent>
     </Card>
