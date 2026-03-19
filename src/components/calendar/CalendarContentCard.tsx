@@ -8,6 +8,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import {
   DropdownMenu,
@@ -17,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-interface ScheduledItem {
+export interface ScheduledItem {
   id: string;
   caption_final: string | null;
   caption_draft: string | null;
@@ -28,14 +29,25 @@ interface ScheduledItem {
   created_at: string;
   source_plan_publish_item_id: string | null;
   source_plan_title: string | null;
+  /** Resolved from join with plan_publish_items */
+  source_plan_id: string | null;
 }
 
 interface CalendarContentCardProps {
   item: ScheduledItem;
   onDelete: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectChange?: (checked: boolean) => void;
 }
 
-export function CalendarContentCard({ item, onDelete }: CalendarContentCardProps) {
+export function CalendarContentCard({
+  item,
+  onDelete,
+  selectable = false,
+  selected = false,
+  onSelectChange,
+}: CalendarContentCardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [captionCopied, setCaptionCopied] = useState(false);
@@ -83,14 +95,30 @@ export function CalendarContentCard({ item, onDelete }: CalendarContentCardProps
 
   const handleOpenCampaign = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    // Navigate to planner - the source_plan_publish_item_id links to the plan
-    navigate('/planner');
+    if (item.source_plan_id) {
+      navigate(`/content/planner/plan/${item.source_plan_id}`);
+    } else {
+      // Fallback: go to planner list
+      navigate('/content/planner');
+    }
   };
 
   return (
-    <Card className="overflow-hidden group">
+    <Card className={`overflow-hidden group ${selected ? 'ring-2 ring-accent' : ''}`}>
       {/* Thumbnail area */}
       <div className="aspect-square bg-muted relative">
+        {/* Selection checkbox */}
+        {selectable && (
+          <div className="absolute top-2 left-2 z-10">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(checked) => onSelectChange?.(!!checked)}
+              className="bg-background/80 backdrop-blur-sm"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        )}
+
         {hasMedia ? (
           <img
             src={item.media_master_url!}
@@ -164,27 +192,18 @@ export function CalendarContentCard({ item, onDelete }: CalendarContentCardProps
               )}
               {hasMedia && (
                 <>
-                  <DropdownMenuItem
-                    className="gap-2"
-                    onClick={handleOpenAsset}
-                  >
+                  <DropdownMenuItem className="gap-2" onClick={handleOpenAsset}>
                     <ExternalLink className="w-3.5 h-3.5" />
                     Open Asset
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="gap-2"
-                    onClick={handleDownloadAsset}
-                  >
+                  <DropdownMenuItem className="gap-2" onClick={handleDownloadAsset}>
                     <Download className="w-3.5 h-3.5" />
                     Download Asset
                   </DropdownMenuItem>
                 </>
               )}
               {isCampaignLinked && (
-                <DropdownMenuItem
-                  className="gap-2"
-                  onClick={handleOpenCampaign}
-                >
+                <DropdownMenuItem className="gap-2" onClick={handleOpenCampaign}>
                   <Megaphone className="w-3.5 h-3.5" />
                   Open Campaign
                 </DropdownMenuItem>
