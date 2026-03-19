@@ -130,7 +130,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
         <div>
           <h2 className="text-lg font-serif font-medium">Post Packs</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Ready-to-post content packs for each channel. Copy, download, and post when reminded.
+            Build channel-ready posts for this campaign. Add them to your Content Calendar when ready to schedule.
           </p>
         </div>
         <Button size="sm" className="gap-2" onClick={handleCreateBlank}>
