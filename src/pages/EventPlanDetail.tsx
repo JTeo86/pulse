@@ -97,7 +97,7 @@ function getNextBestAction(
   if (!hasCampaignPack && hasStrategy && activeStep !== 'create')
     return { label: 'Generate content', description: 'Create copy, captions, and asset briefs for your campaign.', target: 'create' };
   if (hasCampaignPack && (publishPackCount || 0) === 0 && activeStep !== 'post')
-    return { label: 'Create Post Packs', description: 'Package your content for Instagram, TikTok, Email and more.', target: 'post' };
+    return { label: 'Create Post Packs', description: 'Package your campaign content into channel-ready posts, then add them to your Content Calendar.', target: 'post' };
   return null;
 }
 
