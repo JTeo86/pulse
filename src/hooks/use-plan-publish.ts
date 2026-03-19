@@ -151,7 +151,7 @@ export function usePlanPublish(planId: string | undefined) {
       media_master_url: resolvedAssetUrl || null,
       scheduled_for: packItem.publish_date || null,
       status: calendarStatus,
-      intent: packItem.channel,
+      intent: resolveCalendarIntent(packItem.channel, packItem.metadata as Record<string, any>),
       source_plan_publish_item_id: packItem.id,
       source_plan_title: planTitle || packItem.metadata?.plan_title || null,
     };
