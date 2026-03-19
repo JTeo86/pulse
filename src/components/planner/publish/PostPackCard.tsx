@@ -17,10 +17,12 @@ import { useVenue } from '@/lib/venue-context';
 interface PostPackCardProps {
   item: PlanPublishItem;
   assetData: any;
+  planTitle?: string;
   onEdit: () => void;
   onMarkPosted: () => void;
   onArchive: () => void;
   onRemove: () => void;
+  onStatusChange?: () => void;
 }
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
