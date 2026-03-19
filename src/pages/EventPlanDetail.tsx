@@ -28,6 +28,8 @@ import { usePulseBrain, buildStrategyContext } from '@/hooks/use-pulse-brain';
 import { useAutosaveField } from '@/hooks/use-optimistic-mutation';
 import { SaveIndicator } from '@/components/ui/save-indicator';
 import { supabase } from '@/integrations/supabase/client';
+import { useRevenueFeedback, useVenueLearningSignals } from '@/hooks/use-revenue-feedback';
+import { RevenueFeedbackCard } from '@/components/planner/RevenueFeedbackCard';
 
 const STATUS_LABELS: Record<string, string> = {
   not_started: 'Idea', planned: 'Planned', in_production: 'In Production',
@@ -117,10 +119,13 @@ export default function EventPlanDetailPage() {
 
   const workspace = usePlanWorkspace(planId);
   const publish = usePlanPublish(planId);
+  const { feedback, loading: feedbackLoading, refetch: refetchFeedback } = useRevenueFeedback(planId);
+  const { summary: learningSummary } = useVenueLearningSignals(currentVenue?.id);
 
   const activePacks = publish.items.filter(i => i.status !== 'archived');
   const publishPackCount = activePacks.length;
   const publishPostedCount = activePacks.filter(i => i.status === 'published').length;
+  const hasPostedPacks = publishPostedCount > 0;
 
   const [activeStep, setActiveStep] = useState<WorkflowStep>('plan');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -270,7 +275,7 @@ export default function EventPlanDetailPage() {
           )}
 
           {showRevenue ? (
-            <RevenueSection plan={plan} brain={brain} />
+            <RevenueSection plan={plan} brain={brain} planId={planId!} feedback={feedback} hasPostedPacks={hasPostedPacks} onFeedbackSubmitted={refetchFeedback} learningSummary={learningSummary} />
           ) : (
             <>
               {activeStep === 'plan' && (
@@ -327,8 +332,8 @@ function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: a
   } else if (activeStep === 'revenue') {
     if (brain.revenueInsights.totalSignals > 0)
       insights.push(`${brain.revenueInsights.totalSignals} revenue signals tracked across your campaigns.`);
-    else
-      insights.push('Revenue tracking will show campaign ROI once your campaigns go live.');
+    insights.push('Submit quick campaign feedback so Lily can learn what works for your venue.');
+    insights.push('The more feedback you give, the smarter Lily\'s recommendations become.');
   }
 
   return (
@@ -533,15 +538,63 @@ function PlanSection({
 /* ═══════════════════════════════════════════════════════
    REVENUE SECTION (secondary)
    ═══════════════════════════════════════════════════════ */
-function RevenueSection({ plan, brain }: { plan: any; brain: any }) {
+function RevenueSection({ plan, brain, planId, feedback, hasPostedPacks, onFeedbackSubmitted, learningSummary }: {
+  plan: any; brain: any; planId: string;
+  feedback: any; hasPostedPacks: boolean;
+  onFeedbackSubmitted: () => void;
+  learningSummary: any;
+}) {
   return (
     <div className="space-y-6">
+      {/* One-tap feedback card */}
+      <RevenueFeedbackCard
+        planId={planId}
+        plan={plan}
+        feedback={feedback}
+        onFeedbackSubmitted={onFeedbackSubmitted}
+        hasPostedPacks={hasPostedPacks}
+      />
+
+      {/* Learning summary */}
+      {(learningSummary.positive_revenue_count > 0 || learningSummary.positive_covers_count > 0 || learningSummary.neutral_count > 0) && (
+        <div className="card-elevated p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-accent" />
+            <h3 className="font-medium text-sm">Lily's Learnings</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 rounded-lg bg-success/10 border border-success/15 text-center">
+              <p className="text-lg font-semibold text-success">{learningSummary.positive_revenue_count}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Revenue up</p>
+            </div>
+            <div className="p-3 rounded-lg bg-info/10 border border-info/15 text-center">
+              <p className="text-lg font-semibold text-info">{learningSummary.positive_covers_count}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Covers up</p>
+            </div>
+            <div className="p-3 rounded-lg bg-muted/30 border border-border/50 text-center">
+              <p className="text-lg font-semibold text-muted-foreground">{learningSummary.neutral_count}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Neutral</p>
+            </div>
+          </div>
+          {learningSummary.top_patterns.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Patterns detected</p>
+              {learningSummary.top_patterns.map((p: string, i: number) => (
+                <p key={i} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-accent shrink-0" /> {p}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Revenue signals */}
       <div className="card-elevated p-5 space-y-4">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-accent" />
-          <h3 className="font-medium">Revenue Insights</h3>
+          <h3 className="font-medium text-sm">Revenue Insights</h3>
         </div>
-
         {brain.revenueInsights.totalSignals > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 rounded-lg bg-muted/20 border border-border/50">
@@ -554,10 +607,9 @@ function RevenueSection({ plan, brain }: { plan: any; brain: any }) {
             </div>
           </div>
         ) : (
-          <div className="text-center py-8">
-            <TrendingUp className="w-8 h-8 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="text-sm text-muted-foreground">No revenue data yet for this campaign.</p>
-            <p className="text-xs text-muted-foreground mt-1">Revenue signals will appear here once campaigns are live and tracked.</p>
+          <div className="text-center py-6">
+            <TrendingUp className="w-6 h-6 mx-auto text-muted-foreground/40 mb-2" />
+            <p className="text-xs text-muted-foreground">Revenue signals will appear here once campaigns are tracked.</p>
           </div>
         )}
       </div>

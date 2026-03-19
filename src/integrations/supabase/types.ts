@@ -1537,6 +1537,57 @@ export type Database = {
           },
         ]
       }
+      plan_revenue_feedback: {
+        Row: {
+          created_at: string
+          feedback_outcome: string
+          id: string
+          notes: string | null
+          plan_id: string
+          submitted_at: string
+          submitted_by: string | null
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          feedback_outcome: string
+          id?: string
+          notes?: string | null
+          plan_id: string
+          submitted_at?: string
+          submitted_by?: string | null
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          feedback_outcome?: string
+          id?: string
+          notes?: string | null
+          plan_id?: string
+          submitted_at?: string
+          submitted_by?: string | null
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_revenue_feedback_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: true
+            referencedRelation: "venue_event_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_revenue_feedback_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_workspace_snapshots: {
         Row: {
           plan_id: string
@@ -2756,6 +2807,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "venue_invites_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_learning_signals: {
+        Row: {
+          category: string | null
+          channel: string | null
+          confidence_score: number
+          created_at: string
+          id: string
+          last_reinforced_at: string
+          payload: Json
+          signal_type: string
+          supporting_count: number
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          category?: string | null
+          channel?: string | null
+          confidence_score?: number
+          created_at?: string
+          id?: string
+          last_reinforced_at?: string
+          payload?: Json
+          signal_type: string
+          supporting_count?: number
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          category?: string | null
+          channel?: string | null
+          confidence_score?: number
+          created_at?: string
+          id?: string
+          last_reinforced_at?: string
+          payload?: Json
+          signal_type?: string
+          supporting_count?: number
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_learning_signals_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
