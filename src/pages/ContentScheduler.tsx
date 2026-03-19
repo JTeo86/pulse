@@ -1,22 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Plus, Image, MoreVertical, Megaphone, Trash2, ExternalLink } from 'lucide-react';
+import { Calendar, Clock, Image } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { CalendarContentCard } from '@/components/calendar/CalendarContentCard';
 
 interface ScheduledItem {
   id: string;
@@ -132,7 +122,7 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {scheduledItems.map((item) => (
-                  <ContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                  <CalendarContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
                 ))}
               </div>
             </section>
@@ -146,7 +136,7 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {draftItems.map((item) => (
-                  <ContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                  <CalendarContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
                 ))}
               </div>
             </section>
@@ -160,7 +150,7 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {publishedItems.map((item) => (
-                  <ContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                  <CalendarContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
                 ))}
               </div>
             </section>
@@ -168,75 +158,5 @@ export default function ContentScheduler() {
         </div>
       )}
     </motion.div>
-  );
-}
-
-function ContentCard({ item, onDelete }: { item: ScheduledItem; onDelete: () => void }) {
-  const navigate = useNavigate();
-  const caption = item.caption_final || item.caption_draft || 'No caption';
-  const isCampaignLinked = !!item.source_plan_publish_item_id || !!item.source_plan_title;
-
-  return (
-    <Card className="overflow-hidden group">
-      <div className="aspect-square bg-muted relative">
-        {item.media_master_url ? (
-          <img src={item.media_master_url} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Image className="w-12 h-12 text-muted-foreground/30" />
-          </div>
-        )}
-        <div className="absolute top-2 right-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                className="text-destructive gap-2"
-                onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      <CardContent className="p-3">
-        <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <Badge variant={item.status === 'scheduled' ? 'default' : item.status === 'published' ? 'default' : 'secondary'}>
-            {item.status}
-          </Badge>
-          {item.scheduled_for && (
-            <span className="text-xs text-muted-foreground">
-              {format(new Date(item.scheduled_for), 'MMM d, h:mm a')}
-            </span>
-          )}
-        </div>
-
-        {isCampaignLinked ? (
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <Megaphone className="w-3 h-3 text-accent shrink-0" />
-            <span className="text-[10px] font-medium text-accent truncate">
-              From Campaign{item.source_plan_title ? `: ${item.source_plan_title}` : ''}
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground">One-off Post</span>
-          </div>
-        )}
-
-        <p className="text-sm text-muted-foreground line-clamp-2">{caption}</p>
-      </CardContent>
-    </Card>
   );
 }
