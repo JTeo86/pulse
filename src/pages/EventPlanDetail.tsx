@@ -332,8 +332,8 @@ function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: a
   } else if (activeStep === 'revenue') {
     if (brain.revenueInsights.totalSignals > 0)
       insights.push(`${brain.revenueInsights.totalSignals} revenue signals tracked across your campaigns.`);
-    else
-      insights.push('Revenue tracking will show campaign ROI once your campaigns go live.');
+    insights.push('Submit quick campaign feedback so Lily can learn what works for your venue.');
+    insights.push('The more feedback you give, the smarter Lily\'s recommendations become.');
   }
 
   return (
