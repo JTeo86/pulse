@@ -98,15 +98,23 @@ export function useTodaysActions() {
         .map((d: any) => d.content_asset_id)
         .filter(Boolean) as string[];
 
-      let assetUrlMap = new Map<string, string>();
+      const assetUrlMap = new Map<string, string>();
       if (assetIds.length > 0) {
         const { data: assets } = await supabase
           .from('content_assets')
-          .select('id, public_url, thumbnail_url')
+          .select('id, public_url, thumbnail_url, storage_path')
           .in('id', assetIds);
 
         for (const a of assets ?? []) {
-          assetUrlMap.set(a.id, a.public_url || a.thumbnail_url || '');
+          let url = a.public_url || a.thumbnail_url || '';
+          // If the stored URL is a stale signed URL, regenerate from storage_path
+          if (a.storage_path && (!url || url.includes('?token=') || url.includes('/object/sign/'))) {
+            const { data: signed } = await supabase.storage
+              .from('content-assets')
+              .createSignedUrl(a.storage_path, 3600);
+            if (signed?.signedUrl) url = signed.signedUrl;
+          }
+          if (url) assetUrlMap.set(a.id, url);
         }
       }
 
