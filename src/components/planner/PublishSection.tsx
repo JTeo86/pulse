@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePlanWorkspace } from '@/hooks/use-plan-workspace';
 import { usePlanPublish, PlanPublishItem } from '@/hooks/use-plan-publish';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { generateSuggestedPacks, SuggestedPostPack } from './publish/post-pack-engine';
 import { PostPackCard } from './publish/PostPackCard';
