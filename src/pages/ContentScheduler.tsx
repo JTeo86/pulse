@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Plus, Image, MoreVertical, Megaphone } from 'lucide-react';
+import { Calendar, Clock, Plus, Image, MoreVertical, Megaphone, Trash2, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
@@ -8,7 +8,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,36 +27,80 @@ interface ScheduledItem {
   status: string | null;
   intent: string | null;
   created_at: string;
-  /** Set by plan_publish_items metadata when sent to calendar */
-  plan_title?: string | null;
+  source_plan_publish_item_id: string | null;
+  source_plan_title: string | null;
 }
 
 export default function ContentScheduler() {
   const { currentVenue } = useVenue();
+  const { toast } = useToast();
   const [items, setItems] = useState<ScheduledItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchScheduled = useCallback(async () => {
     if (!currentVenue) return;
+    setLoading(true);
+    const { data } = await supabase
+      .from('content_items')
+      .select('id, caption_final, caption_draft, media_master_url, scheduled_for, status, intent, created_at, source_plan_publish_item_id, source_plan_title')
+      .eq('venue_id', currentVenue.id)
+      .in('status', ['scheduled', 'draft', 'published'])
+      .order('scheduled_for', { ascending: true, nullsFirst: false });
 
-    const fetchScheduled = async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from('content_items')
-        .select('*')
-        .eq('venue_id', currentVenue.id)
-        .in('status', ['scheduled', 'draft'])
-        .order('scheduled_for', { ascending: true, nullsFirst: false });
-
-      setItems((data as ScheduledItem[]) || []);
-      setLoading(false);
-    };
-
-    fetchScheduled();
+    setItems((data as ScheduledItem[]) || []);
+    setLoading(false);
   }, [currentVenue]);
+
+  useEffect(() => { fetchScheduled(); }, [fetchScheduled]);
+
+  const handleDelete = async (item: ScheduledItem) => {
+    // Optimistic removal
+    setItems(prev => prev.filter(i => i.id !== item.id));
+
+    const { error } = await supabase
+      .from('content_items')
+      .delete()
+      .eq('id', item.id);
+
+    if (error) {
+      toast({ variant: 'destructive', title: 'Failed to delete', description: error.message });
+      fetchScheduled(); // revert
+      return;
+    }
+
+    // If campaign-linked, reset the pack status back to 'ready'
+    if (item.source_plan_publish_item_id) {
+      await supabase
+        .from('plan_publish_items')
+        .update({
+          status: 'ready',
+          metadata: supabase.rpc ? {} : {},
+        } as any)
+        .eq('id', item.source_plan_publish_item_id);
+
+      // Clear the calendar_item_id from pack metadata
+      const { data: packData } = await supabase
+        .from('plan_publish_items')
+        .select('metadata')
+        .eq('id', item.source_plan_publish_item_id)
+        .single();
+
+      if (packData) {
+        const meta = (packData.metadata as Record<string, any>) || {};
+        delete meta.calendar_item_id;
+        await supabase
+          .from('plan_publish_items')
+          .update({ status: 'ready', metadata: meta } as any)
+          .eq('id', item.source_plan_publish_item_id);
+      }
+    }
+
+    toast({ title: 'Removed from calendar' });
+  };
 
   const scheduledItems = items.filter((i) => i.status === 'scheduled' && i.scheduled_for);
   const draftItems = items.filter((i) => i.status === 'draft');
+  const publishedItems = items.filter((i) => i.status === 'published');
 
   return (
     <motion.div
@@ -80,7 +126,6 @@ export default function ContentScheduler() {
         />
       ) : (
         <div className="space-y-8">
-          {/* Scheduled Section */}
           {scheduledItems.length > 0 && (
             <section className="space-y-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -89,13 +134,12 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {scheduledItems.map((item) => (
-                  <ContentCard key={item.id} item={item} />
+                  <ContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
                 ))}
               </div>
             </section>
           )}
 
-          {/* Drafts Section */}
           {draftItems.length > 0 && (
             <section className="space-y-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -104,7 +148,21 @@ export default function ContentScheduler() {
               </h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {draftItems.map((item) => (
-                  <ContentCard key={item.id} item={item} />
+                  <ContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {publishedItems.length > 0 && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-success" />
+                Published ({publishedItems.length})
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {publishedItems.map((item) => (
+                  <ContentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
                 ))}
               </div>
             </section>
@@ -115,20 +173,16 @@ export default function ContentScheduler() {
   );
 }
 
-function ContentCard({ item }: { item: ScheduledItem }) {
+function ContentCard({ item, onDelete }: { item: ScheduledItem; onDelete: () => void }) {
+  const navigate = useNavigate();
   const caption = item.caption_final || item.caption_draft || 'No caption';
-  const isCampaignLinked = !!(item as any).plan_title || item.intent;
+  const isCampaignLinked = !!item.source_plan_publish_item_id || !!item.source_plan_title;
 
   return (
     <Card className="overflow-hidden group">
-      {/* Image */}
       <div className="aspect-square bg-muted relative">
         {item.media_master_url ? (
-          <img
-            src={item.media_master_url}
-            alt=""
-            className="w-full h-full object-cover"
-          />
+          <img src={item.media_master_url} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Image className="w-12 h-12 text-muted-foreground/30" />
@@ -146,19 +200,21 @@ function ContentCard({ item }: { item: ScheduledItem }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Edit</DropdownMenuItem>
-              <DropdownMenuItem>Reschedule</DropdownMenuItem>
-              <DropdownMenuItem>Duplicate</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive gap-2"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      {/* Content */}
       <CardContent className="p-3">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <Badge variant={item.status === 'scheduled' ? 'default' : 'secondary'}>
+          <Badge variant={item.status === 'scheduled' ? 'default' : item.status === 'published' ? 'default' : 'secondary'}>
             {item.status}
           </Badge>
           {item.scheduled_for && (
@@ -168,12 +224,11 @@ function ContentCard({ item }: { item: ScheduledItem }) {
           )}
         </div>
 
-        {/* Campaign source label */}
         {isCampaignLinked ? (
           <div className="flex items-center gap-1.5 mb-1.5">
             <Megaphone className="w-3 h-3 text-accent shrink-0" />
             <span className="text-[10px] font-medium text-accent truncate">
-              From Campaign{(item as any).plan_title ? `: ${(item as any).plan_title}` : ''}
+              From Campaign{item.source_plan_title ? `: ${item.source_plan_title}` : ''}
             </span>
           </div>
         ) : (
