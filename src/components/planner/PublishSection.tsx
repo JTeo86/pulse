@@ -251,11 +251,13 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
                   <PostPackCard
                     key={item.id}
                     item={item}
+                    planTitle={plan?.title}
                     assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
                     onEdit={() => handleEdit(item)}
                     onMarkPosted={() => publish.markAsPosted(item.id)}
                     onArchive={() => publish.archivePack(item.id)}
                     onRemove={() => publish.removePublishItem(item.id)}
+                    onStatusChange={() => publish.fetchItems()}
                   />
                 ))}
               </div>
