@@ -291,7 +291,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
           <p className="text-xs text-muted-foreground mt-1">
             {suggestions.length > 0
               ? 'Click a suggestion above to get started, or create one manually.'
-              : 'Approve copy and assets first, then create post packs for each channel.'}
+              : 'Generate content in the Create step first, then build post packs for each channel.'}
           </p>
         </div>
       )}
