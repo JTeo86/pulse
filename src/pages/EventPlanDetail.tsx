@@ -43,7 +43,7 @@ const STATUS_LABELS: Record<string, string> = {
 const WORKFLOW_STEPS = [
   { id: 'plan', label: 'Plan', icon: Lightbulb },
   { id: 'create', label: 'Create', icon: PenTool },
-  { id: 'post', label: 'Post', icon: Send },
+  { id: 'post', label: 'Post Packs', icon: Send },
 ] as const;
 
 type WorkflowStep = typeof WORKFLOW_STEPS[number]['id'];
@@ -97,7 +97,7 @@ function getNextBestAction(
   if (!hasCampaignPack && hasStrategy && activeStep !== 'create')
     return { label: 'Generate content', description: 'Create copy, captions, and asset briefs for your campaign.', target: 'create' };
   if (hasCampaignPack && (publishPackCount || 0) === 0 && activeStep !== 'post')
-    return { label: 'Create Post Packs', description: 'Package your content for Instagram, TikTok, Email and more.', target: 'post' };
+    return { label: 'Create Post Packs', description: 'Package your campaign content into channel-ready posts, then add them to your Content Calendar.', target: 'post' };
   return null;
 }
 
@@ -326,7 +326,7 @@ function LilyPanel({ plan, brain, activeStep, workspace }: { plan: any; brain: a
         insights.push('Star your favourite copy and assets — Pulse will use them first when building Post Packs.');
     }
   } else if (activeStep === 'post') {
-    insights.push('Post Packs bundle your content into ready-to-post deliverables for each channel.');
+    insights.push('Post Packs bundle your campaign content into channel-ready posts. Add them to your Content Calendar when ready.');
     insights.push('Post Instagram Reels 5-7 days before the event for maximum reach.');
     insights.push('TikTok content performs best when posted at peak hours — weekdays 7-9pm.');
   } else if (activeStep === 'revenue') {

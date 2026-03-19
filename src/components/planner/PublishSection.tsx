@@ -130,7 +130,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
         <div>
           <h2 className="text-lg font-serif font-medium">Post Packs</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Ready-to-post content packs for each channel. Copy, download, and post when reminded.
+            Build channel-ready posts for this campaign. Add them to your Content Calendar when ready to schedule.
           </p>
         </div>
         <Button size="sm" className="gap-2" onClick={handleCreateBlank}>
@@ -225,11 +225,13 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
                   <PostPackCard
                     key={item.id}
                     item={item}
+                    planTitle={plan?.title}
                     assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
                     onEdit={() => handleEdit(item)}
                     onMarkPosted={() => publish.markAsPosted(item.id)}
                     onArchive={() => publish.archivePack(item.id)}
                     onRemove={() => publish.removePublishItem(item.id)}
+                    onStatusChange={() => publish.fetchItems()}
                   />
                 ))}
               </div>
@@ -249,11 +251,13 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
                   <PostPackCard
                     key={item.id}
                     item={item}
+                    planTitle={plan?.title}
                     assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
                     onEdit={() => handleEdit(item)}
                     onMarkPosted={() => publish.markAsPosted(item.id)}
                     onArchive={() => publish.archivePack(item.id)}
                     onRemove={() => publish.removePublishItem(item.id)}
+                    onStatusChange={() => publish.fetchItems()}
                   />
                 ))}
               </div>
@@ -273,11 +277,13 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
                   <PostPackCard
                     key={item.id}
                     item={item}
+                    planTitle={plan?.title}
                     assetData={item.content_asset_id ? linkedAssetData[item.content_asset_id] : null}
                     onEdit={() => handleEdit(item)}
                     onMarkPosted={() => publish.markAsPosted(item.id)}
                     onArchive={() => publish.archivePack(item.id)}
                     onRemove={() => publish.removePublishItem(item.id)}
+                    onStatusChange={() => publish.fetchItems()}
                   />
                 ))}
               </div>
@@ -291,7 +297,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
           <p className="text-xs text-muted-foreground mt-1">
             {suggestions.length > 0
               ? 'Click a suggestion above to get started, or create one manually.'
-              : 'Approve copy and assets first, then create post packs for each channel.'}
+              : 'Generate content in the Create step first, then build post packs for each channel.'}
           </p>
         </div>
       )}

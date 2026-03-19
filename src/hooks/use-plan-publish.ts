@@ -31,7 +31,7 @@ export const PUBLISH_CHANNELS = [
 
 export type PublishChannel = typeof PUBLISH_CHANNELS[number]['value'];
 
-export const PACK_STATUSES = ['draft', 'ready', 'scheduled', 'reminded', 'published', 'archived'] as const;
+export const PACK_STATUSES = ['draft', 'ready', 'scheduled', 'reminded', 'sent_to_calendar', 'published', 'archived'] as const;
 export type PackStatus = typeof PACK_STATUSES[number];
 
 export const PACK_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -39,6 +39,7 @@ export const PACK_STATUS_CONFIG: Record<string, { label: string; color: string }
   ready: { label: 'Ready', color: 'bg-info/10 text-info' },
   scheduled: { label: 'Scheduled', color: 'bg-accent/10 text-accent' },
   reminded: { label: 'Reminder Sent', color: 'bg-warning/10 text-warning' },
+  sent_to_calendar: { label: 'In Calendar', color: 'bg-success/10 text-success' },
   published: { label: 'Posted', color: 'bg-success/10 text-success' },
   archived: { label: 'Archived', color: 'bg-muted text-muted-foreground' },
 };
@@ -159,7 +160,7 @@ export function usePlanPublish(planId: string | undefined) {
 
   // Grouped by status
   const readyPacks = items.filter(i => i.status === 'draft' || i.status === 'ready');
-  const scheduledPacks = items.filter(i => i.status === 'scheduled' || i.status === 'reminded');
+  const scheduledPacks = items.filter(i => i.status === 'scheduled' || i.status === 'reminded' || i.status === 'sent_to_calendar');
   const completedPacks = items.filter(i => i.status === 'published' || i.status === 'archived');
 
   return {
