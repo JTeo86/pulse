@@ -238,7 +238,7 @@ export function usePlanPublish(planId: string | undefined) {
     )));
 
     return data.id;
-  }, [currentVenue?.id, toast]);
+  }, [currentVenue?.id, toast, resolveAssetUrl]);
 
   const removeCalendarItemLink = useCallback(async (packItem: PlanPublishItem) => {
     const calendarItemId = packItem.metadata?.calendar_item_id as string | undefined;
