@@ -136,7 +136,13 @@ export function AssetCard({
       onClick={handleCardClick}
     >
       {/* Image */}
-      <div className="aspect-square relative overflow-hidden bg-muted">
+      <MediaImage
+        src={imageUrl}
+        alt={asset.title || 'Asset'}
+        fallbackIcon={asset.asset_type === 'video' ? <Film className="w-8 h-8 text-muted-foreground" /> : <Sparkles className="w-8 h-8 text-muted-foreground" />}
+        aspectClassName="aspect-square"
+        className="transition-transform duration-500 group-hover:scale-105"
+      >
         {/* Selection checkbox */}
         {selectionMode && (
           <div className="absolute top-2 right-2 z-20" onClick={(e) => e.stopPropagation()}>
@@ -145,21 +151,6 @@ export function AssetCard({
               onCheckedChange={() => onSelect?.(asset)}
               className="h-5 w-5 border-2 border-white bg-black/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
             />
-          </div>
-        )}
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={asset.title || 'Asset'}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none';
-            }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            {asset.asset_type === 'video' ? <Film className="w-8 h-8" /> : <Sparkles className="w-8 h-8" />}
           </div>
         )}
 
