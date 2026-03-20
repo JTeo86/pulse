@@ -409,6 +409,7 @@ export default function BrandLibraryPage() {
                     onToggleFavorite={handleToggleFavorite}
                     onDelete={handleDelete}
                     onUpdateStatus={handleUpdateStatus}
+                    onPreview={setLightboxAsset}
                     showVariation={false}
                     showReel={false}
                     showLineage={flags.gallery_lineage_enabled}
