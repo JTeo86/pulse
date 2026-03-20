@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Image, Film, Search, Check } from 'lucide-react';
+import { MediaImage } from '@/components/ui/media-image';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
