@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
+import { batchResolveSignedUrls } from '@/hooks/use-resolved-media';
+import { MediaImage } from '@/components/ui/media-image';
 import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -217,12 +219,12 @@ export default function BrandLibraryPage() {
 
   useEffect(() => {
     const loadUrls = async () => {
+      const paths = uploads.map((u) => u.storage_path);
+      const signedMap = await batchResolveSignedUrls(paths);
       const urls: Record<string, string> = {};
       for (const u of uploads) {
-        const { data } = await supabase.storage
-          .from('venue-assets')
-          .createSignedUrl(u.storage_path, 3600);
-        if (data?.signedUrl) urls[u.id] = data.signedUrl;
+        const url = signedMap.get(u.storage_path);
+        if (url) urls[u.id] = url;
       }
       setUploadUrls(urls);
     };
@@ -466,12 +468,11 @@ export default function BrandLibraryPage() {
                       />
                     </div>
                   )}
-                  <img
-                    src={uploadUrls[upload.id] || ''}
+                  <MediaImage
+                    src={uploadUrls[upload.id] || null}
                     alt={upload.notes || ''}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    aspectClassName=""
+                    containerClassName="w-full h-full"
                   />
                   {canEdit && !selectionMode && (
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
