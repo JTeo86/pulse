@@ -129,9 +129,9 @@ export function AssetCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
-      className={`group relative rounded-xl overflow-hidden border bg-card transition-all duration-300 ${
+      className={`group relative rounded-xl overflow-hidden border bg-card transition-all duration-300 cursor-pointer ${
         selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-accent/30'
-      } ${selectionMode ? 'cursor-pointer' : ''}`}
+      }`}
       onClick={handleCardClick}
     >
       {/* Image */}
