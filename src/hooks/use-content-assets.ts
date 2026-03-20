@@ -103,7 +103,6 @@ export function useAssetLineage(assetId: string | null) {
     queryFn: async () => {
       if (!assetId || !venueId) return [];
 
-      // Get the asset to find root
       const { data: asset } = await supabase
         .from('content_assets')
         .select('root_asset_id')
@@ -112,7 +111,6 @@ export function useAssetLineage(assetId: string | null) {
 
       const rootId = asset?.root_asset_id || assetId;
 
-      // Get all assets in this lineage chain
       const { data, error } = await supabase
         .from('content_assets')
         .select('*')
@@ -124,18 +122,25 @@ export function useAssetLineage(assetId: string | null) {
       if (error) throw error;
 
       const assets = (data || []) as ContentAsset[];
-      return Promise.all(
-        assets.map(async (a) => {
-          if (a.public_url) return { ...a, _resolvedUrl: a.public_url };
-          if (a.storage_path) {
-            const { data: signed } = await supabase.storage
-              .from('venue-assets')
-              .createSignedUrl(a.storage_path, 3600);
-            return { ...a, _resolvedUrl: signed?.signedUrl || '' };
-          }
-          return { ...a, _resolvedUrl: '' };
+      const pathsNeedingUrls = assets
+        .filter((a) => {
+          const stable = resolveAssetUrl(a);
+          return (!stable || isSignedUrl(stable)) && !!a.storage_path;
         })
-      );
+        .map((a) => a.storage_path!);
+
+      const signedMap = pathsNeedingUrls.length > 0
+        ? await batchResolveSignedUrls(pathsNeedingUrls)
+        : new Map<string, string>();
+
+      return assets.map((a) => {
+        const stableUrl = resolveAssetUrl(a);
+        if (stableUrl && !isSignedUrl(stableUrl)) return { ...a, _resolvedUrl: stableUrl };
+        if (a.storage_path && signedMap.has(a.storage_path)) {
+          return { ...a, _resolvedUrl: signedMap.get(a.storage_path)! };
+        }
+        return { ...a, _resolvedUrl: stableUrl || '' };
+      });
     },
     enabled: !!assetId && !!venueId,
   });
