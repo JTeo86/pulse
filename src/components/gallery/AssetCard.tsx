@@ -105,6 +105,8 @@ export function AssetCard({
   const handleCardClick = () => {
     if (selectionMode && onSelect) {
       onSelect(asset);
+    } else if (onPreview) {
+      onPreview(asset);
     }
   };
 
