@@ -113,7 +113,7 @@ export function useTodaysActions() {
           // If the stored URL is a stale signed URL, regenerate from storage_path
           if (a.storage_path && (!url || url.includes('?token=') || url.includes('/object/sign/'))) {
             const { data: signed } = await supabase.storage
-              .from('content-assets')
+              .from('venue-assets')
               .createSignedUrl(a.storage_path, 3600);
             if (signed?.signedUrl) url = signed.signedUrl;
           }
