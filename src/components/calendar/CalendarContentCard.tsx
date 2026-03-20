@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   Copy, Check, ExternalLink, Download, MoreVertical, Megaphone,
-  Trash2, Image, Clock, Play,
+  Trash2, Clock, Play,
 } from 'lucide-react';
+import { MediaImage } from '@/components/ui/media-image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
