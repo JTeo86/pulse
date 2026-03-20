@@ -302,6 +302,65 @@ export default function TheEditorPage() {
     setJobResult(null);
     setFidelityConfirmed(false);
     setFeedbackSent(null);
+    setSavedToLibrary(false);
+  };
+
+  const handleSaveToLibrary = async () => {
+    if (!currentVenue || !user || !jobResult?.storage_path || savedToLibrary) return;
+    try {
+      const modeLabel = realismMode.charAt(0).toUpperCase() + realismMode.slice(1);
+      await supabase.from('content_assets').insert({
+        venue_id: currentVenue.id,
+        created_by: user.id,
+        asset_type: 'image',
+        source_type: 'generated_image',
+        status: 'draft',
+        title: `Pro Photo · ${modeLabel}`,
+        storage_path: jobResult.storage_path,
+        public_url: jobResult.final_image_url,
+        mime_type: 'image/jpeg',
+        derived_from_editor_job_id: jobId || null,
+        source_job_id: jobResult.edited_asset_id || null,
+        prompt_snapshot: { generation_mode: realismMode },
+        generation_settings: {
+          generation_mode: realismMode,
+          reference_count: jobResult.reference_count,
+          style_sources: jobResult.style_sources,
+        },
+        metadata: {
+          generation_mode: realismMode,
+          edited_asset_id: jobResult.edited_asset_id || null,
+        },
+      });
+      setSavedToLibrary(true);
+      toast({ title: 'Saved to Content Library', description: 'Image is available in Brand → Content Library.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Save failed', description: err.message });
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (!jobResult?.storage_path) {
+      handleReset();
+      return;
+    }
+    // Remove the stored file since user doesn't want it
+    try {
+      await supabase.storage.from('venue-assets').remove([jobResult.storage_path]);
+    } catch { /* best effort */ }
+    handleReset();
+    toast({ title: 'Image discarded' });
+  };
+
+  const handleRejectAndRegenerate = async (feedbackType: string) => {
+    await handleFeedback(feedbackType);
+    // Reset result but keep the upload so user can regenerate
+    setJobResult(null);
+    setJobId(null);
+    setFidelityConfirmed(false);
+    setFeedbackSent(null);
+    setSavedToLibrary(false);
+    toast({ title: 'Feedback recorded', description: 'Try generating again with different settings.' });
   };
 
   return (
