@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Image, Trash2, CheckSquare } from 'lucide-react';
+import { Calendar, Clock, Image, Trash2, CheckSquare, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarContentCard, type ScheduledItem } from '@/components/calendar/CalendarContentCard';
+import { CreateCalendarItemDialog } from '@/components/calendar/CreateCalendarItemDialog';
 import {
   AlertDialog,
   AlertDialogAction,
