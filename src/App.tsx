@@ -32,6 +32,8 @@ import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 // EventsPlanner is now fully consolidated into Planner
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";

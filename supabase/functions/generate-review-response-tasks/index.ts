@@ -12,10 +12,53 @@ serve(async (req) => {
   }
 
   try {
+    // --- Auth check ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(
+      authHeader.replace("Bearer ", "")
+    );
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userId = claimsData.claims.sub as string;
+
     const { venue_id, week_start, week_end } = await req.json();
     if (!venue_id) {
       return new Response(JSON.stringify({ error: "venue_id required" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // --- Venue membership check ---
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const { data: isMember } = await supabaseAdmin.rpc("is_venue_member", {
+      check_venue_id: venue_id,
+      check_user_id: userId,
+    });
+    if (!isMember) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -28,11 +71,6 @@ serve(async (req) => {
       });
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
     // Fetch reviews for the period
     let query = supabaseAdmin
       .from("reviews")
@@ -43,7 +81,6 @@ serve(async (req) => {
     if (week_start && week_end) {
       query = query.gte("review_date", week_start).lte("review_date", week_end + "T23:59:59Z");
     } else {
-      // Default: last 7 days
       const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
       query = query.gte("review_date", sevenDaysAgo);
     }
@@ -165,7 +202,6 @@ Priority guide:
     const tasks = triageResult.tasks || [];
     let tasksCreated = 0;
 
-    // Build a map of review_id -> review for quick lookup
     const reviewMap = new Map(allReviews.map(r => [r.id, r]));
 
     for (const task of tasks) {
@@ -202,7 +238,7 @@ Priority guide:
     });
   } catch (error) {
     console.error("generate-review-response-tasks error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
