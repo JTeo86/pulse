@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, ImgHTMLAttributes } from 'react';
+import { useState, useCallback, useEffect, useRef, ImgHTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Image as ImageIcon } from 'lucide-react';
 
@@ -8,7 +8,9 @@ interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'onE
   /** Optional fallback URL if primary fails */
   fallbackSrc?: string | null;
   /** Show this icon when all sources fail. Defaults to Image icon. */
-  fallbackIcon?: React.ReactNode;
+  fallbackIcon?: ReactNode;
+  /** Overlay children rendered on top of the image (checkboxes, badges, hover actions) */
+  children?: ReactNode;
   /** CSS class for the container wrapper */
   containerClassName?: string;
   /** Aspect ratio class (e.g. 'aspect-square'). Applied to container. */
@@ -21,11 +23,13 @@ interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'onE
  * - error fallback (alternate URL → icon)
  * - lazy loading by default
  * - no layout jumps
+ * - children overlay support
  */
 export function MediaImage({
   src,
   fallbackSrc,
   fallbackIcon,
+  children,
   containerClassName,
   aspectClassName = 'aspect-square',
   className,
@@ -91,6 +95,9 @@ export function MediaImage({
           )}
         />
       )}
+
+      {/* Overlay children */}
+      {children}
     </div>
   );
 }

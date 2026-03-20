@@ -171,18 +171,12 @@ export function TodaysActionsPanel({ actions, loading, onMarkPosted }: TodaysAct
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
                       {/* Thumbnail */}
-                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                        {action.media_url ? (
-                          <img
-                            src={action.media_url}
-                            alt=""
-                            className="w-full h-full object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; e.currentTarget.parentElement?.classList.add('fallback-icon'); }}
-                          />
-                        ) : (
-                          <ChannelIcon className="w-5 h-5 text-muted-foreground" />
-                        )}
-                      </div>
+                      <MediaImage
+                        src={action.media_url}
+                        fallbackIcon={<ChannelIcon className="w-5 h-5 text-muted-foreground" />}
+                        aspectClassName=""
+                        containerClassName="w-12 h-12 rounded-lg shrink-0"
+                      />
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
