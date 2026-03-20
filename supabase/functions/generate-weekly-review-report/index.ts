@@ -12,10 +12,53 @@ serve(async (req) => {
   }
 
   try {
+    // --- Auth check ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(
+      authHeader.replace("Bearer ", "")
+    );
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userId = claimsData.claims.sub as string;
+
     const { venue_id, week_start, week_end } = await req.json();
     if (!venue_id || !week_start || !week_end) {
       return new Response(JSON.stringify({ error: "venue_id, week_start, week_end required" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // --- Venue membership check ---
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+
+    const { data: isMember } = await supabaseAdmin.rpc("is_venue_member", {
+      check_venue_id: venue_id,
+      check_user_id: userId,
+    });
+    if (!isMember) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -28,12 +71,7 @@ serve(async (req) => {
       });
     }
 
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
-
-    // Fetch reviews for the date range — try review_date first, fall back to created_at for nulls
+    // Fetch reviews for the date range
     const { data: reviewsByDate, error: revErr } = await supabaseAdmin
       .from("reviews")
       .select("*")
@@ -42,7 +80,6 @@ serve(async (req) => {
       .lte("review_date", week_end)
       .order("review_date", { ascending: false });
 
-    // Also fetch reviews where review_date is null but created_at falls in range
     const { data: reviewsByCreated } = await supabaseAdmin
       .from("reviews")
       .select("*")
@@ -84,7 +121,6 @@ serve(async (req) => {
       .eq("id", venue_id)
       .maybeSingle();
 
-    // Prepare review summaries for AI
     const reviewSummaries = reviews.map(r => ({
       source: r.source,
       rating: r.rating,
@@ -181,7 +217,6 @@ Return a JSON object with this EXACT structure:
       });
     }
 
-    // Upsert the report
     const { data: saved, error: saveErr } = await supabaseAdmin
       .from("weekly_review_reports")
       .upsert({
@@ -203,7 +238,6 @@ Return a JSON object with this EXACT structure:
 
     if (saveErr) {
       console.error("Failed to save report:", saveErr);
-      // Still return the report even if save failed
       return new Response(JSON.stringify({ report, saved: false }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -219,7 +253,7 @@ Return a JSON object with this EXACT structure:
 
   } catch (error) {
     console.error("generate-weekly-review-report error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

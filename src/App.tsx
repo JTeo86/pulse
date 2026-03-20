@@ -32,6 +32,8 @@ import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 // EventsPlanner is now fully consolidated into Planner
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
@@ -95,6 +97,28 @@ function ProtectedLayout() {
   );
 }
 
+function PlatformAdminRoute() {
+  const { user } = useAuth();
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setIsPlatformAdmin(false); setLoading(false); return; }
+    supabase.rpc('is_platform_admin', { check_user_id: user.id })
+      .then(({ data }) => { setIsPlatformAdmin(!!data); setLoading(false); });
+  }, [user?.id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!isPlatformAdmin) return <Navigate to="/home" replace />;
+  return <PlatformAdmin />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -151,7 +175,7 @@ function AppRoutes() {
         <Route path="/venue/guest-photos" element={<GuestSubmissions />} />
 
         {/* Admin Section */}
-        <Route path="/admin/platform" element={<PlatformAdmin />} />
+        <Route path="/admin/platform" element={<PlatformAdminRoute />} />
         <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
         {/* Legacy event planner redirects */}
