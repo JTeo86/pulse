@@ -29,6 +29,7 @@ export default function ContentScheduler() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const fetchScheduled = useCallback(async () => {
     if (!currentVenue) return;
