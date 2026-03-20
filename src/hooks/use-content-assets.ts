@@ -2,6 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useToast } from '@/hooks/use-toast';
+import {
+  resolveAssetUrl,
+  isSignedUrl,
+  batchResolveSignedUrls,
+} from '@/hooks/use-resolved-media';
 
 export interface ContentAsset {
   id: string;
@@ -56,28 +61,36 @@ export function useContentAssets(assetType?: 'image' | 'video') {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Resolve signed URLs for assets with storage_path
       const assets = (data || []) as ContentAsset[];
-      const resolved = await Promise.all(
-        assets.map(async (asset) => {
-          // Detect expired signed URLs — never trust them
-          const isSignedUrl = asset.public_url?.includes('/object/sign/') || asset.public_url?.includes('?token=');
-          if (asset.public_url && !isSignedUrl) {
-            return { ...asset, _resolvedUrl: asset.public_url };
-          }
-          if (asset.storage_path) {
-            const { data: signed } = await supabase.storage
-              .from('venue-assets')
-              .createSignedUrl(asset.storage_path, 3600);
-            return { ...asset, _resolvedUrl: signed?.signedUrl || '' };
-          }
-          return { ...asset, _resolvedUrl: '' };
-        })
-      );
-      return resolved;
+
+      // Collect storage paths that need signed URLs (batch resolution)
+      const pathsNeedingUrls: string[] = [];
+      for (const asset of assets) {
+        const stableUrl = resolveAssetUrl(asset);
+        if (!stableUrl || isSignedUrl(stableUrl)) {
+          if (asset.storage_path) pathsNeedingUrls.push(asset.storage_path);
+        }
+      }
+
+      // Batch resolve all needed signed URLs at once
+      const signedMap = pathsNeedingUrls.length > 0
+        ? await batchResolveSignedUrls(pathsNeedingUrls)
+        : new Map<string, string>();
+
+      // Assign resolved URLs
+      return assets.map((asset) => {
+        const stableUrl = resolveAssetUrl(asset);
+        if (stableUrl && !isSignedUrl(stableUrl)) {
+          return { ...asset, _resolvedUrl: stableUrl };
+        }
+        if (asset.storage_path && signedMap.has(asset.storage_path)) {
+          return { ...asset, _resolvedUrl: signedMap.get(asset.storage_path)! };
+        }
+        return { ...asset, _resolvedUrl: stableUrl || '' };
+      });
     },
     enabled: !!venueId,
-    staleTime: 1000 * 30,
+    staleTime: 1000 * 60, // 1 minute — signed URLs are cached internally
   });
 }
 
