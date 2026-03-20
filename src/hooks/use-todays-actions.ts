@@ -123,6 +123,15 @@ export function useTodaysActions() {
 
       const actions: TodayAction[] = data.map((item: any) => {
         const planData = item.venue_event_plans;
+        // Resolve media: direct asset > plan_assets linked asset > metadata fallback
+        const directAssetId = item.content_asset_id;
+        const planLinkedAssetId = item.plan_assets?.content_asset_id;
+        const resolvedMediaUrl =
+          (directAssetId && assetUrlMap.get(directAssetId)) ||
+          (planLinkedAssetId && assetUrlMap.get(planLinkedAssetId)) ||
+          (item.metadata as any)?.media_url ||
+          null;
+
         return {
           id: item.id,
           title: item.title || 'Untitled Post',
@@ -134,7 +143,7 @@ export function useTodaysActions() {
           content_asset_id: item.content_asset_id,
           plan_id: item.plan_id,
           plan_title: planData?.title || (item.metadata as any)?.plan_title || null,
-          media_url: item.content_asset_id ? (assetUrlMap.get(item.content_asset_id) || null) : null,
+          media_url: resolvedMediaUrl,
           due_state: computeDueState(item.reminder_at),
           metadata: item.metadata as Record<string, any> | null,
         };

@@ -1327,6 +1327,12 @@ function WeeklyReport({ venueId }: { venueId: string }) {
 
 export default function ReviewsAnalytics() {
   const { currentVenue } = useVenue();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'report';
+
+  const handleTabChange = (value: string) => {
+    setSearchParams({ tab: value }, { replace: true });
+  };
 
   if (!currentVenue) {
     return <div className="text-center py-12 text-muted-foreground">Select a brand to view reviews.</div>;
@@ -1339,7 +1345,7 @@ export default function ReviewsAnalytics() {
         description="Aggregate reviews from Google and OpenTable via SerpAPI. Generate AI-powered weekly reports and manage responses."
       />
 
-      <Tabs defaultValue="report" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
           <TabsTrigger value="report" className="gap-2"><FileText className="w-4 h-4" />Weekly Report</TabsTrigger>
           <TabsTrigger value="feed" className="gap-2"><MessageSquare className="w-4 h-4" />Review Feed</TabsTrigger>
