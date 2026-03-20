@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   Copy, Check, ExternalLink, Download, MoreVertical, Megaphone,
-  Trash2, Image, Clock, Play,
+  Trash2, Clock, Play,
 } from 'lucide-react';
+import { MediaImage } from '@/components/ui/media-image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -106,7 +107,12 @@ export function CalendarContentCard({
   return (
     <Card className={`overflow-hidden group ${selected ? 'ring-2 ring-accent' : ''}`}>
       {/* Thumbnail area */}
-      <div className="aspect-square bg-muted relative">
+      <MediaImage
+        src={item.media_master_url}
+        alt=""
+        containerClassName="relative"
+        aspectClassName="aspect-square"
+      >
         {/* Selection checkbox */}
         {selectable && (
           <div className="absolute top-2 left-2 z-10">
@@ -116,18 +122,6 @@ export function CalendarContentCard({
               className="bg-background/80 backdrop-blur-sm"
               onClick={(e) => e.stopPropagation()}
             />
-          </div>
-        )}
-
-        {hasMedia ? (
-          <img
-            src={item.media_master_url!}
-            alt=""
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Image className="w-12 h-12 text-muted-foreground/30" />
           </div>
         )}
 
@@ -219,7 +213,7 @@ export function CalendarContentCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </MediaImage>
 
       <CardContent className="p-3 space-y-1.5">
         {/* Status + schedule */}

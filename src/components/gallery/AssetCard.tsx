@@ -152,6 +152,9 @@ export function AssetCard({
             alt={asset.title || 'Asset'}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-muted-foreground">

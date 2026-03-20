@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useCallback, useEffect } from 'react';
+import { resolveAssetUrl, isSignedUrl, batchResolveSignedUrls } from '@/hooks/use-resolved-media';
 
 export type DueState = 'upcoming' | 'due_soon' | 'due_now' | 'overdue';
 
@@ -108,16 +109,24 @@ export function useTodaysActions() {
           .select('id, public_url, thumbnail_url, storage_path')
           .in('id', Array.from(assetIds));
 
+        // Collect paths needing signed URLs
+        const pathsNeeded: { id: string; path: string }[] = [];
         for (const a of assets ?? []) {
-          let url = a.public_url || a.thumbnail_url || '';
-          // If the stored URL is a stale signed URL, regenerate from storage_path
-          if (a.storage_path && (!url || url.includes('?token=') || url.includes('/object/sign/'))) {
-            const { data: signed } = await supabase.storage
-              .from('venue-assets')
-              .createSignedUrl(a.storage_path, 3600);
-            if (signed?.signedUrl) url = signed.signedUrl;
+          const stableUrl = resolveAssetUrl(a);
+          if (stableUrl && !isSignedUrl(stableUrl)) {
+            assetUrlMap.set(a.id, stableUrl);
+          } else if (a.storage_path) {
+            pathsNeeded.push({ id: a.id, path: a.storage_path });
           }
-          if (url) assetUrlMap.set(a.id, url);
+        }
+
+        // Batch resolve signed URLs
+        if (pathsNeeded.length > 0) {
+          const signedMap = await batchResolveSignedUrls(pathsNeeded.map((p) => p.path));
+          for (const { id, path } of pathsNeeded) {
+            const url = signedMap.get(path);
+            if (url) assetUrlMap.set(id, url);
+          }
         }
       }
 
