@@ -651,30 +651,44 @@ export default function TheEditorPage() {
                   </div>
                 )}
 
-                {/* Download + Actions */}
+                {/* Primary Actions */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Actions</p>
                   <Button
-                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${realismMode}-${Date.now()}.jpg`)}
-                    variant="default"
+                    onClick={handleSaveToLibrary}
+                    disabled={savedToLibrary}
                     className="w-full gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                    size="sm"
+                  >
+                    {savedToLibrary ? (
+                      <><CheckSquare className="w-3.5 h-3.5" /> Saved to Library</>
+                    ) : (
+                      <><ImageIcon className="w-3.5 h-3.5" /> Save to Content Library</>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${realismMode}-${Date.now()}.jpg`)}
+                    variant="outline"
+                    className="w-full gap-1.5 text-xs"
                     size="sm"
                   >
                     <Download className="w-3.5 h-3.5" /> Download Image
                   </Button>
-                  <p className="text-[10px] text-muted-foreground">
-                    Per-format crops (4:5, 9:16) coming soon. Current output is the full generated image.
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={() => toast({ title: 'Saved to Content Library', description: 'Image is available in Brand → Content Library.' })}
-                  >
-                    <ImageIcon className="w-4 h-4" /> Save to Content Library
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground text-center">
-                    Pro Photo outputs are automatically saved to your Content Library.
-                  </p>
+                  <div className="border-t border-border pt-3 space-y-2">
+                    <Button
+                      variant="ghost"
+                      className="w-full gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+                      size="sm"
+                      onClick={handleDiscard}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Discard
+                    </Button>
+                  </div>
+                  {!savedToLibrary && !planId && (
+                    <p className="text-[10px] text-muted-foreground text-center">
+                      This image is not yet saved. Save it or it will be lost.
+                    </p>
+                  )}
                 </div>
               </motion.div>
             )}
