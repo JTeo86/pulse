@@ -219,12 +219,12 @@ export default function BrandLibraryPage() {
 
   useEffect(() => {
     const loadUrls = async () => {
+      const paths = uploads.map((u) => u.storage_path);
+      const signedMap = await batchResolveSignedUrls(paths);
       const urls: Record<string, string> = {};
       for (const u of uploads) {
-        const { data } = await supabase.storage
-          .from('venue-assets')
-          .createSignedUrl(u.storage_path, 3600);
-        if (data?.signedUrl) urls[u.id] = data.signedUrl;
+        const url = signedMap.get(u.storage_path);
+        if (url) urls[u.id] = url;
       }
       setUploadUrls(urls);
     };
