@@ -91,7 +91,7 @@ async function buildVenueStyleContext(
 ): Promise<VenueStyleContext> {
   const styleSourcesUsed: string[] = [];
 
-  const [venueResult, brandKitResult, styleProfileResult, refAssetsResult, legacyRefResult] = await Promise.all([
+  const [venueResult, brandKitResult, styleProfileResult, refAssetsResult, legacyRefResult, feedbackResult] = await Promise.all([
     supabase.from('venues').select('name, city').eq('id', venueId).single(),
     supabase.from('brand_kits').select('preset, rules_text').eq('venue_id', venueId).single(),
     supabase.from('venue_style_profiles').select('*').eq('venue_id', venueId).maybeSingle(),
@@ -104,6 +104,13 @@ async function buildVenueStyleContext(
       .eq('venue_id', venueId).eq('status', 'analyzed')
       .in('channel', ['atmosphere', 'brand', 'plating'])
       .order('pinned', { ascending: false }).order('created_at', { ascending: false }).limit(6),
+    // Fetch recent negative feedback to learn from rejected outputs
+    supabase.from('venue_style_feedback')
+      .select('feedback_type')
+      .eq('venue_id', venueId)
+      .not('feedback_type', 'in', '("approved","great_match")')
+      .order('created_at', { ascending: false })
+      .limit(30),
   ]);
 
   const venueName = venueResult.data?.name || 'restaurant';
@@ -129,6 +136,28 @@ async function buildVenueStyleContext(
     cuisineType = sp.cuisine_type || '';
     negativeRules = Array.isArray(sp.negative_prompt_rules) ? sp.negative_prompt_rules : [];
     dishLockRules = Array.isArray(sp.dish_lock_rules) ? sp.dish_lock_rules : [];
+  }
+
+  // Aggregate negative feedback into additional negative rules
+  const negativeFeedback = feedbackResult.data || [];
+  if (negativeFeedback.length > 0) {
+    styleSourcesUsed.push('negative_feedback');
+    const feedbackCounts: Record<string, number> = {};
+    for (const fb of negativeFeedback) {
+      feedbackCounts[fb.feedback_type] = (feedbackCounts[fb.feedback_type] || 0) + 1;
+    }
+    const feedbackRuleMap: Record<string, string> = {
+      too_dark: 'Avoid overly dark or underexposed images — user has flagged this multiple times',
+      too_bright: 'Avoid overexposed or washed-out lighting — user prefers controlled exposure',
+      too_generic: 'Avoid generic stock-photo-like compositions — create unique, venue-specific scenes',
+      not_our_style: 'Pay extra attention to venue style references — previous outputs did not match the brand identity',
+      dish_changed: 'Strictly preserve the original dish appearance — do not alter, rearrange, or reimagine the food presentation',
+    };
+    for (const [type, count] of Object.entries(feedbackCounts)) {
+      if (count >= 2 && feedbackRuleMap[type]) {
+        negativeRules.push(feedbackRuleMap[type]);
+      }
+    }
   }
 
   if (brandKitResult.data) {
