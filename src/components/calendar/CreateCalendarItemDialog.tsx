@@ -4,6 +4,7 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useToast } from '@/hooks/use-toast';
+import { normalizeContentAssetType } from '@/lib/content-item-utils';
 import { cn } from '@/lib/utils';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
