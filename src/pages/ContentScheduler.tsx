@@ -184,8 +184,14 @@ export default function ContentScheduler() {
           title="Content Calendar"
           description="Manage all scheduled and draft posts for your venue — including campaign posts and one-off content."
         />
-        {items.length > 0 && (
-          <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <Button size="sm" className="gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+            <Plus className="w-3.5 h-3.5" />
+            Create
+          </Button>
+          {items.length > 0 && (
+            <>
+
             {selectionMode ? (
               <>
                 <Button
