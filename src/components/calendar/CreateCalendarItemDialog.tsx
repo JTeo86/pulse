@@ -108,6 +108,11 @@ export function CreateCalendarItemDialog({
       }
     }
 
+    // Derive a valid asset_type from the selected media
+    const assetType = media
+      ? normalizeContentAssetType(media.type, media.mimeType, media.name)
+      : null;
+
     const { error } = await supabase.from('content_items').insert({
       venue_id: currentVenue.id,
       caption_draft: caption || null,
@@ -116,7 +121,7 @@ export function CreateCalendarItemDialog({
       intent,
       scheduled_for: scheduledFor,
       media_master_url: mediaUrl,
-      asset_type: channel,
+      asset_type: assetType,
     });
 
     setSaving(false);
