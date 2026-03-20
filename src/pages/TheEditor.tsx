@@ -168,6 +168,10 @@ export default function TheEditorPage() {
       if (createError) throw createError;
       setJobId(newJob.id);
 
+      // skip_library_save: true for standard editor flow (review-first)
+      // Plan-driven flows still auto-save when planId is set
+      const skipLibrarySave = !planId;
+
       const { data, error: fnError } = await supabase.functions.invoke('editor-generate-pro-photo', {
         body: {
           job_id: newJob.id,
@@ -175,6 +179,7 @@ export default function TheEditorPage() {
           sourceFileBase64: base64,
           sourceFileName: uploadedFile.name,
           realism_mode: realismMode,
+          skip_library_save: skipLibrarySave,
         },
       });
       if (fnError) throw fnError;
@@ -187,6 +192,8 @@ export default function TheEditorPage() {
           background_source: data.background_source || 'ai_generated',
           style_sources: data.style_sources || [],
           edited_asset_id: data.edited_asset_id || null,
+          storage_path: data.storage_path || null,
+          output_asset_id: data.output_asset_id || null,
         });
 
         // Auto-link to plan if we came from Production workspace
@@ -200,7 +207,6 @@ export default function TheEditorPage() {
               status: 'created',
               metadata: { source: 'pro_photo', brief_title: briefTitle || null },
             });
-            // Update brief status if linked
             if (briefId) {
               await supabase.from('plan_asset_briefs').update({ status: 'created' }).eq('id', briefId);
             }
@@ -213,7 +219,9 @@ export default function TheEditorPage() {
       const backToPlan = planId ? ` Asset linked to campaign.` : '';
       toast({
         title: 'Pro Photo generated',
-        description: `Saved to Content Library.${backToPlan} ${data?.reference_count > 0 ? `${data.reference_count} brand references used.` : 'AI-generated environment.'}`,
+        description: planId
+          ? `Saved to Content Library.${backToPlan}`
+          : `Review the result below.`,
       });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message || 'AI photo generation failed. Please try again.' });
