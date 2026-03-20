@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Image, Trash2, CheckSquare } from 'lucide-react';
+import { Calendar, Clock, Image, Trash2, CheckSquare, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarContentCard, type ScheduledItem } from '@/components/calendar/CalendarContentCard';
+import { CreateCalendarItemDialog } from '@/components/calendar/CreateCalendarItemDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,7 @@ export default function ContentScheduler() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const fetchScheduled = useCallback(async () => {
     if (!currentVenue) return;
@@ -182,8 +184,14 @@ export default function ContentScheduler() {
           title="Content Calendar"
           description="Manage all scheduled and draft posts for your venue — including campaign posts and one-off content."
         />
-        {items.length > 0 && (
-          <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <Button size="sm" className="gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+            <Plus className="w-3.5 h-3.5" />
+            Create
+          </Button>
+          {items.length > 0 && (
+            <>
+
             {selectionMode ? (
               <>
                 <Button
@@ -226,8 +234,9 @@ export default function ContentScheduler() {
                 Select
               </Button>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -238,7 +247,12 @@ export default function ContentScheduler() {
         <EmptyState
           icon={Calendar}
           title="No content on your calendar"
-          description="Create content in the Studio or build Post Packs in the Planner to populate your calendar."
+          description="Create a one-off post or build Post Packs in the Planner to populate your calendar."
+          action={
+            <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-4 h-4" /> Create Post
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-8">
@@ -327,6 +341,12 @@ export default function ContentScheduler() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CreateCalendarItemDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={fetchScheduled}
+      />
     </motion.div>
   );
 }
