@@ -49,6 +49,7 @@ interface AssetCardProps {
   onToggleFavorite?: (asset: ContentAsset) => void;
   onDelete?: (asset: ContentAsset) => void;
   onUpdateStatus?: (asset: ContentAsset, status: string) => void;
+  onPreview?: (asset: ContentAsset) => void;
   showVariation?: boolean;
   showReel?: boolean;
   showLineage?: boolean;
