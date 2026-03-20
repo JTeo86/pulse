@@ -175,7 +175,7 @@ function AppRoutes() {
         <Route path="/venue/guest-photos" element={<GuestSubmissions />} />
 
         {/* Admin Section */}
-        <Route path="/admin/platform" element={<PlatformAdmin />} />
+        <Route path="/admin/platform" element={<PlatformAdminRoute />} />
         <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
         {/* Legacy event planner redirects */}
