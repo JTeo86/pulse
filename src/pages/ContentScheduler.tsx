@@ -341,6 +341,12 @@ export default function ContentScheduler() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CreateCalendarItemDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={fetchScheduled}
+      />
     </motion.div>
   );
 }
