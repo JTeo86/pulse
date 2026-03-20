@@ -110,7 +110,7 @@ export function CreateCalendarItemDialog({
 
     // Derive a valid asset_type from the selected media
     const assetType = media
-      ? normalizeContentAssetType(media.type, media.mimeType, media.name)
+      ? normalizeContentAssetType(media.type, null, media.label)
       : null;
 
     const { error } = await supabase.from('content_items').insert({
