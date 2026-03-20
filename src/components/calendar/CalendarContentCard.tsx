@@ -213,7 +213,7 @@ export function CalendarContentCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </MediaImage>
 
       <CardContent className="p-3 space-y-1.5">
         {/* Status + schedule */}
