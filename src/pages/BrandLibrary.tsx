@@ -32,6 +32,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { AssetCard } from '@/components/gallery/AssetCard';
+import { AssetLightbox } from '@/components/gallery/AssetLightbox';
 import { VersionHistoryPanel } from '@/components/gallery/VersionHistoryPanel';
 import {
   ContentAsset,
@@ -81,6 +82,9 @@ export default function BrandLibraryPage() {
 
   // Version history panel
   const [lineageAsset, setLineageAsset] = useState<ContentAsset | null>(null);
+
+  // Lightbox
+  const [lightboxAsset, setLightboxAsset] = useState<ContentAsset | null>(null);
 
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
@@ -366,6 +370,7 @@ export default function BrandLibraryPage() {
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDelete}
                   onUpdateStatus={handleUpdateStatus}
+                  onPreview={setLightboxAsset}
                   showVariation={flags.gallery_variations_enabled}
                   showReel={reelEnabled}
                   showLineage={flags.gallery_lineage_enabled}
@@ -404,6 +409,7 @@ export default function BrandLibraryPage() {
                     onToggleFavorite={handleToggleFavorite}
                     onDelete={handleDelete}
                     onUpdateStatus={handleUpdateStatus}
+                    onPreview={setLightboxAsset}
                     showVariation={false}
                     showReel={false}
                     showLineage={flags.gallery_lineage_enabled}
@@ -549,6 +555,15 @@ export default function BrandLibraryPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Asset Lightbox */}
+      <AssetLightbox
+        asset={lightboxAsset}
+        assets={activeTab === 'reels' ? videoAssets : imageAssets}
+        open={!!lightboxAsset}
+        onClose={() => setLightboxAsset(null)}
+        onNavigate={setLightboxAsset}
+      />
 
       {/* Version History Panel */}
       <VersionHistoryPanel

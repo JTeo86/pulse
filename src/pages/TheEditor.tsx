@@ -5,7 +5,7 @@ import {
   Upload, Camera, Wand2, Download,
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info, ChevronDown, ChevronRight,
-  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles
+  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
@@ -107,7 +107,10 @@ export default function TheEditorPage() {
     background_source: string;
     style_sources: string[];
     edited_asset_id: string | null;
+    storage_path: string | null;
+    output_asset_id: string | null;
   } | null>(null);
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
 
@@ -168,6 +171,10 @@ export default function TheEditorPage() {
       if (createError) throw createError;
       setJobId(newJob.id);
 
+      // skip_library_save: true for standard editor flow (review-first)
+      // Plan-driven flows still auto-save when planId is set
+      const skipLibrarySave = !planId;
+
       const { data, error: fnError } = await supabase.functions.invoke('editor-generate-pro-photo', {
         body: {
           job_id: newJob.id,
@@ -175,6 +182,7 @@ export default function TheEditorPage() {
           sourceFileBase64: base64,
           sourceFileName: uploadedFile.name,
           realism_mode: realismMode,
+          skip_library_save: skipLibrarySave,
         },
       });
       if (fnError) throw fnError;
@@ -187,6 +195,8 @@ export default function TheEditorPage() {
           background_source: data.background_source || 'ai_generated',
           style_sources: data.style_sources || [],
           edited_asset_id: data.edited_asset_id || null,
+          storage_path: data.storage_path || null,
+          output_asset_id: data.output_asset_id || null,
         });
 
         // Auto-link to plan if we came from Production workspace
@@ -200,7 +210,6 @@ export default function TheEditorPage() {
               status: 'created',
               metadata: { source: 'pro_photo', brief_title: briefTitle || null },
             });
-            // Update brief status if linked
             if (briefId) {
               await supabase.from('plan_asset_briefs').update({ status: 'created' }).eq('id', briefId);
             }
@@ -213,7 +222,9 @@ export default function TheEditorPage() {
       const backToPlan = planId ? ` Asset linked to campaign.` : '';
       toast({
         title: 'Pro Photo generated',
-        description: `Saved to Content Library.${backToPlan} ${data?.reference_count > 0 ? `${data.reference_count} brand references used.` : 'AI-generated environment.'}`,
+        description: planId
+          ? `Saved to Content Library.${backToPlan}`
+          : `Review the result below.`,
       });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message || 'AI photo generation failed. Please try again.' });
@@ -291,6 +302,65 @@ export default function TheEditorPage() {
     setJobResult(null);
     setFidelityConfirmed(false);
     setFeedbackSent(null);
+    setSavedToLibrary(false);
+  };
+
+  const handleSaveToLibrary = async () => {
+    if (!currentVenue || !user || !jobResult?.storage_path || savedToLibrary) return;
+    try {
+      const modeLabel = realismMode.charAt(0).toUpperCase() + realismMode.slice(1);
+      await supabase.from('content_assets').insert({
+        venue_id: currentVenue.id,
+        created_by: user.id,
+        asset_type: 'image',
+        source_type: 'generated_image',
+        status: 'draft',
+        title: `Pro Photo · ${modeLabel}`,
+        storage_path: jobResult.storage_path,
+        public_url: jobResult.final_image_url,
+        mime_type: 'image/jpeg',
+        derived_from_editor_job_id: jobId || null,
+        source_job_id: jobResult.edited_asset_id || null,
+        prompt_snapshot: { generation_mode: realismMode },
+        generation_settings: {
+          generation_mode: realismMode,
+          reference_count: jobResult.reference_count,
+          style_sources: jobResult.style_sources,
+        },
+        metadata: {
+          generation_mode: realismMode,
+          edited_asset_id: jobResult.edited_asset_id || null,
+        },
+      });
+      setSavedToLibrary(true);
+      toast({ title: 'Saved to Content Library', description: 'Image is available in Brand → Content Library.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Save failed', description: err.message });
+    }
+  };
+
+  const handleDiscard = async () => {
+    if (!jobResult?.storage_path) {
+      handleReset();
+      return;
+    }
+    // Remove the stored file since user doesn't want it
+    try {
+      await supabase.storage.from('venue-assets').remove([jobResult.storage_path]);
+    } catch { /* best effort */ }
+    handleReset();
+    toast({ title: 'Image discarded' });
+  };
+
+  const handleRejectAndRegenerate = async (feedbackType: string) => {
+    await handleFeedback(feedbackType);
+    // Reset result but keep the upload so user can regenerate
+    setJobResult(null);
+    setJobId(null);
+    setFidelityConfirmed(false);
+    setFeedbackSent(null);
+    setSavedToLibrary(false);
+    toast({ title: 'Feedback recorded', description: 'Try generating again with different settings.' });
   };
 
   return (
@@ -512,15 +582,23 @@ export default function TheEditorPage() {
 
                 {/* Feedback controls */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Rate this output</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">How does this look?</p>
                   <div className="flex flex-wrap gap-1.5">
                     {FEEDBACK_OPTIONS.map((fb) => {
                       const Icon = fb.icon;
+                      const isPositive = fb.type === 'approved' || fb.type === 'great_match';
                       const isSelected = feedbackSent === fb.type;
+                      const isNegative = !isPositive && fb.type !== 'rejected';
                       return (
                         <button
                           key={fb.type}
-                          onClick={() => handleFeedback(fb.type)}
+                          onClick={() => {
+                            if (isNegative || fb.type === 'rejected') {
+                              handleRejectAndRegenerate(fb.type);
+                            } else {
+                              handleFeedback(fb.type);
+                            }
+                          }}
                           disabled={!!feedbackSent}
                           className={cn(
                             'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-all',
@@ -541,7 +619,7 @@ export default function TheEditorPage() {
                     <p className="text-[10px] text-muted-foreground">
                       {(feedbackSent === 'approved' || feedbackSent === 'great_match')
                         ? 'Saved as style reference for future generations.'
-                        : 'Feedback recorded — this helps improve future results.'}
+                        : 'Feedback recorded — this will improve future results. Try regenerating below.'}
                     </p>
                   )}
                 </div>
@@ -573,30 +651,44 @@ export default function TheEditorPage() {
                   </div>
                 )}
 
-                {/* Download + Actions */}
+                {/* Primary Actions */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Actions</p>
                   <Button
-                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${realismMode}-${Date.now()}.jpg`)}
-                    variant="default"
+                    onClick={handleSaveToLibrary}
+                    disabled={savedToLibrary}
                     className="w-full gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
+                    size="sm"
+                  >
+                    {savedToLibrary ? (
+                      <><CheckSquare className="w-3.5 h-3.5" /> Saved to Library</>
+                    ) : (
+                      <><ImageIcon className="w-3.5 h-3.5" /> Save to Content Library</>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${realismMode}-${Date.now()}.jpg`)}
+                    variant="outline"
+                    className="w-full gap-1.5 text-xs"
                     size="sm"
                   >
                     <Download className="w-3.5 h-3.5" /> Download Image
                   </Button>
-                  <p className="text-[10px] text-muted-foreground">
-                    Per-format crops (4:5, 9:16) coming soon. Current output is the full generated image.
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={() => toast({ title: 'Saved to Content Library', description: 'Image is available in Brand → Content Library.' })}
-                  >
-                    <ImageIcon className="w-4 h-4" /> Save to Content Library
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground text-center">
-                    Pro Photo outputs are automatically saved to your Content Library.
-                  </p>
+                  <div className="border-t border-border pt-3 space-y-2">
+                    <Button
+                      variant="ghost"
+                      className="w-full gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+                      size="sm"
+                      onClick={handleDiscard}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Discard
+                    </Button>
+                  </div>
+                  {!savedToLibrary && !planId && (
+                    <p className="text-[10px] text-muted-foreground text-center">
+                      This image is not yet saved. Save it or it will be lost.
+                    </p>
+                  )}
                 </div>
               </motion.div>
             )}

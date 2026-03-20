@@ -49,6 +49,7 @@ interface AssetCardProps {
   onToggleFavorite?: (asset: ContentAsset) => void;
   onDelete?: (asset: ContentAsset) => void;
   onUpdateStatus?: (asset: ContentAsset, status: string) => void;
+  onPreview?: (asset: ContentAsset) => void;
   showVariation?: boolean;
   showReel?: boolean;
   showLineage?: boolean;
@@ -86,6 +87,7 @@ export function AssetCard({
   onToggleFavorite,
   onDelete,
   onUpdateStatus,
+  onPreview,
   showVariation = true,
   showReel = true,
   showLineage = true,
@@ -103,6 +105,8 @@ export function AssetCard({
   const handleCardClick = () => {
     if (selectionMode && onSelect) {
       onSelect(asset);
+    } else if (onPreview) {
+      onPreview(asset);
     }
   };
 
@@ -125,9 +129,9 @@ export function AssetCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
-      className={`group relative rounded-xl overflow-hidden border bg-card transition-all duration-300 ${
+      className={`group relative rounded-xl overflow-hidden border bg-card transition-all duration-300 cursor-pointer ${
         selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-accent/30'
-      } ${selectionMode ? 'cursor-pointer' : ''}`}
+      }`}
       onClick={handleCardClick}
     >
       {/* Image */}
