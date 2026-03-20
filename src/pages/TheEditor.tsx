@@ -107,7 +107,10 @@ export default function TheEditorPage() {
     background_source: string;
     style_sources: string[];
     edited_asset_id: string | null;
+    storage_path: string | null;
+    output_asset_id: string | null;
   } | null>(null);
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
 
