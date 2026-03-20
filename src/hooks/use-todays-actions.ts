@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useCallback, useEffect } from 'react';
+import { resolveAssetUrl, isSignedUrl, batchResolveSignedUrls } from '@/hooks/use-resolved-media';
 
 export type DueState = 'upcoming' | 'due_soon' | 'due_now' | 'overdue';
 
