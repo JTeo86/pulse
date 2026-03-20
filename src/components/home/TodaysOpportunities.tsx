@@ -49,13 +49,6 @@ export function TodaysOpportunities() {
           .eq('venue_id', currentVenue.id)
           .eq('status', 'pending'),
         supabase
-          .from('marketing_plans')
-          .select('plan_data')
-          .eq('venue_id', currentVenue.id)
-          .eq('status', 'draft')
-          .limit(1)
-          .maybeSingle(),
-        supabase
           .from('content_items')
           .select('*', { count: 'exact', head: true })
           .eq('venue_id', currentVenue.id)
@@ -77,13 +70,8 @@ export function TodaysOpportunities() {
           : Promise.resolve({ count: 0 }),
       ]);
 
-      const [reviews, guestContent, marketingPlan, drafts, billVerify, payouts] = queries;
+      const [reviews, guestContent, drafts, billVerify, payouts] = queries;
 
-      const pendingPlanTasks = marketingPlan?.data?.plan_data
-        ? (marketingPlan.data.plan_data as any[]).filter(
-            (t: any) => t.status === 'pending'
-          ).length
-        : 0;
 
       const items: Opportunity[] = [];
 
@@ -113,18 +101,6 @@ export function TodaysOpportunities() {
         });
       }
 
-      if (pendingPlanTasks > 0) {
-        items.push({
-          key: 'marketing',
-          icon: CalendarCheck,
-          title: `Approve ${pendingPlanTasks} marketing task${pendingPlanTasks > 1 ? 's' : ''}`,
-          description: 'Weekly marketing plan tasks pending',
-          count: pendingPlanTasks,
-          route: '/content/planner',
-          actionLabel: 'Review Plan',
-          priority: 'medium',
-        });
-      }
 
       if ((drafts.count ?? 0) > 0) {
         items.push({
