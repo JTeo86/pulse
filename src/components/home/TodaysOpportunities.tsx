@@ -70,13 +70,8 @@ export function TodaysOpportunities() {
           : Promise.resolve({ count: 0 }),
       ]);
 
-      const [reviews, guestContent, marketingPlan, drafts, billVerify, payouts] = queries;
+      const [reviews, guestContent, drafts, billVerify, payouts] = queries;
 
-      const pendingPlanTasks = marketingPlan?.data?.plan_data
-        ? (marketingPlan.data.plan_data as any[]).filter(
-            (t: any) => t.status === 'pending'
-          ).length
-        : 0;
 
       const items: Opportunity[] = [];
 
