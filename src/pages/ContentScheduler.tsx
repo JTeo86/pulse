@@ -234,8 +234,9 @@ export default function ContentScheduler() {
                 Select
               </Button>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {loading ? (
