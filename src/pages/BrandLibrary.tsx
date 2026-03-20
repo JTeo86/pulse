@@ -556,6 +556,15 @@ export default function BrandLibraryPage() {
         )}
       </AnimatePresence>
 
+      {/* Asset Lightbox */}
+      <AssetLightbox
+        asset={lightboxAsset}
+        assets={activeTab === 'reels' ? videoAssets : imageAssets}
+        open={!!lightboxAsset}
+        onClose={() => setLightboxAsset(null)}
+        onNavigate={setLightboxAsset}
+      />
+
       {/* Version History Panel */}
       <VersionHistoryPanel
         asset={lineageAsset}
