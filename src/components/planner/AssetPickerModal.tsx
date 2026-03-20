@@ -83,21 +83,16 @@ export function AssetPickerModal({ open, onClose, onSelect, assetType }: AssetPi
                   onClick={() => handleSelect(asset)}
                   className="group relative aspect-square rounded-lg overflow-hidden border border-border hover:border-accent transition-colors bg-muted"
                 >
-                  {asset._resolvedUrl ? (
-                    <img
-                      src={asset._resolvedUrl}
-                      alt={asset.title || ''}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      {asset.asset_type === 'video' ? (
-                        <Film className="w-6 h-6 text-muted-foreground" />
-                      ) : (
-                        <Image className="w-6 h-6 text-muted-foreground" />
-                      )}
-                    </div>
-                  )}
+                  <MediaImage
+                    src={asset._resolvedUrl || null}
+                    alt={asset.title || ''}
+                    fallbackIcon={asset.asset_type === 'video'
+                      ? <Film className="w-6 h-6 text-muted-foreground" />
+                      : <Image className="w-6 h-6 text-muted-foreground" />
+                    }
+                    aspectClassName=""
+                    containerClassName="w-full h-full"
+                  />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-accent text-accent-foreground rounded-full p-1.5">
                       <Check className="w-4 h-4" />
