@@ -471,6 +471,7 @@ export default function BrandLibraryPage() {
                     alt={upload.notes || ''}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                   {canEdit && !selectionMode && (
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
