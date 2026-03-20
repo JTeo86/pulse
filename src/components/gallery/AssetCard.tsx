@@ -204,7 +204,7 @@ export function AssetCard({
             )}
           </div>
         </div>
-      </div>
+      </MediaImage>
 
       {/* Card footer */}
       <div className="p-3 space-y-2">

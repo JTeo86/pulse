@@ -98,6 +98,7 @@ export default function BrandLibraryPage() {
   const [uploadsLoading, setUploadsLoading] = useState(true);
   const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
   const [uploadUrls, setUploadUrls] = useState<Record<string, string>>({});
+  import { batchResolveSignedUrls } from '@/hooks/use-resolved-media';
 
   // Clear selections when leaving selection mode
   const exitSelectionMode = () => {
