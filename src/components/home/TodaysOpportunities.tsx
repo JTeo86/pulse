@@ -94,7 +94,7 @@ export function TodaysOpportunities() {
           title: `Respond to ${reviews.count} review${(reviews.count ?? 0) > 1 ? 's' : ''}`,
           description: 'Pending reviews need your attention',
           count: reviews.count ?? 0,
-          route: '/reputation/reviews',
+          route: '/reputation/reviews?tab=respond',
           actionLabel: 'Respond',
           priority: 'high',
         });
@@ -133,7 +133,7 @@ export function TodaysOpportunities() {
           title: `Schedule ${drafts.count} draft${(drafts.count ?? 0) > 1 ? 's' : ''}`,
           description: 'Content ready to be scheduled',
           count: drafts.count ?? 0,
-          route: '/content/scheduler',
+          route: '/content/calendar',
           actionLabel: 'Schedule',
           priority: 'low',
         });
