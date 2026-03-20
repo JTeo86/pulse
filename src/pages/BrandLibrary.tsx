@@ -83,6 +83,9 @@ export default function BrandLibraryPage() {
   // Version history panel
   const [lineageAsset, setLineageAsset] = useState<ContentAsset | null>(null);
 
+  // Lightbox
+  const [lightboxAsset, setLightboxAsset] = useState<ContentAsset | null>(null);
+
   // Selection mode
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
