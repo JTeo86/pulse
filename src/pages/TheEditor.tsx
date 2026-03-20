@@ -5,7 +5,7 @@ import {
   Upload, Camera, Wand2, Download,
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info, ChevronDown, ChevronRight,
-  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles
+  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
