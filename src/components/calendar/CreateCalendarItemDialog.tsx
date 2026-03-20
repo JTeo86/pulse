@@ -19,6 +19,7 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { CalendarMediaPicker, type SelectedMedia } from './CalendarMediaPicker';
 
 const CHANNELS = [
   { value: 'instagram_feed', label: 'Instagram Feed' },
@@ -61,7 +62,7 @@ export function CreateCalendarItemDialog({
   const [status, setStatus] = useState('scheduled');
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   const [scheduledTime, setScheduledTime] = useState('12:00');
-  const [mediaUrl, setMediaUrl] = useState('');
+  const [media, setMedia] = useState<SelectedMedia | null>(null);
   const [saving, setSaving] = useState(false);
 
   const resetForm = () => {
@@ -71,7 +72,7 @@ export function CreateCalendarItemDialog({
     setStatus('scheduled');
     setScheduledDate(undefined);
     setScheduledTime('12:00');
-    setMediaUrl('');
+    setMedia(null);
   };
 
   const handleCreate = async () => {
@@ -92,6 +93,20 @@ export function CreateCalendarItemDialog({
       scheduledFor = dt.toISOString();
     }
 
+    // Resolve the media URL to persist
+    let mediaUrl: string | null = null;
+    if (media) {
+      if (media.storagePath) {
+        // For freshly uploaded files, generate a long-lived signed URL
+        const { data: signed } = await supabase.storage
+          .from('venue-assets')
+          .createSignedUrl(media.storagePath, 60 * 60 * 24 * 365);
+        mediaUrl = signed?.signedUrl || media.url;
+      } else {
+        mediaUrl = media.url;
+      }
+    }
+
     const { error } = await supabase.from('content_items').insert({
       venue_id: currentVenue.id,
       caption_draft: caption || null,
@@ -99,7 +114,7 @@ export function CreateCalendarItemDialog({
       status,
       intent,
       scheduled_for: scheduledFor,
-      media_master_url: mediaUrl.trim() || null,
+      media_master_url: mediaUrl,
       asset_type: channel,
     });
 
@@ -118,7 +133,7 @@ export function CreateCalendarItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Calendar Item</DialogTitle>
         </DialogHeader>
@@ -214,16 +229,8 @@ export function CreateCalendarItemDialog({
             </div>
           </div>
 
-          {/* Media URL (optional) */}
-          <div className="space-y-1.5">
-            <Label htmlFor="create-media">Image / Video URL <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Input
-              id="create-media"
-              placeholder="https://…"
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-            />
-          </div>
+          {/* Media picker */}
+          <CalendarMediaPicker value={media} onChange={setMedia} />
         </div>
 
         <DialogFooter>
