@@ -629,58 +629,68 @@ Deno.serve(async (req) => {
       compliance_status: 'approved',
     }).select('id').single();
 
+    // --- Conditional library save ---
+    // skip_library_save: when true, do NOT insert into content_assets or uploads.
+    // The client can call a separate save action later.
+    const skipLibrarySave = body.skip_library_save === true;
+
     let uploadId: string | null = null;
-    const { data: uploadData, error: uploadError } = await supabase.from('uploads').insert({
-      venue_id,
-      storage_path: finalStoragePath,
-      uploaded_by: user.id,
-      status: 'ready',
-      notes: `Pro Photo · ${plan.mode.charAt(0).toUpperCase() + plan.mode.slice(1)} (${ctx.referenceImages.length} refs)`,
-    }).select('id').single();
-
-    if (uploadError) {
-      console.error('[PRO-PHOTO] uploads insert error:', uploadError.message);
-    } else {
-      uploadId = uploadData?.id || null;
-    }
-
-    // Content assets record with proper generation metadata
-    const modeLabel = plan.mode.charAt(0).toUpperCase() + plan.mode.slice(1);
     let outputAssetId: string | null = null;
-    try {
-      const { data: contentAsset } = await supabase.from('content_assets').insert({
+
+    if (!skipLibrarySave) {
+      const { data: uploadData, error: uploadError } = await supabase.from('uploads').insert({
         venue_id,
-        created_by: user.id,
-        asset_type: 'image',
-        source_type: 'generated_image',
-        status: 'draft',
-        title: `Pro Photo · ${modeLabel}`,
         storage_path: finalStoragePath,
-        public_url: finalUrl,
-        mime_type: 'image/jpeg',
-        source_job_id: editedAssetData?.id || null,
-        derived_from_editor_job_id: job_id || null,
-        prompt_snapshot: {
-          prompt: prompt.substring(0, 2000),
-          generation_plan: plan,
-        },
-        generation_settings: {
-          generation_mode: plan.mode,
-          generation_plan: plan,
-          reference_count: ctx.referenceImages.length,
-          model: 'google/gemini-2.5-flash-image',
-          generation_time_ms: generationTimeMs,
-          style_sources: ctx.styleSourcesUsed,
-        },
-        metadata: {
-          generation_mode: plan.mode,
-          edited_asset_id: editedAssetData?.id || null,
-          upload_id: uploadId,
-        },
+        uploaded_by: user.id,
+        status: 'ready',
+        notes: `Pro Photo · ${plan.mode.charAt(0).toUpperCase() + plan.mode.slice(1)} (${ctx.referenceImages.length} refs)`,
       }).select('id').single();
-      outputAssetId = contentAsset?.id || null;
-    } catch (e) {
-      console.warn('[PRO-PHOTO] content_assets insert error:', e);
+
+      if (uploadError) {
+        console.error('[PRO-PHOTO] uploads insert error:', uploadError.message);
+      } else {
+        uploadId = uploadData?.id || null;
+      }
+
+      // Content assets record with proper generation metadata
+      const modeLabel = plan.mode.charAt(0).toUpperCase() + plan.mode.slice(1);
+      try {
+        const { data: contentAsset } = await supabase.from('content_assets').insert({
+          venue_id,
+          created_by: user.id,
+          asset_type: 'image',
+          source_type: 'generated_image',
+          status: 'draft',
+          title: `Pro Photo · ${modeLabel}`,
+          storage_path: finalStoragePath,
+          public_url: finalUrl,
+          mime_type: 'image/jpeg',
+          source_job_id: editedAssetData?.id || null,
+          derived_from_editor_job_id: job_id || null,
+          prompt_snapshot: {
+            prompt: prompt.substring(0, 2000),
+            generation_plan: plan,
+          },
+          generation_settings: {
+            generation_mode: plan.mode,
+            generation_plan: plan,
+            reference_count: ctx.referenceImages.length,
+            model: 'google/gemini-2.5-flash-image',
+            generation_time_ms: generationTimeMs,
+            style_sources: ctx.styleSourcesUsed,
+          },
+          metadata: {
+            generation_mode: plan.mode,
+            edited_asset_id: editedAssetData?.id || null,
+            upload_id: uploadId,
+          },
+        }).select('id').single();
+        outputAssetId = contentAsset?.id || null;
+      } catch (e) {
+        console.warn('[PRO-PHOTO] content_assets insert error:', e);
+      }
+    } else {
+      console.log('[PRO-PHOTO] skip_library_save=true — skipping content_assets & uploads insert');
     }
 
     // Generation log
