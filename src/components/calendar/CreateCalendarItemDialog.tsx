@@ -4,6 +4,7 @@ import { CalendarIcon, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useToast } from '@/hooks/use-toast';
+import { normalizeContentAssetType } from '@/lib/content-item-utils';
 import { cn } from '@/lib/utils';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -107,6 +108,11 @@ export function CreateCalendarItemDialog({
       }
     }
 
+    // Derive a valid asset_type from the selected media
+    const assetType = media
+      ? normalizeContentAssetType(media.type, null, media.label)
+      : null;
+
     const { error } = await supabase.from('content_items').insert({
       venue_id: currentVenue.id,
       caption_draft: caption || null,
@@ -115,7 +121,7 @@ export function CreateCalendarItemDialog({
       intent,
       scheduled_for: scheduledFor,
       media_master_url: mediaUrl,
-      asset_type: channel,
+      asset_type: assetType,
     });
 
     setSaving(false);
