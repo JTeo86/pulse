@@ -1,42 +1,33 @@
 
-Diagnosis
 
-- The broken image is coming from the data resolver in `src/hooks/use-todays-actions.ts`, not from the Home card UI.
-- `TodaysActionsPanel` simply renders `action.media_url` in an `<img>` tag. If that URL is bad, the image breaks.
-- In `use-todays-actions`, asset URLs are regenerated with:
-  - `supabase.storage.from('content-assets').createSignedUrl(...)`
-- But this project’s actual media bucket is `venue-assets`, and the migrations show that bucket was later made private.
-- There is no `content-assets` bucket in the current backend config, so this signed URL generation path is wrong.
-- The same project already uses the correct bucket elsewhere:
-  - `src/hooks/use-content-assets.ts` → `from('venue-assets')`
-  - `src/hooks/use-plan-publish.ts` → `from('venue-assets')`
-- Result:
-  - if `public_url` / `thumbnail_url` is stale or missing, `use-todays-actions` tries to refresh from the wrong bucket
-  - that refresh fails silently
-  - `media_url` ends up empty or stale
-  - Home shows a broken/blank thumbnail
+## Diagnosis
 
-Why it happens specifically in Today’s Actions
+The "Approve 6 marketing tasks" count on Home comes from `marketing_plans.plan_data` — the **Marketing Autopilot** weekly plan, which stores tasks as JSON with a `status` field. The count filters for `status === 'pending'`.
 
-- This module has its own asset-resolution logic instead of reusing the working planner/calendar resolver.
-- It also falls back to `metadata.media_url`, which may itself be an expired signed URL from an earlier session.
-- So Home is using an inconsistent media contract compared with the working Planner/Content Calendar flow.
+But the CTA routes to `/content/planner`, which lands on the **Planner page** showing **Lily's Recommendations** — a completely different system driven by `events_catalog` and `venue_event_plans`.
 
-Fix plan
+These are two separate features:
+- **Marketing Autopilot** = auto-generated weekly tasks stored in `marketing_plans.plan_data`
+- **Lily's Recommendations** = event-driven campaign suggestions from `LilyRecommendations` component
 
-1. Update `use-todays-actions` to use the correct storage bucket: `venue-assets`.
-2. Reuse the same signed-URL rules already used elsewhere:
-   - prefer stable `public_url`
-   - otherwise prefer stable `thumbnail_url`
-   - if URL is signed or missing, regenerate from `storage_path`
-3. Treat `metadata.media_url` as a weak fallback only, and refresh it if it looks like an expired signed URL.
-4. Optionally centralize asset URL resolution into a shared helper so Home, Planner, and Content Calendar cannot drift again.
-5. Add a safe image fallback in `TodaysActionsPanel` so broken URLs degrade to the channel icon instead of a broken image.
+The count comes from system A, but the link goes to system B. That's why the numbers don't match.
 
-Most likely root cause
+## Fix
 
-- Wrong storage bucket name in `use-todays-actions`:
-  - current: `content-assets`
-  - should be: `venue-assets`
+**In `TodaysOpportunities.tsx`**, update the marketing tasks opportunity to route to the correct destination. Since the Marketing Autopilot weekly plan was previously rendered by `WeeklyMarketingPlan` (which was removed from Home), the CTA should either:
 
-That is the main reason the scheduled post image under “Today’s Actions” is broken.
+1. **Route back to a working review surface** — if `WeeklyMarketingPlan` still exists as a component, re-expose it at a reachable route or re-add it to Home as a collapsible section
+2. **Simpler fix**: Since `WeeklyMarketingPlan` is a standalone component that was removed from Home for simplicity, the cleanest approach is to **remove the marketing tasks opportunity card entirely** from `TodaysOpportunities` — it references a workflow that no longer has a visible review surface
+
+**Recommended approach**: Remove the marketing plan opportunity from `TodaysOpportunities.tsx` (lines 108-117) since there is currently no destination page that shows those Autopilot tasks for review. This eliminates the misleading count and broken routing.
+
+If the Autopilot weekly plan should remain reviewable, an alternative is to re-add the `WeeklyMarketingPlan` component back to Home (below Today's Actions) so users can review and approve those tasks inline — then keep the opportunity card but change its route to scroll/link to that section on Home.
+
+## Changes
+
+**File: `src/components/home/TodaysOpportunities.tsx`**
+- Remove the `marketing` opportunity block (the one that counts `pendingPlanTasks` from `marketing_plans.plan_data`) since its destination doesn't match its data source
+- Optionally remove the `marketing_plans` query too since nothing else uses it
+
+This is a ~15-line deletion. No other files need changes.
+
