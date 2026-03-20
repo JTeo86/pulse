@@ -582,15 +582,23 @@ export default function TheEditorPage() {
 
                 {/* Feedback controls */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Rate this output</p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">How does this look?</p>
                   <div className="flex flex-wrap gap-1.5">
                     {FEEDBACK_OPTIONS.map((fb) => {
                       const Icon = fb.icon;
+                      const isPositive = fb.type === 'approved' || fb.type === 'great_match';
                       const isSelected = feedbackSent === fb.type;
+                      const isNegative = !isPositive && fb.type !== 'rejected';
                       return (
                         <button
                           key={fb.type}
-                          onClick={() => handleFeedback(fb.type)}
+                          onClick={() => {
+                            if (isNegative || fb.type === 'rejected') {
+                              handleRejectAndRegenerate(fb.type);
+                            } else {
+                              handleFeedback(fb.type);
+                            }
+                          }}
                           disabled={!!feedbackSent}
                           className={cn(
                             'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-all',
@@ -611,7 +619,7 @@ export default function TheEditorPage() {
                     <p className="text-[10px] text-muted-foreground">
                       {(feedbackSent === 'approved' || feedbackSent === 'great_match')
                         ? 'Saved as style reference for future generations.'
-                        : 'Feedback recorded — this helps improve future results.'}
+                        : 'Feedback recorded — this will improve future results. Try regenerating below.'}
                     </p>
                   )}
                 </div>
