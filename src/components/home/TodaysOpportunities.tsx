@@ -49,13 +49,6 @@ export function TodaysOpportunities() {
           .eq('venue_id', currentVenue.id)
           .eq('status', 'pending'),
         supabase
-          .from('marketing_plans')
-          .select('plan_data')
-          .eq('venue_id', currentVenue.id)
-          .eq('status', 'draft')
-          .limit(1)
-          .maybeSingle(),
-        supabase
           .from('content_items')
           .select('*', { count: 'exact', head: true })
           .eq('venue_id', currentVenue.id)
