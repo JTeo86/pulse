@@ -78,8 +78,9 @@ export function useTodaysActions() {
         .from('plan_publish_items')
         .select(`
           id, title, caption, channel, reminder_at, publish_date, status,
-          content_asset_id, plan_id, metadata,
-          venue_event_plans!plan_publish_items_plan_id_fkey ( title )
+          content_asset_id, plan_asset_id, plan_id, metadata,
+          venue_event_plans!plan_publish_items_plan_id_fkey ( title ),
+          plan_assets!plan_publish_items_plan_asset_id_fkey ( content_asset_id )
         `)
         .not('reminder_at', 'is', null)
         .not('status', 'in', '("published","archived")')
@@ -93,17 +94,19 @@ export function useTodaysActions() {
 
       if (!data?.length) return [];
 
-      // Resolve asset URLs for items that have content_asset_id
-      const assetIds = data
-        .map((d: any) => d.content_asset_id)
-        .filter(Boolean) as string[];
+      // Collect all content_asset_ids: direct + via plan_assets join
+      const assetIds = new Set<string>();
+      for (const d of data as any[]) {
+        if (d.content_asset_id) assetIds.add(d.content_asset_id);
+        if (d.plan_assets?.content_asset_id) assetIds.add(d.plan_assets.content_asset_id);
+      }
 
       const assetUrlMap = new Map<string, string>();
-      if (assetIds.length > 0) {
+      if (assetIds.size > 0) {
         const { data: assets } = await supabase
           .from('content_assets')
           .select('id, public_url, thumbnail_url, storage_path')
-          .in('id', assetIds);
+          .in('id', Array.from(assetIds));
 
         for (const a of assets ?? []) {
           let url = a.public_url || a.thumbnail_url || '';
