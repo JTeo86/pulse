@@ -97,6 +97,28 @@ function ProtectedLayout() {
   );
 }
 
+function PlatformAdminRoute() {
+  const { user } = useAuth();
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) { setIsPlatformAdmin(false); setLoading(false); return; }
+    supabase.rpc('is_platform_admin', { check_user_id: user.id })
+      .then(({ data }) => { setIsPlatformAdmin(!!data); setLoading(false); });
+  }, [user?.id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!isPlatformAdmin) return <Navigate to="/home" replace />;
+  return <PlatformAdmin />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
