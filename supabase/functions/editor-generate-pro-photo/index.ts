@@ -756,6 +756,7 @@ Deno.serve(async (req) => {
       success: true,
       final_image_url: finalUrl,
       final_image_variants: finalImageVariants,
+      storage_path: finalStoragePath,
       reference_count: ctx.referenceImages.length,
       background_source: ctx.referenceImages.length > 0 ? 'brand_references' : 'ai_generated',
       style_sources: ctx.styleSourcesUsed,

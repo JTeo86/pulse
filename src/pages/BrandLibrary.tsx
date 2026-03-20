@@ -32,6 +32,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { AssetCard } from '@/components/gallery/AssetCard';
+import { AssetLightbox } from '@/components/gallery/AssetLightbox';
 import { VersionHistoryPanel } from '@/components/gallery/VersionHistoryPanel';
 import {
   ContentAsset,
