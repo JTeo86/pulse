@@ -106,18 +106,6 @@ export function TodaysOpportunities() {
         });
       }
 
-      if (pendingPlanTasks > 0) {
-        items.push({
-          key: 'marketing',
-          icon: CalendarCheck,
-          title: `Approve ${pendingPlanTasks} marketing task${pendingPlanTasks > 1 ? 's' : ''}`,
-          description: 'Weekly marketing plan tasks pending',
-          count: pendingPlanTasks,
-          route: '/content/planner',
-          actionLabel: 'Review Plan',
-          priority: 'medium',
-        });
-      }
 
       if ((drafts.count ?? 0) > 0) {
         items.push({
