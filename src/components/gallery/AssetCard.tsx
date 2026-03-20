@@ -87,6 +87,7 @@ export function AssetCard({
   onToggleFavorite,
   onDelete,
   onUpdateStatus,
+  onPreview,
   showVariation = true,
   showReel = true,
   showLineage = true,
