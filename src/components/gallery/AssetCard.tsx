@@ -40,6 +40,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ContentAsset } from '@/hooks/use-content-assets';
+import { MediaImage } from '@/components/ui/media-image';
 
 interface AssetCardProps {
   asset: ContentAsset;
