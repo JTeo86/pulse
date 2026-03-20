@@ -247,7 +247,12 @@ export default function ContentScheduler() {
         <EmptyState
           icon={Calendar}
           title="No content on your calendar"
-          description="Create content in the Studio or build Post Packs in the Planner to populate your calendar."
+          description="Create a one-off post or build Post Packs in the Planner to populate your calendar."
+          action={
+            <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-4 h-4" /> Create Post
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-8">
