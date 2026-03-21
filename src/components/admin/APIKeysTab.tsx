@@ -5,13 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Eye, EyeOff, Save, KeyRound } from 'lucide-react';
+import { Save, KeyRound } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ApiKey {
   id: string;
   key_name: string;
-  key_value: string;
   description: string | null;
   is_configured: boolean;
   updated_at: string;
@@ -22,7 +21,6 @@ export default function APIKeysTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
-  const [visible, setVisible] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,33 +31,36 @@ export default function APIKeysTab() {
     setLoading(true);
     const { data, error } = await supabase
       .from('platform_api_keys')
-      .select('*')
+      .select('id, key_name, description, is_configured, updated_at')
       .order('key_name');
     if (error) {
       toast({ title: 'Error loading API keys', description: error.message, variant: 'destructive' });
     } else {
       setKeys(data || []);
-      const vals: Record<string, string> = {};
-      (data || []).forEach((k: ApiKey) => { vals[k.id] = k.key_value; });
-      setEditValues(vals);
     }
     setLoading(false);
   };
 
   const handleSave = async (key: ApiKey) => {
     const value = editValues[key.id] ?? '';
+    if (!value.trim()) return;
     setSaving(key.id);
-    const { error } = await supabase
-      .from('platform_api_keys')
-      .update({ key_value: value, is_configured: value.trim().length > 0 })
-      .eq('id', key.id);
-    setSaving(null);
-    if (error) {
-      toast({ title: 'Error saving key', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await supabase.functions.invoke('manage-platform-key', {
+        body: { key_name: key.key_name, key_value: value },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (resp.error) throw new Error(resp.error.message);
+      const result = resp.data as { error?: string } | null;
+      if (result?.error) throw new Error(result.error);
       toast({ title: 'Saved', description: `${key.key_name} updated successfully.` });
+      setEditValues(prev => ({ ...prev, [key.id]: '' }));
       fetchKeys();
+    } catch (err) {
+      toast({ title: 'Error saving key', description: (err as Error).message, variant: 'destructive' });
     }
+    setSaving(null);
   };
 
   if (loading) {
@@ -75,7 +76,7 @@ export default function APIKeysTab() {
       <div>
         <h2 className="text-lg font-medium">API Keys &amp; Tokens</h2>
         <p className="text-sm text-muted-foreground">
-          Manage third-party API credentials used by backend functions. Values are stored in the database and read by edge functions at runtime.
+          Manage third-party API credentials used by backend functions. Key values are stored securely and never sent back to the browser.
         </p>
       </div>
 
@@ -96,27 +97,20 @@ export default function APIKeysTab() {
             </CardHeader>
             <CardContent>
               <div className="flex gap-2">
-                <div className="flex-1 relative">
+                <div className="flex-1">
                   <Label htmlFor={key.id} className="sr-only">{key.key_name}</Label>
                   <Input
                     id={key.id}
-                    type={visible[key.id] ? 'text' : 'password'}
+                    type="password"
                     value={editValues[key.id] ?? ''}
                     onChange={(e) => setEditValues((prev) => ({ ...prev, [key.id]: e.target.value }))}
-                    placeholder="Enter API key…"
-                    className="pr-10 font-mono text-sm"
+                    placeholder={key.is_configured ? '••••••••••• (enter new value to update)' : 'Enter API key…'}
+                    className="font-mono text-sm"
                   />
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setVisible((prev) => ({ ...prev, [key.id]: !prev[key.id] }))}
-                  >
-                    {visible[key.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
                 <Button
                   onClick={() => handleSave(key)}
-                  disabled={saving === key.id}
+                  disabled={saving === key.id || !(editValues[key.id] ?? '').trim()}
                   size="sm"
                   className="gap-1.5"
                 >

@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Plug, KeyRound, Eye, EyeOff, Save, CheckCircle2,
+  Plug, KeyRound, Save, CheckCircle2,
   XCircle, AlertCircle, Clock, RefreshCw, ShieldAlert,
-  Activity, Star
+  Activity, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,7 +86,7 @@ function CategorySummary({ keys }: { keys: PlatformApiKey[] }) {
   return <Badge variant="outline" className="bg-muted text-muted-foreground border-border gap-1 text-[10px]"><Clock className="w-2.5 h-2.5" />Not set</Badge>;
 }
 
-// ─── Single key row ──────────────────────────────────────────────────────────
+// ─── Single key row (write-only — key_value never fetched) ───────────────────
 function KeyRow({
   apiKey,
   onSaved,
@@ -95,16 +95,17 @@ function KeyRow({
   onSaved: () => void;
 }) {
   const { toast } = useToast();
-  const [value, setValue] = useState(apiKey.key_value ?? '');
-  const [visible, setVisible] = useState(false);
+  const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
 
   const handleSave = async () => {
+    if (!value.trim()) return;
     setSaving(true);
     try {
       await updatePlatformKey(apiKey.key_name, value);
       toast({ title: 'Saved', description: `${apiKey.key_name} updated.` });
+      setValue('');
       onSaved();
     } catch (err) {
       toast({ title: 'Error', description: (err as Error).message, variant: 'destructive' });
@@ -136,9 +137,6 @@ function KeyRow({
     }
   };
 
-  const isDirty = value !== (apiKey.key_value ?? '');
-  const inputType = apiKey.is_secret && !visible ? 'password' : 'text';
-
   return (
     <div className="flex flex-col gap-2 py-4 border-b border-border last:border-0">
       <div className="flex items-start justify-between gap-4">
@@ -147,9 +145,6 @@ function KeyRow({
             <span className="font-mono text-sm font-medium">{apiKey.key_name}</span>
             {apiKey.is_required && (
               <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-accent/40 text-accent">Required</Badge>
-            )}
-            {!apiKey.is_secret && (
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0">Public</Badge>
             )}
           </div>
           {apiKey.description && (
@@ -171,32 +166,23 @@ function KeyRow({
       </div>
 
       <div className="flex gap-2">
-        <div className="flex-1 relative">
+        <div className="flex-1">
           <Label htmlFor={apiKey.id} className="sr-only">{apiKey.key_name}</Label>
           <Input
             id={apiKey.id}
-            type={inputType}
+            type="password"
             value={value}
             onChange={e => setValue(e.target.value)}
-            placeholder={apiKey.is_secret ? '••••••••••' : 'Enter value…'}
-            className="pr-10 font-mono text-sm"
+            placeholder={apiKey.is_configured ? '••••••••••• (enter new value to update)' : 'Enter value…'}
+            className="font-mono text-sm"
           />
-          {apiKey.is_secret && (
-            <button
-              type="button"
-              onClick={() => setVisible(v => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          )}
         </div>
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={saving || !isDirty}
+          disabled={saving || !value.trim()}
           className="gap-1.5 shrink-0"
-          variant={isDirty ? 'default' : 'outline'}
+          variant={value.trim() ? 'default' : 'outline'}
         >
           <Save className="w-3.5 h-3.5" />
           {saving ? 'Saving…' : 'Save'}
@@ -276,7 +262,7 @@ export default function AdminIntegrations() {
             </div>
           </div>
           <p className="text-muted-foreground max-w-xl text-sm">
-            All third-party credentials live here. Edge functions read exclusively from this table — never from <code className="text-xs bg-muted px-1 py-0.5 rounded">platform_settings</code>.
+            All third-party credentials live here. Key values are stored securely and never transmitted to the browser.
           </p>
         </div>
 
@@ -284,7 +270,7 @@ export default function AdminIntegrations() {
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-destructive/10 border border-destructive/20 text-sm">
           <ShieldAlert className="w-3.5 h-3.5 text-destructive" />
           <span className="text-destructive font-medium">Admin Only</span>
-          <span className="text-muted-foreground">• Key values are never exposed to non-admins</span>
+          <span className="text-muted-foreground">• Key values are write-only — never returned to the browser</span>
         </div>
 
         {/* ── Health Overview ── */}

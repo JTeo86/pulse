@@ -6,7 +6,6 @@ export type KeyCategory = 'Reviews' | 'Editor' | 'Publishing' | 'Video' | 'Other
 export interface PlatformApiKey {
   id: string;
   key_name: string;
-  key_value: string;
   description: string | null;
   category: KeyCategory;
   is_required: boolean;
@@ -29,11 +28,11 @@ const ADMIN_VISIBLE_KEYS = new Set([
   'BUFFER_API_KEY',
 ]);
 
-/** Fetch platform API keys visible in admin */
+/** Fetch platform API keys visible in admin — NEVER returns key_value */
 export async function getPlatformKeys(): Promise<PlatformApiKey[]> {
   const { data, error } = await supabase
     .from('platform_api_keys')
-    .select('*')
+    .select('id, key_name, description, category, is_required, is_secret, is_configured, health_status, last_checked_at, last_error, created_at, updated_at')
     .order('category')
     .order('key_name');
   if (error) throw error;
@@ -52,18 +51,16 @@ export async function getPlatformKeysByCategory(): Promise<Record<KeyCategory, P
   }, {} as Record<KeyCategory, PlatformApiKey[]>);
 }
 
-/** Update a single key value */
+/** Save a key value via server-side edge function — key_value never returned to client */
 export async function updatePlatformKey(keyName: string, value: string): Promise<void> {
-  const { error } = await supabase
-    .from('platform_api_keys')
-    .update({
-      key_value: value.trim(),
-      is_configured: value.trim().length > 0,
-      health_status: 'untested',
-      last_error: null,
-    })
-    .eq('key_name', keyName);
-  if (error) throw error;
+  const { data: { session } } = await supabase.auth.getSession();
+  const resp = await supabase.functions.invoke('manage-platform-key', {
+    body: { key_name: keyName, key_value: value },
+    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+  });
+  if (resp.error) throw new Error(resp.error.message ?? 'Failed to save key');
+  const result = resp.data as { success?: boolean; error?: string } | null;
+  if (result?.error) throw new Error(result.error);
 }
 
 /** Manually update health status (used by edge function result) */

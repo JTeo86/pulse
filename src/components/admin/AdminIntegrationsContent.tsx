@@ -175,7 +175,7 @@ function GeminiTestButton() {
 // ─── Single key row ───────────────────────────────────────────────────────────
 function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => void }) {
   const { toast } = useToast();
-  const [value,    setValue]    = useState(apiKey.key_value ?? '');
+  const [value,    setValue]    = useState('');
   const [visible,  setVisible]  = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [checking, setChecking] = useState(false);
@@ -212,8 +212,8 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
     } finally { setChecking(false); }
   };
 
-  const isDirty   = value !== (apiKey.key_value ?? '');
-  const inputType = apiKey.is_secret && !visible ? 'password' : 'text';
+  const isDirty   = value.trim().length > 0;
+  const inputType = 'password';
   const isSerpApi = apiKey.key_name === 'SERPAPI_API_KEY';
   const isGemini  = apiKey.key_name === 'GEMINI_IMAGE_API_KEY';
 
@@ -241,7 +241,7 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
             type={inputType}
             value={value}
             onChange={e => setValue(e.target.value)}
-            placeholder={apiKey.is_secret ? '••••••••••' : 'Enter value…'}
+            placeholder={apiKey.is_configured ? '••••••••••• (enter new value to update)' : 'Enter value…'}
             className="pr-10 font-mono text-sm"
           />
           {apiKey.is_secret && (
