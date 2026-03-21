@@ -24,7 +24,6 @@ import {
 interface ApiKeyRow {
   id: string;
   key_name: string;
-  key_value: string;
   is_configured: boolean;
   health_status: string;
   description: string | null;
@@ -46,13 +45,13 @@ const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'outlin
 export default function VideoProviderTab() {
   const queryClient = useQueryClient();
 
-  // Load Kling API keys
+  // Load Kling API keys — never fetch key_value
   const { data: apiKeys, isLoading: keysLoading } = useQuery({
     queryKey: ['video-provider-keys'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('platform_api_keys')
-        .select('*')
+        .select('id, key_name, is_configured, health_status, description')
         .eq('category', 'Video');
       if (error) throw error;
       return (data || []) as ApiKeyRow[];
@@ -85,7 +84,7 @@ export default function VideoProviderTab() {
   const klingApiKey = apiKeys?.find((k) => k.key_name === 'KLING_API_KEY');
   const klingApiSecret = apiKeys?.find((k) => k.key_name === 'KLING_API_SECRET');
 
-  // Local state for key editing
+  // Local state for write-only key editing
   const [apiKeyValue, setApiKeyValue] = useState('');
   const [apiSecretValue, setApiSecretValue] = useState('');
 
@@ -108,17 +107,15 @@ export default function VideoProviderTab() {
   });
 
   const saveKeyMutation = useMutation({
-    mutationFn: async ({ id, value }: { id: string; value: string }) => {
-      const trimmed = value.trim();
-      const { error } = await supabase
-        .from('platform_api_keys')
-        .update({
-          key_value: trimmed,
-          is_configured: trimmed.length > 0,
-          health_status: trimmed.length > 0 ? 'untested' : 'missing',
-        })
-        .eq('id', id);
-      if (error) throw error;
+    mutationFn: async ({ keyName, value }: { keyName: string; value: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await supabase.functions.invoke('manage-platform-key', {
+        body: { key_name: keyName, key_value: value },
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (resp.error) throw new Error(resp.error.message);
+      const result = resp.data as { error?: string } | null;
+      if (result?.error) throw new Error(result.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['video-provider-keys'] });
@@ -251,7 +248,7 @@ export default function VideoProviderTab() {
                   <Input
                     id="kling-api-key"
                     type="password"
-                    placeholder={klingApiKey?.is_configured ? '••••••••••••' : 'Paste your Kling API key'}
+                    placeholder={klingApiKey?.is_configured ? '••••••••••• (enter new value to update)' : 'Paste your Kling API key'}
                     value={apiKeyValue}
                     onChange={(e) => setApiKeyValue(e.target.value)}
                   />
@@ -259,8 +256,8 @@ export default function VideoProviderTab() {
                     size="sm"
                     variant="outline"
                     className="shrink-0 gap-1"
-                    disabled={!apiKeyValue.trim() || !klingApiKey || saveKeyMutation.isPending}
-                    onClick={() => klingApiKey && saveKeyMutation.mutate({ id: klingApiKey.id, value: apiKeyValue })}
+                    disabled={!apiKeyValue.trim() || saveKeyMutation.isPending}
+                    onClick={() => saveKeyMutation.mutate({ keyName: 'KLING_API_KEY', value: apiKeyValue })}
                   >
                     {saveKeyMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                     Save
@@ -274,7 +271,7 @@ export default function VideoProviderTab() {
                   <Input
                     id="kling-api-secret"
                     type="password"
-                    placeholder={klingApiSecret?.is_configured ? '••••••••••••' : 'Paste your Kling API secret'}
+                    placeholder={klingApiSecret?.is_configured ? '••••••••••• (enter new value to update)' : 'Paste your Kling API secret'}
                     value={apiSecretValue}
                     onChange={(e) => setApiSecretValue(e.target.value)}
                   />
@@ -282,8 +279,8 @@ export default function VideoProviderTab() {
                     size="sm"
                     variant="outline"
                     className="shrink-0 gap-1"
-                    disabled={!apiSecretValue.trim() || !klingApiSecret || saveKeyMutation.isPending}
-                    onClick={() => klingApiSecret && saveKeyMutation.mutate({ id: klingApiSecret.id, value: apiSecretValue })}
+                    disabled={!apiSecretValue.trim() || saveKeyMutation.isPending}
+                    onClick={() => saveKeyMutation.mutate({ keyName: 'KLING_API_SECRET', value: apiSecretValue })}
                   >
                     {saveKeyMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                     Save
@@ -303,9 +300,9 @@ export default function VideoProviderTab() {
             </h5>
             <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside">
               <li>Kling credentials are configured only here — they do not appear in the Integrations tab.</li>
+              <li>Key values are write-only and never sent back to the browser.</li>
               <li>Reel Creator is hidden from venue users until both <strong>Video Features</strong> and <strong>Reel Creator Visible</strong> are enabled above.</li>
               <li>Kling API credentials can be added at any time. Jobs queued before provider setup will be held in pending state.</li>
-              <li>If provider config is missing when a user tries to create a reel, they'll see a clean "provider not configured" message.</li>
               <li>Enable <strong>Kling Provider</strong> only after API credentials are saved and tested.</li>
             </ul>
           </div>
