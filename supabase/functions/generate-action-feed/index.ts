@@ -22,22 +22,65 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const { venue_id } = await req.json().catch(() => ({}));
 
-    // If venue_id provided, process single venue; otherwise process all venues
-    let venueIds: string[] = [];
+    // --- Auth ---
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
 
+    if (venue_id) {
+      // Single venue: require user JWT + membership, or service role key
+      if (!authHeader.startsWith("Bearer ") || !token) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (token !== serviceKey) {
+        const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: claimsData, error: claimsErr } = await supabaseAuth.auth.getClaims(token);
+        if (claimsErr || !claimsData?.claims?.sub) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const userId = claimsData.claims.sub as string;
+        const adminClient = createClient(supabaseUrl, serviceKey);
+        const { data: isMember } = await adminClient.rpc("is_venue_member", {
+          check_venue_id: venue_id,
+          check_user_id: userId,
+        });
+        if (!isMember) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    } else {
+      // Batch mode: require service role key
+      if (token !== serviceKey) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+
+    let venueIds: string[] = [];
     if (venue_id) {
       venueIds = [venue_id];
     } else {
-      const { data: venues } = await supabaseAdmin
-        .from("venues")
-        .select("id");
+      const { data: venues } = await supabaseAdmin.from("venues").select("id");
       venueIds = (venues || []).map((v) => v.id);
     }
 
@@ -211,8 +254,8 @@ serve(async (req) => {
           cta_route: "/venue/guest-photos",
         });
       }
+
       for (const action of actions) {
-        // Use action_type + venue_id as idempotency key
         const { error } = await supabaseAdmin
           .from("action_feed_items")
           .upsert(
@@ -235,7 +278,7 @@ serve(async (req) => {
         }
       }
 
-      // Clean up resolved actions (e.g., if reviews are now 0, remove that action)
+      // Clean up resolved actions
       if ((reviewCount || 0) === 0) {
         await supabaseAdmin
           .from("action_feed_items")

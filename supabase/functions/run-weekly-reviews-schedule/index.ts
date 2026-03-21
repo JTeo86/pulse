@@ -11,6 +11,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // --- Auth: require service role key (internal/cron only) ---
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace("Bearer ", "");
+  if (token !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -41,16 +51,16 @@ serve(async (req) => {
       const now = new Date();
       const localStr = now.toLocaleString("en-US", { timeZone: tz });
       const localDate = new Date(localStr);
-      const dayOfWeek = localDate.getDay(); // 0=Sun, 1=Mon
+      const dayOfWeek = localDate.getDay();
       const hour = localDate.getHours();
 
       if (dayOfWeek !== 1 || hour !== 8) continue;
 
       // Compute last week (Mon-Sun)
       const weekEnd = new Date(localDate);
-      weekEnd.setDate(weekEnd.getDate() - weekEnd.getDay()); // last Sunday
+      weekEnd.setDate(weekEnd.getDate() - weekEnd.getDay());
       const weekStart = new Date(weekEnd);
-      weekStart.setDate(weekStart.getDate() - 6); // Monday before that
+      weekStart.setDate(weekStart.getDate() - 6);
 
       const weekStartStr = weekStart.toISOString().split("T")[0];
       const weekEndStr = weekEnd.toISOString().split("T")[0];
@@ -90,7 +100,7 @@ serve(async (req) => {
       let hasError = false;
       let errorMsg = "";
 
-      // Step 1: Ingest reviews (service-role call, no user auth needed)
+      // Step 1: Ingest reviews
       try {
         const ingestResp = await fetch(
           `${Deno.env.get("SUPABASE_URL")}/functions/v1/ingest-reviews`,

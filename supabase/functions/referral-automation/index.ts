@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const PULSE_FEE_RATE = 0.05; // 5% platform fee
@@ -14,10 +14,40 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // --- Auth: require user JWT + venue admin (financial operations) ---
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
+
+    if (!authHeader.startsWith("Bearer ") || !token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    let userId: string;
+
+    // Allow service role key for internal/cron calls
+    if (token === serviceKey) {
+      userId = "service-role";
+    } else {
+      const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: claimsData, error: claimsErr } = await supabaseAuth.auth.getClaims(token);
+      if (claimsErr || !claimsData?.claims?.sub) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = claimsData.claims.sub as string;
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
     const { venue_id, action } = await req.json();
 
@@ -28,7 +58,37 @@ serve(async (req) => {
       });
     }
 
-    // Action: calculate_commissions - recalculate commissions for all verified but unpaid bookings
+    // Verify venue membership (skip for service role)
+    if (userId !== "service-role") {
+      // For financial actions, require venue admin (owner)
+      const isFinancialAction = action === "calculate_commissions" || action === "generate_payout_batch";
+
+      if (isFinancialAction) {
+        const { data: isAdmin } = await supabaseAdmin.rpc("is_venue_admin", {
+          check_venue_id: venue_id,
+          check_user_id: userId,
+        });
+        if (!isAdmin) {
+          return new Response(JSON.stringify({ error: "Forbidden: venue admin required" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } else {
+        const { data: isMember } = await supabaseAdmin.rpc("is_venue_member", {
+          check_venue_id: venue_id,
+          check_user_id: userId,
+        });
+        if (!isMember) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
+    // Action: calculate_commissions
     if (action === "calculate_commissions") {
       const { data: bookings } = await supabaseAdmin
         .from("referral_bookings")
@@ -43,7 +103,6 @@ serve(async (req) => {
         });
       }
 
-      // Get all relevant offers
       const offerIds = [...new Set(bookings.filter(b => b.offer_id).map(b => b.offer_id))];
       const { data: offers } = await supabaseAdmin
         .from("venue_offers")
@@ -63,16 +122,12 @@ serve(async (req) => {
 
         await supabaseAdmin
           .from("referral_bookings")
-          .update({
-            commission_amount: commission,
-            commission_status: "pending",
-          })
+          .update({ commission_amount: commission, commission_status: "pending" })
           .eq("id", booking.id);
 
         processed++;
       }
 
-      // Emit event
       await supabaseAdmin.from("system_events").insert({
         venue_id,
         event_type: "commissions_calculated",
@@ -84,12 +139,11 @@ serve(async (req) => {
       });
     }
 
-    // Action: generate_payout_batch - create a payout batch for a given month
+    // Action: generate_payout_batch
     if (action === "generate_payout_batch") {
       const now = new Date();
       const batchMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-      // Check if batch already exists
       const { data: existing } = await supabaseAdmin
         .from("payout_batches")
         .select("id")
@@ -103,7 +157,6 @@ serve(async (req) => {
         });
       }
 
-      // Get all approved bookings without a payout
       const { data: approved } = await supabaseAdmin
         .from("referral_bookings")
         .select("id, referrer_id, commission_amount, venue_id")
@@ -122,7 +175,6 @@ serve(async (req) => {
       const pulseFee = totalCommission * PULSE_FEE_RATE;
       const netPayout = totalCommission - pulseFee;
 
-      // Create batch
       const { data: batch, error: batchErr } = await supabaseAdmin
         .from("payout_batches")
         .insert({
@@ -138,7 +190,6 @@ serve(async (req) => {
 
       if (batchErr) throw batchErr;
 
-      // Create payout items
       for (const booking of approved) {
         const commission = Number(booking.commission_amount) || 0;
         const fee = commission * PULSE_FEE_RATE;
@@ -154,7 +205,6 @@ serve(async (req) => {
         });
       }
 
-      // Emit events
       await supabaseAdmin.from("system_events").insert({
         venue_id,
         event_type: "payout_batch_created",
@@ -172,11 +222,10 @@ serve(async (req) => {
       });
     }
 
-    // Action: generate_referral_actions - create action feed items for referral module
+    // Action: generate_referral_actions
     if (action === "generate_referral_actions") {
       const actions: any[] = [];
 
-      // Pending verifications
       const { count: pendingVerify } = await supabaseAdmin
         .from("referral_bookings")
         .select("*", { count: "exact", head: true })
@@ -197,7 +246,6 @@ serve(async (req) => {
         });
       }
 
-      // Pending payout approval
       const { count: pendingPayout } = await supabaseAdmin
         .from("payout_batches")
         .select("*", { count: "exact", head: true })
@@ -217,7 +265,6 @@ serve(async (req) => {
         });
       }
 
-      // New partner invites pending
       const { count: pendingPartners } = await supabaseAdmin
         .from("referrers")
         .select("*", { count: "exact", head: true })
@@ -237,7 +284,6 @@ serve(async (req) => {
         });
       }
 
-      // Guest UGC submissions
       const { count: pendingUGC } = await supabaseAdmin
         .from("guest_submissions")
         .select("*", { count: "exact", head: true })
@@ -257,7 +303,6 @@ serve(async (req) => {
         });
       }
 
-      // Upsert all actions
       for (const action of actions) {
         await supabaseAdmin.from("action_feed_items").upsert(action, {
           onConflict: "venue_id,action_type",
@@ -265,11 +310,10 @@ serve(async (req) => {
         });
       }
 
-      // Clean up resolved actions
       const types = ["referral_verify_bills", "referral_approve_payout", "referral_partner_pending", "guest_ugc_review"];
       const activeTypes = actions.map(a => a.action_type);
       const toClean = types.filter(t => !activeTypes.includes(t));
-      
+
       for (const t of toClean) {
         await supabaseAdmin
           .from("action_feed_items")
