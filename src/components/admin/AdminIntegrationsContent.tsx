@@ -213,7 +213,7 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
   };
 
   const isDirty   = value.trim().length > 0;
-  const inputType = apiKey.is_secret && !visible ? 'password' : 'text';
+  const inputType = 'password';
   const isSerpApi = apiKey.key_name === 'SERPAPI_API_KEY';
   const isGemini  = apiKey.key_name === 'GEMINI_IMAGE_API_KEY';
 
