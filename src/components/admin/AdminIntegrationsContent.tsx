@@ -241,7 +241,7 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
             type={inputType}
             value={value}
             onChange={e => setValue(e.target.value)}
-            placeholder={apiKey.is_secret ? '••••••••••' : 'Enter value…'}
+            placeholder={apiKey.is_configured ? '••••••••••• (enter new value to update)' : 'Enter value…'}
             className="pr-10 font-mono text-sm"
           />
           {apiKey.is_secret && (
