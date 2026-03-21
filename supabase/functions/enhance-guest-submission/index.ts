@@ -55,6 +55,18 @@ serve(async (req) => {
 
     if (subErr || !sub) throw new Error("Submission not found");
 
+    // --- Venue membership check ---
+    const { data: isMember } = await sb.rpc("is_venue_member", {
+      check_venue_id: (sub as any).venue_id,
+      check_user_id: userId,
+    });
+    if (!isMember) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const venueName = (sub as any).venues?.name || "the venue";
     const city = (sub as any).venues?.city || "";
 
