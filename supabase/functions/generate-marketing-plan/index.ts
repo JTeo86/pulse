@@ -14,19 +14,65 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Accept venue_id from body or generate for all venues
     const body = await req.json().catch(() => ({}));
     let venueIds: string[] = [];
 
+    // --- Auth ---
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "");
+
     if (body.venue_id) {
+      // Single venue: require user JWT + membership
+      if (!authHeader.startsWith("Bearer ") || !token) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Allow service role key for internal calls
+      if (token !== serviceKey) {
+        const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: claimsData, error: claimsErr } = await supabaseAuth.auth.getClaims(token);
+        if (claimsErr || !claimsData?.claims?.sub) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const userId = claimsData.claims.sub as string;
+        const adminClient = createClient(supabaseUrl, serviceKey);
+        const { data: isMember } = await adminClient.rpc("is_venue_member", {
+          check_venue_id: body.venue_id,
+          check_user_id: userId,
+        });
+        if (!isMember) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
       venueIds = [body.venue_id];
     } else {
+      // Batch mode: require service role key
+      if (token !== serviceKey) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const supabase = createClient(supabaseUrl, serviceKey);
       const { data: venues } = await supabase.from("venues").select("id");
       venueIds = (venues || []).map((v: any) => v.id);
     }
 
+    const supabase = createClient(supabaseUrl, serviceKey);
     const results: any[] = [];
 
     for (const venueId of venueIds) {
