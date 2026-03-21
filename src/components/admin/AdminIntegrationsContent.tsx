@@ -175,7 +175,7 @@ function GeminiTestButton() {
 // ─── Single key row ───────────────────────────────────────────────────────────
 function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => void }) {
   const { toast } = useToast();
-  const [value,    setValue]    = useState(apiKey.key_value ?? '');
+  const [value,    setValue]    = useState('');
   const [visible,  setVisible]  = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [checking, setChecking] = useState(false);
