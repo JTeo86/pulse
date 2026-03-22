@@ -5,7 +5,8 @@ import {
   Upload, Camera, Wand2, Download,
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info, ChevronDown, ChevronRight,
-  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2
+  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2,
+  Target, Layout
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
@@ -17,12 +18,53 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-type RealismMode = 'safe' | 'enhanced' | 'editorial';
+// ── Types ────────────────────────────────────────────────────────────
 
-const REALISM_MODES: { key: RealismMode; label: string; desc: string; detail: string; warn?: boolean }[] = [
-  { key: 'safe', label: 'Safe', desc: 'Closest to original', detail: 'Professional cleanup with minimal scene change. Same angle, same setting — just sharper and better exposed.' },
-  { key: 'enhanced', label: 'Enhanced', desc: 'Balanced improvement', detail: 'Better lighting, polish, and styling while staying believable. Social-media ready with professional food photography quality.' },
-  { key: 'editorial', label: 'Editorial', desc: 'Premium campaign', detail: 'Most dramatic result. Cinematic lighting, luxury styling, and magazine-quality presentation. Ideal for hero posts and ads.', warn: true },
+type GenerationMode = 'authentic_social' | 'enhanced' | 'campaign' | 'reference_match';
+type BackgroundAdherence = 'exact' | 'close' | 'inspired' | 'creative';
+type CompositionFidelity = 'locked' | 'mostly_preserved' | 'flexible' | 'creative';
+
+const GENERATION_MODES: { key: GenerationMode; label: string; desc: string; detail: string; warn?: boolean; default?: boolean }[] = [
+  {
+    key: 'authentic_social',
+    label: 'Authentic Social',
+    desc: 'Closest to real life',
+    detail: 'Best for everyday venue social posts. Gentle cleanup while keeping it real and believable.',
+    default: true,
+  },
+  {
+    key: 'enhanced',
+    label: 'Enhanced',
+    desc: 'Cleaner and polished',
+    detail: 'Professional food photography quality while still looking authentic and on-brand.',
+  },
+  {
+    key: 'campaign',
+    label: 'Campaign',
+    desc: 'Premium hero content',
+    detail: 'Dramatic, cinematic, magazine-quality. Ideal for ads, launches, and promotions.',
+    warn: true,
+  },
+  {
+    key: 'reference_match',
+    label: 'Reference Match',
+    desc: 'Match your venue photos',
+    detail: 'Strongest match to your uploaded venue and background references.',
+  },
+];
+
+const BACKGROUND_OPTIONS: { key: BackgroundAdherence; label: string; desc: string }[] = [
+  { key: 'exact', label: 'Exact venue setting', desc: 'Keep original background as-is' },
+  { key: 'close', label: 'Close venue setting', desc: 'Same feel, cleaned up' },
+  { key: 'inspired', label: 'Venue-inspired', desc: 'Elevated version of your environment' },
+  { key: 'creative', label: 'Creative / editorial', desc: 'Premium styled background' },
+];
+
+const COMPOSITION_OPTIONS: { key: CompositionFidelity; label: string; desc: string }[] = [
+  { key: 'locked', label: 'Locked', desc: 'Exact same angle and framing' },
+  { key: 'mostly_preserved', label: 'Mostly preserved', desc: 'Same shot, slightly improved' },
+  { key: 'flexible', label: 'Flexible', desc: 'May reframe for better composition' },
+  { key: 'creative', label: 'Creative', desc: 'Full creative freedom' },
 ];
 
 const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[] = [
@@ -35,6 +77,17 @@ const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[]
   { type: 'not_our_style', label: 'Not Our Style', icon: Eye },
   { type: 'dish_changed', label: 'Dish Changed', icon: Utensils },
 ];
+
+// ── Mode defaults map ────────────────────────────────────────────────
+
+const MODE_DEFAULTS: Record<GenerationMode, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
+  authentic_social: { bg: 'exact', comp: 'mostly_preserved' },
+  enhanced: { bg: 'close', comp: 'mostly_preserved' },
+  campaign: { bg: 'inspired', comp: 'flexible' },
+  reference_match: { bg: 'exact', comp: 'locked' },
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -78,6 +131,8 @@ function StyleSourceBadge({ sources, refCount }: { sources: string[]; refCount: 
   );
 }
 
+// ── Main Component ───────────────────────────────────────────────────
+
 export default function TheEditorPage() {
   const { user } = useAuth();
   const { currentVenue, isAdmin } = useVenue();
@@ -87,7 +142,6 @@ export default function TheEditorPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Plan context from URL params (passed from Production workspace)
   const planId = searchParams.get('plan_id');
   const briefId = searchParams.get('brief_id');
   const briefTitle = searchParams.get('brief_title');
@@ -97,7 +151,11 @@ export default function TheEditorPage() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [realismMode, setRealismMode] = useState<RealismMode>('safe');
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('authentic_social');
+  const [backgroundAdherence, setBackgroundAdherence] = useState<BackgroundAdherence>('exact');
+  const [compositionFidelity, setCompositionFidelity] = useState<CompositionFidelity>('mostly_preserved');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const [generating, setGenerating] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobResult, setJobResult] = useState<{
@@ -109,6 +167,7 @@ export default function TheEditorPage() {
     edited_asset_id: string | null;
     storage_path: string | null;
     output_asset_id: string | null;
+    generation_mode: string;
   } | null>(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
@@ -116,6 +175,14 @@ export default function TheEditorPage() {
 
   const [usage] = useState({ pro_photo_used: 3, reel_used: 1 });
   const [limits] = useState({ monthly_pro_photo_credits: 50, monthly_reel_credits: 20 });
+
+  // When mode changes, update bg/comp defaults
+  const handleModeChange = (mode: GenerationMode) => {
+    setGenerationMode(mode);
+    const defaults = MODE_DEFAULTS[mode];
+    setBackgroundAdherence(defaults.bg);
+    setCompositionFidelity(defaults.comp);
+  };
 
   const handleFileDrop = useCallback(async (file: File) => {
     if (!currentVenue || !user) return;
@@ -162,7 +229,7 @@ export default function TheEditorPage() {
           created_by: user.id,
           status: 'queued',
           mode: 'pro_photo',
-          realism_mode: realismMode,
+          realism_mode: generationMode,
           style_preset: 'clean_studio',
         })
         .select('id')
@@ -171,8 +238,6 @@ export default function TheEditorPage() {
       if (createError) throw createError;
       setJobId(newJob.id);
 
-      // skip_library_save: true for standard editor flow (review-first)
-      // Plan-driven flows still auto-save when planId is set
       const skipLibrarySave = !planId;
 
       const { data, error: fnError } = await supabase.functions.invoke('editor-generate-pro-photo', {
@@ -181,7 +246,9 @@ export default function TheEditorPage() {
           venue_id: currentVenue.id,
           sourceFileBase64: base64,
           sourceFileName: uploadedFile.name,
-          realism_mode: realismMode,
+          realism_mode: generationMode,
+          background_adherence: backgroundAdherence,
+          composition_fidelity: compositionFidelity,
           skip_library_save: skipLibrarySave,
         },
       });
@@ -197,9 +264,9 @@ export default function TheEditorPage() {
           edited_asset_id: data.edited_asset_id || null,
           storage_path: data.storage_path || null,
           output_asset_id: data.output_asset_id || null,
+          generation_mode: data.generation_mode || generationMode,
         });
 
-        // Auto-link to plan if we came from Production workspace
         if (planId && data.output_asset_id) {
           try {
             await supabase.from('plan_assets').insert({
@@ -219,12 +286,9 @@ export default function TheEditorPage() {
         }
       }
 
-      const backToPlan = planId ? ` Asset linked to campaign.` : '';
       toast({
         title: 'Pro Photo generated',
-        description: planId
-          ? `Saved to Content Library.${backToPlan}`
-          : `Review the result below.`,
+        description: planId ? 'Saved to Content Library. Asset linked to campaign.' : 'Review the result below.',
       });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Generation failed', description: err.message || 'AI photo generation failed. Please try again.' });
@@ -273,7 +337,6 @@ export default function TheEditorPage() {
         created_by: user.id,
       });
 
-      // If approved, optionally save as style reference for future generations
       if (feedbackType === 'approved' || feedbackType === 'great_match') {
         const finalUrl = jobResult.final_image_url;
         const storagePath = `venues/${currentVenue.id}/style/approved_output/${crypto.randomUUID()}.jpg`;
@@ -308,7 +371,7 @@ export default function TheEditorPage() {
   const handleSaveToLibrary = async () => {
     if (!currentVenue || !user || !jobResult?.storage_path || savedToLibrary) return;
     try {
-      const modeLabel = realismMode.charAt(0).toUpperCase() + realismMode.slice(1);
+      const modeLabel = generationMode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       await supabase.from('content_assets').insert({
         venue_id: currentVenue.id,
         created_by: user.id,
@@ -321,14 +384,16 @@ export default function TheEditorPage() {
         mime_type: 'image/jpeg',
         derived_from_editor_job_id: jobId || null,
         source_job_id: jobResult.edited_asset_id || null,
-        prompt_snapshot: { generation_mode: realismMode },
+        prompt_snapshot: { generation_mode: generationMode },
         generation_settings: {
-          generation_mode: realismMode,
+          generation_mode: generationMode,
+          background_adherence: backgroundAdherence,
+          composition_fidelity: compositionFidelity,
           reference_count: jobResult.reference_count,
           style_sources: jobResult.style_sources,
         },
         metadata: {
-          generation_mode: realismMode,
+          generation_mode: generationMode,
           edited_asset_id: jobResult.edited_asset_id || null,
         },
       });
@@ -344,7 +409,6 @@ export default function TheEditorPage() {
       handleReset();
       return;
     }
-    // Remove the stored file since user doesn't want it
     try {
       await supabase.storage.from('venue-assets').remove([jobResult.storage_path]);
     } catch { /* best effort */ }
@@ -354,7 +418,6 @@ export default function TheEditorPage() {
 
   const handleRejectAndRegenerate = async (feedbackType: string) => {
     await handleFeedback(feedbackType);
-    // Reset result but keep the upload so user can regenerate
     setJobResult(null);
     setJobId(null);
     setFidelityConfirmed(false);
@@ -362,6 +425,8 @@ export default function TheEditorPage() {
     setSavedToLibrary(false);
     toast({ title: 'Feedback recorded', description: 'Try generating again with different settings.' });
   };
+
+  const modeLabel = generationMode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   return (
     <motion.div
@@ -386,6 +451,7 @@ export default function TheEditorPage() {
           </button>
         </div>
       )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -464,31 +530,104 @@ export default function TheEditorPage() {
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileInput} />
           </div>
 
-          {/* Realism mode */}
+          {/* Generation Mode */}
           <div className={cn('rounded-xl border bg-card p-5 space-y-4 transition-opacity', !uploadedFile ? 'opacity-40 pointer-events-none' : '')}>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">2</span>
-              <span className="font-medium text-sm">Realism Mode</span>
+              <span className="font-medium text-sm">Generation Mode</span>
             </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {REALISM_MODES.map((m) => (
+            <div className="grid grid-cols-2 gap-1.5">
+              {GENERATION_MODES.map((m) => (
                 <button
                   key={m.key}
-                  onClick={() => setRealismMode(m.key)}
+                  onClick={() => handleModeChange(m.key)}
                   className={cn(
-                    'p-2.5 rounded-lg border text-left transition-all',
-                    realismMode === m.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/30'
+                    'p-2.5 rounded-lg border text-left transition-all relative',
+                    generationMode === m.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/30'
                   )}
                 >
+                  {m.default && (
+                    <span className="absolute top-1 right-1 text-[8px] font-bold uppercase text-accent bg-accent/10 rounded px-1">Default</span>
+                  )}
                   <p className="text-xs font-semibold flex items-center gap-1">
                     {m.label}
                     {m.warn && <AlertTriangle className="w-3 h-3 text-amber-500" />}
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight font-medium">{m.desc}</p>
-                  <p className="text-[9px] text-muted-foreground/70 mt-0.5 leading-tight">{m.detail}</p>
+                  <p className="text-[9px] text-muted-foreground/70 mt-1 leading-tight">{m.detail}</p>
                 </button>
               ))}
             </div>
+
+            {/* Advanced controls toggle */}
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+            >
+              {showAdvanced ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <span className="font-medium">Advanced controls</span>
+            </button>
+
+            <AnimatePresence>
+              {showAdvanced && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden space-y-4"
+                >
+                  {/* Background Adherence */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                      <Target className="w-3.5 h-3.5 text-accent" />
+                      Background Adherence
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {BACKGROUND_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.key}
+                          onClick={() => setBackgroundAdherence(opt.key)}
+                          className={cn(
+                            'p-2 rounded-md border text-left transition-all',
+                            backgroundAdherence === opt.key
+                              ? 'border-accent bg-accent/10'
+                              : 'border-border/50 hover:border-border'
+                          )}
+                        >
+                          <p className="text-[10px] font-semibold">{opt.label}</p>
+                          <p className="text-[9px] text-muted-foreground leading-tight">{opt.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Composition Fidelity */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                      <Layout className="w-3.5 h-3.5 text-accent" />
+                      Composition Fidelity
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {COMPOSITION_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.key}
+                          onClick={() => setCompositionFidelity(opt.key)}
+                          className={cn(
+                            'p-2 rounded-md border text-left transition-all',
+                            compositionFidelity === opt.key
+                              ? 'border-accent bg-accent/10'
+                              : 'border-border/50 hover:border-border'
+                          )}
+                        >
+                          <p className="text-[10px] font-semibold">{opt.label}</p>
+                          <p className="text-[9px] text-muted-foreground leading-tight">{opt.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Generate CTA */}
             <Button
@@ -548,7 +687,7 @@ export default function TheEditorPage() {
                   </div>
                 </div>
 
-                {/* Style Source + Inputs Used */}
+                {/* Inputs Used */}
                 <div className="rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Inputs Used</p>
@@ -556,21 +695,19 @@ export default function TheEditorPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="flex items-center gap-2">
-                      <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                      <Camera className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Mode:</span>
+                      <span className="font-medium capitalize">{(jobResult.generation_mode || generationMode).replace(/_/g, ' ')}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Target className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-muted-foreground">Background:</span>
-                      <span className="font-medium">
-                        {jobResult.background_source === 'brand_references' ? 'Brand References' : 'AI Generated'}
-                      </span>
+                      <span className="font-medium capitalize">{backgroundAdherence.replace(/_/g, ' ')}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Wand2 className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Provider:</span>
-                      <span className="font-medium">Gemini</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Star className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Realism:</span>
-                      <span className="font-medium capitalize">{realismMode}</span>
+                      <Layout className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Composition:</span>
+                      <span className="font-medium capitalize">{compositionFidelity.replace(/_/g, ' ')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Info className="w-3.5 h-3.5 text-muted-foreground" />
@@ -644,10 +781,10 @@ export default function TheEditorPage() {
                   </button>
                 )}
 
-                {!fidelityConfirmed && realismMode === 'editorial' && isAdmin && (
+                {!fidelityConfirmed && generationMode === 'campaign' && isAdmin && (
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                     <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                    <p className="text-sm text-destructive">Consider regenerating using Safe mode to better represent the actual dish.</p>
+                    <p className="text-sm text-destructive">Campaign mode outputs are heavily stylized. Consider using Authentic Social for everyday social content.</p>
                   </div>
                 )}
 
@@ -667,7 +804,7 @@ export default function TheEditorPage() {
                     )}
                   </Button>
                   <Button
-                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${realismMode}-${Date.now()}.jpg`)}
+                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${generationMode}-${Date.now()}.jpg`)}
                     variant="outline"
                     className="w-full gap-1.5 text-xs"
                     size="sm"
