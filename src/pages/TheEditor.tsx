@@ -254,35 +254,40 @@ export default function TheEditorPage() {
       });
       if (fnError) throw fnError;
 
-      if (data?.final_image_url) {
-        setJobResult({
-          final_image_url: data.final_image_url,
-          final_image_variants: (data.final_image_variants as Record<string, string>) || {},
-          reference_count: data.reference_count || 0,
-          background_source: data.background_source || 'ai_generated',
-          style_sources: data.style_sources || [],
-          edited_asset_id: data.edited_asset_id || null,
-          storage_path: data.storage_path || null,
-          output_asset_id: data.output_asset_id || null,
-          generation_mode: data.generation_mode || generationMode,
-        });
+      // Validate the response contains a usable result
+      if (!data?.final_image_url) {
+        const errDetail = data?.error || 'No image was returned by the AI. Please try again.';
+        console.error('[Pro Photo] Generation succeeded but no final_image_url in response:', data);
+        throw new Error(errDetail);
+      }
 
-        if (planId && data.output_asset_id) {
-          try {
-            await supabase.from('plan_assets').insert({
-              plan_id: planId,
-              asset_brief_id: briefId || null,
-              content_asset_id: data.output_asset_id,
-              asset_type: 'image',
-              status: 'created',
-              metadata: { source: 'pro_photo', brief_title: briefTitle || null },
-            });
-            if (briefId) {
-              await supabase.from('plan_asset_briefs').update({ status: 'created' }).eq('id', briefId);
-            }
-          } catch (linkErr) {
-            console.error('Failed to auto-link asset to plan:', linkErr);
+      setJobResult({
+        final_image_url: data.final_image_url,
+        final_image_variants: (data.final_image_variants as Record<string, string>) || {},
+        reference_count: data.reference_count || 0,
+        background_source: data.background_source || 'ai_generated',
+        style_sources: data.style_sources || [],
+        edited_asset_id: data.edited_asset_id || null,
+        storage_path: data.storage_path || null,
+        output_asset_id: data.output_asset_id || null,
+        generation_mode: data.generation_mode || generationMode,
+      });
+
+      if (planId && data.output_asset_id) {
+        try {
+          await supabase.from('plan_assets').insert({
+            plan_id: planId,
+            asset_brief_id: briefId || null,
+            content_asset_id: data.output_asset_id,
+            asset_type: 'image',
+            status: 'created',
+            metadata: { source: 'pro_photo', brief_title: briefTitle || null },
+          });
+          if (briefId) {
+            await supabase.from('plan_asset_briefs').update({ status: 'created' }).eq('id', briefId);
           }
+        } catch (linkErr) {
+          console.error('Failed to auto-link asset to plan:', linkErr);
         }
       }
 
