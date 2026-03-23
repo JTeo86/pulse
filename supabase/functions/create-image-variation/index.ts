@@ -171,7 +171,7 @@ ANTI-DUPLICATION:
 - If the result would look nearly identical to the parent, push harder on the variation strategy.
 - Do NOT produce a near-duplicate with only pixel-level differences.
 
-Parent image mode was: ${parentMode || 'safe'}.
+Parent image mode was: ${parentMode || 'authentic_social'}.
 ${notes ? `Additional notes: ${notes}` : ''}
 
 The result must be a professional restaurant marketing photograph.
