@@ -30,8 +30,16 @@ async function uploadResultBuffer(
 ): Promise<{ publicUrl: string; storagePath: string }> {
   const { ext, contentType } = sniffImage(buffer);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
-  await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
-  return { publicUrl: '', storagePath: path };
+  const { error: uploadError } = await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
+  if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
+  // venue-assets is a private bucket — create a long-lived signed URL
+  const { data: signedData, error: signError } = await supabase.storage
+    .from('venue-assets')
+    .createSignedUrl(path, 60 * 60 * 24 * 365); // 1 year
+  if (signError || !signedData?.signedUrl) {
+    throw new Error(`Failed to create signed URL: ${signError?.message || 'no URL returned'}`);
+  }
+  return { publicUrl: signedData.signedUrl, storagePath: path };
 }
 
 async function resolveSourceImage(
