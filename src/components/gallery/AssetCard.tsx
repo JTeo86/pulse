@@ -164,10 +164,7 @@ export function AssetCard({
             </Badge>
             {(asset.metadata as any)?.generation_mode && (
               <Badge variant="outline" className="text-[9px] bg-card/80 text-foreground/70 border-0">
-                {(asset.metadata as any).generation_mode === 'safe' ? 'Safe' :
-                 (asset.metadata as any).generation_mode === 'enhanced' ? 'Enhanced' :
-                 (asset.metadata as any).generation_mode === 'editorial' ? 'Editorial' :
-                 (asset.metadata as any).generation_mode}
+                {({ authentic_social: 'Authentic Social', enhanced: 'Enhanced', campaign: 'Campaign', reference_match: 'Reference Match', safe: 'Safe', editorial: 'Editorial' } as Record<string, string>)[(asset.metadata as any).generation_mode] || (asset.metadata as any).generation_mode}
               </Badge>
             )}
           </div>
