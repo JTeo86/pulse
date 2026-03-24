@@ -20,36 +20,36 @@ import { cn } from '@/lib/utils';
 
 // ── Types ────────────────────────────────────────────────────────────
 
-type GenerationMode = 'authentic_social' | 'enhanced' | 'campaign' | 'reference_match';
+type ShotType = 'tabletop' | 'angle' | 'venue_match' | 'campaign';
 type BackgroundAdherence = 'exact' | 'close' | 'inspired' | 'creative';
 type CompositionFidelity = 'locked' | 'mostly_preserved' | 'flexible' | 'creative';
 
-const GENERATION_MODES: { key: GenerationMode; label: string; desc: string; detail: string; warn?: boolean; default?: boolean }[] = [
+const SHOT_TYPES: { key: ShotType; label: string; desc: string; detail: string; warn?: boolean; default?: boolean }[] = [
   {
-    key: 'authentic_social',
-    label: 'Authentic Social',
-    desc: 'Closest to real life',
-    detail: 'Best for everyday venue social posts. Gentle cleanup while keeping it real and believable.',
+    key: 'tabletop',
+    label: 'Tabletop',
+    desc: 'Clean top-down or near top-down',
+    detail: 'Simple, realistic, and perfect for everyday posts. Feels like your own photo, just better.',
     default: true,
   },
   {
-    key: 'enhanced',
-    label: 'Enhanced',
-    desc: 'Cleaner and polished',
-    detail: 'Professional food photography quality while still looking authentic and on-brand.',
+    key: 'angle',
+    label: 'Angle Shot',
+    desc: 'Natural side or 3/4 angle',
+    detail: 'Depth and perspective while staying simple and believable for social media.',
+  },
+  {
+    key: 'venue_match',
+    label: 'Venue Match',
+    desc: 'Match your venue photos',
+    detail: 'Strongest alignment to your uploaded venue and background references.',
   },
   {
     key: 'campaign',
     label: 'Campaign',
     desc: 'Premium hero content',
-    detail: 'Dramatic, cinematic, magazine-quality. Ideal for ads, launches, and promotions.',
+    detail: 'Dramatic, stylized marketing image. Best for ads, launches, and promotions.',
     warn: true,
-  },
-  {
-    key: 'reference_match',
-    label: 'Reference Match',
-    desc: 'Match your venue photos',
-    detail: 'Strongest match to your uploaded venue and background references.',
   },
 ];
 
@@ -78,13 +78,13 @@ const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[]
   { type: 'dish_changed', label: 'Dish Changed', icon: Utensils },
 ];
 
-// ── Mode defaults map ────────────────────────────────────────────────
+// ── Shot Type defaults map ───────────────────────────────────────────
 
-const MODE_DEFAULTS: Record<GenerationMode, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
-  authentic_social: { bg: 'exact', comp: 'mostly_preserved' },
-  enhanced: { bg: 'close', comp: 'mostly_preserved' },
+const SHOT_TYPE_DEFAULTS: Record<ShotType, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
+  tabletop: { bg: 'exact', comp: 'mostly_preserved' },
+  angle: { bg: 'close', comp: 'mostly_preserved' },
+  venue_match: { bg: 'exact', comp: 'locked' },
   campaign: { bg: 'inspired', comp: 'flexible' },
-  reference_match: { bg: 'exact', comp: 'locked' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ export default function TheEditorPage() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [generationMode, setGenerationMode] = useState<GenerationMode>('authentic_social');
+  const [shotType, setShotType] = useState<ShotType>('tabletop');
   const [backgroundAdherence, setBackgroundAdherence] = useState<BackgroundAdherence>('exact');
   const [compositionFidelity, setCompositionFidelity] = useState<CompositionFidelity>('mostly_preserved');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -167,7 +167,7 @@ export default function TheEditorPage() {
     edited_asset_id: string | null;
     storage_path: string | null;
     output_asset_id: string | null;
-    generation_mode: string;
+    shot_type: string;
   } | null>(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
@@ -176,10 +176,10 @@ export default function TheEditorPage() {
   const [usage] = useState({ pro_photo_used: 3, reel_used: 1 });
   const [limits] = useState({ monthly_pro_photo_credits: 50, monthly_reel_credits: 20 });
 
-  // When mode changes, update bg/comp defaults
-  const handleModeChange = (mode: GenerationMode) => {
-    setGenerationMode(mode);
-    const defaults = MODE_DEFAULTS[mode];
+  // When shot type changes, update bg/comp defaults
+  const handleShotTypeChange = (type: ShotType) => {
+    setShotType(type);
+    const defaults = SHOT_TYPE_DEFAULTS[type];
     setBackgroundAdherence(defaults.bg);
     setCompositionFidelity(defaults.comp);
   };
@@ -229,7 +229,7 @@ export default function TheEditorPage() {
           created_by: user.id,
           status: 'queued',
           mode: 'pro_photo',
-          realism_mode: generationMode,
+          realism_mode: shotType,
           style_preset: 'clean_studio',
         })
         .select('id')
@@ -246,7 +246,7 @@ export default function TheEditorPage() {
           venue_id: currentVenue.id,
           sourceFileBase64: base64,
           sourceFileName: uploadedFile.name,
-          realism_mode: generationMode,
+          realism_mode: shotType,
           background_adherence: backgroundAdherence,
           composition_fidelity: compositionFidelity,
           skip_library_save: skipLibrarySave,
@@ -270,7 +270,7 @@ export default function TheEditorPage() {
         edited_asset_id: data.edited_asset_id || null,
         storage_path: data.storage_path || null,
         output_asset_id: data.output_asset_id || null,
-        generation_mode: data.generation_mode || generationMode,
+        shot_type: data.generation_mode || shotType,
       });
 
       if (planId && data.output_asset_id) {
@@ -376,29 +376,29 @@ export default function TheEditorPage() {
   const handleSaveToLibrary = async () => {
     if (!currentVenue || !user || !jobResult?.storage_path || savedToLibrary) return;
     try {
-      const modeLabel = generationMode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const shotLabel = shotType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       await supabase.from('content_assets').insert({
         venue_id: currentVenue.id,
         created_by: user.id,
         asset_type: 'image',
         source_type: 'generated_image',
         status: 'draft',
-        title: `Pro Photo · ${modeLabel}`,
+        title: `Pro Photo · ${shotLabel}`,
         storage_path: jobResult.storage_path,
         public_url: jobResult.final_image_url,
         mime_type: 'image/jpeg',
         derived_from_editor_job_id: jobId || null,
         source_job_id: jobResult.edited_asset_id || null,
-        prompt_snapshot: { generation_mode: generationMode },
+        prompt_snapshot: { generation_mode: shotType },
         generation_settings: {
-          generation_mode: generationMode,
+          generation_mode: shotType,
           background_adherence: backgroundAdherence,
           composition_fidelity: compositionFidelity,
           reference_count: jobResult.reference_count,
           style_sources: jobResult.style_sources,
         },
         metadata: {
-          generation_mode: generationMode,
+          generation_mode: shotType,
           edited_asset_id: jobResult.edited_asset_id || null,
         },
       });
@@ -431,7 +431,7 @@ export default function TheEditorPage() {
     toast({ title: 'Feedback recorded', description: 'Try generating again with different settings.' });
   };
 
-  const modeLabel = generationMode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const shotLabel = shotType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   return (
     <motion.div
@@ -535,20 +535,20 @@ export default function TheEditorPage() {
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileInput} />
           </div>
 
-          {/* Generation Mode */}
+          {/* Shot Type */}
           <div className={cn('rounded-xl border bg-card p-5 space-y-4 transition-opacity', !uploadedFile ? 'opacity-40 pointer-events-none' : '')}>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">2</span>
-              <span className="font-medium text-sm">Generation Mode</span>
+              <span className="font-medium text-sm">Shot Type</span>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
-              {GENERATION_MODES.map((m) => (
+              {SHOT_TYPES.map((m) => (
                 <button
                   key={m.key}
-                  onClick={() => handleModeChange(m.key)}
+                  onClick={() => handleShotTypeChange(m.key)}
                   className={cn(
                     'p-2.5 rounded-lg border text-left transition-all relative',
-                    generationMode === m.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/30'
+                    shotType === m.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/30'
                   )}
                 >
                   {m.default && (
@@ -701,8 +701,8 @@ export default function TheEditorPage() {
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="flex items-center gap-2">
                       <Camera className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Mode:</span>
-                      <span className="font-medium capitalize">{(jobResult.generation_mode || generationMode).replace(/_/g, ' ')}</span>
+                      <span className="text-muted-foreground">Shot:</span>
+                      <span className="font-medium capitalize">{(jobResult.shot_type || shotType).replace(/_/g, ' ')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Target className="w-3.5 h-3.5 text-muted-foreground" />
@@ -786,10 +786,10 @@ export default function TheEditorPage() {
                   </button>
                 )}
 
-                {!fidelityConfirmed && generationMode === 'campaign' && isAdmin && (
+                {!fidelityConfirmed && shotType === 'campaign' && isAdmin && (
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                     <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                    <p className="text-sm text-destructive">Campaign mode outputs are heavily stylized. Consider using Authentic Social for everyday social content.</p>
+                    <p className="text-sm text-destructive">Campaign mode outputs are heavily stylized. Consider using Tabletop for everyday social content.</p>
                   </div>
                 )}
 
@@ -809,7 +809,7 @@ export default function TheEditorPage() {
                     )}
                   </Button>
                   <Button
-                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${generationMode}-${Date.now()}.jpg`)}
+                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${shotType}-${Date.now()}.jpg`)}
                     variant="outline"
                     className="w-full gap-1.5 text-xs"
                     size="sm"

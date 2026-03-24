@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
     // Determine parent mode from metadata
     const parentSettings = (parent.generation_settings || {}) as Record<string, unknown>;
     const parentMetadata = (parent.metadata || {}) as Record<string, unknown>;
-    const parentMode = (parentMetadata.generation_mode as string) || (parentSettings.generation_mode as string) || (parentSettings.realism_mode as string) || 'authentic_social';
+    const parentMode = (parentMetadata.generation_mode as string) || (parentSettings.generation_mode as string) || (parentSettings.realism_mode as string) || 'tabletop';
 
     // Determine lineage
     const rootAssetId = parent.root_asset_id || parent.id;

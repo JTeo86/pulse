@@ -32,10 +32,9 @@ async function uploadResultBuffer(
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
   const { error: uploadError } = await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
   if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
-  // venue-assets is a private bucket — create a long-lived signed URL
   const { data: signedData, error: signError } = await supabase.storage
     .from('venue-assets')
-    .createSignedUrl(path, 60 * 60 * 24 * 365); // 1 year
+    .createSignedUrl(path, 60 * 60 * 24 * 365);
   if (signError || !signedData?.signedUrl) {
     throw new Error(`Failed to create signed URL: ${signError?.message || 'no URL returned'}`);
   }
@@ -90,7 +89,6 @@ interface VenueStyleContext {
   styleSourcesUsed: string[];
   venueName: string;
   venueCity: string;
-  // Aggregated negative feedback counts for mode tuning
   feedbackSignals: Record<string, number>;
 }
 
@@ -146,7 +144,6 @@ async function buildVenueStyleContext(
     dishLockRules = Array.isArray(sp.dish_lock_rules) ? sp.dish_lock_rules : [];
   }
 
-  // Aggregate feedback signals
   const feedbackSignals: Record<string, number> = {};
   const negativeFeedback = feedbackResult.data || [];
   if (negativeFeedback.length > 0) {
@@ -229,16 +226,14 @@ async function buildVenueStyleContext(
   };
 }
 
-// ── Background Adherence + Composition Fidelity ──────────────────────
+// ── Shot Types & Generation Plan ─────────────────────────────────────
 
+type ShotType = 'tabletop' | 'angle' | 'venue_match' | 'campaign';
 type BackgroundAdherence = 'exact' | 'close' | 'inspired' | 'creative';
 type CompositionFidelity = 'locked' | 'mostly_preserved' | 'flexible' | 'creative';
-type GenerationMode = 'authentic_social' | 'enhanced' | 'campaign' | 'reference_match';
-
-// ── Structured Generation Plan ───────────────────────────────────────
 
 interface GenerationPlan {
-  mode: GenerationMode;
+  mode: ShotType;
   background_adherence: BackgroundAdherence;
   composition_fidelity: CompositionFidelity;
   preservation_level: number;
@@ -251,45 +246,75 @@ interface GenerationPlan {
   realism_guardrails: string;
 }
 
+// Normalize legacy mode values to new shot types
+function normalizeShotType(mode: string): ShotType {
+  const map: Record<string, ShotType> = {
+    tabletop: 'tabletop',
+    angle: 'angle',
+    venue_match: 'venue_match',
+    campaign: 'campaign',
+    // Legacy mappings
+    authentic_social: 'tabletop',
+    enhanced: 'angle',
+    reference_match: 'venue_match',
+    safe: 'tabletop',
+    editorial: 'campaign',
+  };
+  return map[mode] || 'tabletop';
+}
+
 function buildGenerationPlan(
-  mode: string,
+  rawMode: string,
   backgroundAdherence?: string,
   compositionFidelity?: string,
   feedbackSignals?: Record<string, number>,
 ): GenerationPlan {
-  // Apply feedback-driven bias: if venue repeatedly rejects as too_generic/not_our_style,
-  // tighten background adherence and reduce styling for non-campaign modes
+  const mode = normalizeShotType(rawMode);
   const genericRejects = (feedbackSignals?.too_generic || 0) + (feedbackSignals?.not_our_style || 0);
   const hasAuthenticityBias = genericRejects >= 4;
 
   switch (mode) {
-    case 'authentic_social':
+    case 'tabletop':
       return {
-        mode: 'authentic_social',
+        mode: 'tabletop',
         background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
         composition_fidelity: (compositionFidelity as CompositionFidelity) || 'mostly_preserved',
         preservation_level: 0.92,
         composition_flexibility: 0.08,
         background_flexibility: 0.1,
         plating_refinement: 0.03,
-        lighting_drama: 0.12,
+        lighting_drama: 0.1,
         styling_intensity: 0.05,
         prop_invention: false,
         realism_guardrails: 'strict',
       };
-    case 'enhanced':
+    case 'angle':
       return {
-        mode: 'enhanced',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || (hasAuthenticityBias ? 'close' : 'close'),
+        mode: 'angle',
+        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
         composition_fidelity: (compositionFidelity as CompositionFidelity) || 'mostly_preserved',
-        preservation_level: 0.75,
-        composition_flexibility: 0.25,
-        background_flexibility: hasAuthenticityBias ? 0.3 : 0.4,
-        plating_refinement: 0.2,
-        lighting_drama: 0.35,
-        styling_intensity: hasAuthenticityBias ? 0.25 : 0.4,
+        preservation_level: 0.82,
+        composition_flexibility: 0.18,
+        background_flexibility: hasAuthenticityBias ? 0.2 : 0.3,
+        plating_refinement: 0.1,
+        lighting_drama: 0.2,
+        styling_intensity: hasAuthenticityBias ? 0.1 : 0.2,
         prop_invention: false,
-        realism_guardrails: 'moderate',
+        realism_guardrails: 'strict',
+      };
+    case 'venue_match':
+      return {
+        mode: 'venue_match',
+        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
+        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
+        preservation_level: 0.95,
+        composition_flexibility: 0.05,
+        background_flexibility: 0.05,
+        plating_refinement: 0.02,
+        lighting_drama: 0.1,
+        styling_intensity: 0.05,
+        prop_invention: false,
+        realism_guardrails: 'strict',
       };
     case 'campaign':
       return {
@@ -305,22 +330,8 @@ function buildGenerationPlan(
         prop_invention: true,
         realism_guardrails: 'relaxed',
       };
-    case 'reference_match':
-      return {
-        mode: 'reference_match',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
-        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
-        preservation_level: 0.95,
-        composition_flexibility: 0.05,
-        background_flexibility: 0.05,
-        plating_refinement: 0.02,
-        lighting_drama: 0.1,
-        styling_intensity: 0.05,
-        prop_invention: false,
-        realism_guardrails: 'strict',
-      };
     default:
-      return buildGenerationPlan('authentic_social', backgroundAdherence, compositionFidelity, feedbackSignals);
+      return buildGenerationPlan('tabletop', backgroundAdherence, compositionFidelity, feedbackSignals);
   }
 }
 
@@ -337,7 +348,6 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
   const venueTone = toneMap[ctx.venueTone] || toneMap.casual;
   const hasRefs = ctx.referenceImages.length > 0;
 
-  // ── DISH LOCK — always strict ──
   const dishLockExtra = ctx.dishLockRules.length > 0
     ? '\n' + ctx.dishLockRules.map(r => `- ${r}`).join('\n')
     : '';
@@ -433,14 +443,21 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
       break;
   }
 
-  // ── MODE-SPECIFIC LIGHTING + POLISH + ENVIRONMENT ──
+  // ── SHOT-TYPE-SPECIFIC DIRECTIVES ──
+  let shotDirective: string;
   let lightingDirective: string;
   let polishDirective: string;
   let environmentDirective: string;
   let modeGoal: string;
 
-  if (plan.mode === 'authentic_social') {
-    lightingDirective = `LIGHTING — GENTLE, AUTHENTIC CORRECTION:
+  if (plan.mode === 'tabletop') {
+    shotDirective = `SHOT TYPE — TABLETOP:
+- Present the dish in a clean top-down or near top-down composition (overhead or slight tilt, max 15° off vertical).
+- Frame the dish centrally with simple, balanced negative space.
+- The perspective should feel natural — like someone standing over the table looking down at the food.
+- Keep the composition clean and uncluttered.`;
+
+    lightingDirective = `LIGHTING — GENTLE, NATURAL:
 - Correct white balance if the image has a noticeable color cast.
 - Fix minor underexposure or overexposure gently.
 - Do NOT add dramatic directional lighting, rim lighting, backlighting, or spotlight effects.
@@ -448,7 +465,7 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - The lighting should feel natural and real — like a phone photo in good conditions.
 - Subtle warmth is acceptable. Avoid cool/clinical tones.`;
 
-    polishDirective = `POLISH — SUBTLE, INVISIBLE CLEANUP:
+    polishDirective = `POLISH — SUBTLE, INVISIBLE:
 - Slightly sharpen for clarity. Minor noise reduction if needed.
 - Subtle contrast adjustment — do not over-punch colors.
 - The output should look like the same photo taken with slightly better conditions.
@@ -456,43 +473,84 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Colors must remain natural and believable.
 - This should look like a real photo, NOT like it was professionally retouched.`;
 
-    environmentDirective = `ENVIRONMENT — DO NOT CHANGE:
+    environmentDirective = `ENVIRONMENT — SIMPLE, UNCHANGED:
+- Use a simple table surface: wood, stone, or whatever the original photo shows.
 - Keep existing tableware, napkins, cutlery, glasses exactly as they are.
 - Do NOT add new props, accessories, garnishes, or decorative elements.
 - Do NOT upgrade or change crockery, glassware, or table items.
-- Do NOT remove minor real-world imperfections (slightly wrinkled napkin, water spot on glass).
-- Preserve the authentic, lived-in restaurant environment.
-- The scene should feel honest and real.`;
+- Preserve minor real-world imperfections (slightly wrinkled napkin, natural table grain).
+- The scene should feel honest and real — "we took a better photo ourselves."`;
 
     modeGoal = `GOAL: The output must look like the same photograph, gently improved — as if the person had slightly better phone camera skills and the lighting was a bit better that day. A real person scrolling Instagram should NOT be able to tell this was AI-enhanced. It should feel completely authentic, believable, and suitable for posting as genuine venue content. This is NOT a studio shot — it's an improved version of a real moment.`;
 
-  } else if (plan.mode === 'enhanced') {
-    lightingDirective = `LIGHTING — PROFESSIONAL BUT NATURAL:
-- Apply soft, natural-looking directional lighting improvement.
-- Gentle fill to reduce harsh shadows under the dish.
-- Create natural-looking highlights on food surfaces where appropriate.
-- Use warm color temperature for an inviting feel.
-- Add moderate depth-of-field — gently blur background while keeping the full dish sharp.
-- The lighting should feel professional but NOT theatrical or cinematic.`;
+  } else if (plan.mode === 'angle') {
+    shotDirective = `SHOT TYPE — ANGLE SHOT:
+- Present the dish from a natural 3/4 angle or side perspective (approximately 30-60° from horizontal).
+- Create natural depth with the dish as the hero in the foreground.
+- Use subtle shallow depth-of-field — the dish sharp, background gently soft.
+- The angle should feel like someone sitting at the table took this photo naturally.
+- Avoid extreme low angles or overly dramatic perspectives.`;
 
-    polishDirective = `POLISH — SOCIAL-MEDIA READY:
-- Increase micro-contrast on the food for texture pop.
-- Boost color saturation moderately — vibrant but still natural.
-- Professional sharpening on the dish area.
-- The image should feel "Instagram-worthy" — clearly better than a casual phone photo.
-- Still believable and authentic — NOT stock-photo-like.
-- Avoid over-processing that makes the image look fake or artificial.`;
+    lightingDirective = `LIGHTING — NATURAL WITH DEPTH:
+- Apply soft, natural-looking lighting that creates gentle depth.
+- Subtle fill to reduce harsh shadows under the dish without flattening.
+- Warm color temperature for an inviting, appetizing feel.
+- Do NOT add theatrical, cinematic, or dramatic lighting effects.
+- The lighting should feel like good natural restaurant light — a nice window seat or well-lit table.`;
 
-    environmentDirective = `ENVIRONMENT — TASTEFUL, MINIMAL UPGRADE:
-- You may add ONE simple, elegant prop if it improves the scene: a clean napkin or a fork.
-- Props must be minimal and must not compete with the dish.
-- Do NOT create an elaborate styled scene.
-- Ensure any added elements match the venue's actual style level.
-- The table setting should suggest a real restaurant, not a photo studio.`;
+    polishDirective = `POLISH — CLEAN BUT BELIEVABLE:
+- Increase micro-contrast slightly on the food for texture.
+- Moderate sharpening on the dish area.
+- Colors should be natural and appetizing — NOT oversaturated.
+- The image should feel like a good food photo taken by someone who knows what they're doing.
+- Avoid stock-photo-level polish. Keep it real.`;
 
-    modeGoal = `GOAL: The output should look noticeably better than the original — like a professional food photographer captured it with proper lighting in a real restaurant. It should feel elevated but still authentic and believable. Someone viewing this should think "wow, their food photography has gotten really good" — not "that looks AI-generated."`;
+    environmentDirective = `ENVIRONMENT — SIMPLE BACKGROUND:
+- Use a simple background: table surface, bar counter, or neutral venue context.
+- Do NOT create elaborate styled scenes.
+- Do NOT add props that weren't in the original.
+- Keep the background non-distracting — the dish is the star.
+- Vary background subtly — avoid repeating the same generic surface across all shots.`;
 
-  } else if (plan.mode === 'campaign') {
+    modeGoal = `GOAL: The output should look like a natural, well-composed social media food photo. It should have depth and visual interest from the angle, while still feeling authentic and believable. Think "talented food blogger" quality, not "ad agency campaign." Someone should think "that looks delicious" not "that looks AI-generated."`;
+
+  } else if (plan.mode === 'venue_match') {
+    shotDirective = `SHOT TYPE — VENUE MATCH:
+- Preserve the original camera angle and framing as closely as possible.
+- The composition should match what the venue's own photography looks like.
+- If venue references show a particular style of composition, mirror that.
+- Do NOT impose a composition style that differs from the venue's actual imagery.`;
+
+    lightingDirective = `LIGHTING — MATCH REFERENCES:
+- Match the lighting conditions shown in the provided reference images as closely as possible.
+- Reproduce the same light direction, warmth, and shadow character visible in references.
+- If no references are provided, use gentle natural lighting similar to the original photo.
+- Do NOT add lighting effects that contradict the reference images.`;
+
+    polishDirective = `POLISH — REFERENCE-MATCHED:
+- Apply only the level of polish visible in the reference images.
+- If references show casual real-world scenes, keep the output similarly casual.
+- If references show polished imagery, match that level.
+- Do NOT exceed the polish level shown in references.`;
+
+    environmentDirective = `ENVIRONMENT — STRICT REFERENCE MATCHING:
+- Reproduce the table surface, tableware style, and environmental details from reference images.
+- Match the color palette, material textures, and ambient feel of the references.
+- If references show wood tables, use wood. If they show marble, use marble.
+- The output environment should be recognizably the same as the reference images.
+- Do NOT add elements not visible in any reference image.
+- If NO references are provided, preserve the original photo's environment with minimal cleanup.`;
+
+    modeGoal = `GOAL: The output should look like it was taken in the same exact environment shown in the reference images, with the uploaded dish placed naturally into that setting. The reference images define the target environment — match them as faithfully as possible.`;
+
+  } else {
+    // campaign
+    shotDirective = `SHOT TYPE — CAMPAIGN:
+- Use a dramatic, visually striking composition optimized for marketing impact.
+- You may recompose freely for maximum visual appeal.
+- Use the most compelling angle for the dish — hero close-up, dramatic tilt, or elegant overhead.
+- The composition should feel intentional, editorial, and premium.`;
+
     lightingDirective = `LIGHTING — CINEMATIC & DRAMATIC:
 - Use dramatic directional lighting — strong key light creating pronounced shadows.
 - Add rim lighting or edge light to separate the dish from the background.
@@ -517,46 +575,25 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Include subtle premium details: fabric texture, reflective surfaces, fine tableware.`;
 
     modeGoal = `GOAL: The output should look dramatically elevated — like a premium ad campaign or magazine editorial. Think high-end food magazine cover or luxury hotel marketing. The dish is the hero in a cinematic, aspirational scene. This mode is explicitly for campaign/hero content, not everyday social posting.`;
-
-  } else {
-    // reference_match
-    lightingDirective = `LIGHTING — MATCH REFERENCES EXACTLY:
-- Match the lighting conditions shown in the provided reference images as closely as possible.
-- Reproduce the same light direction, warmth, and shadow character visible in references.
-- If no references are provided, use gentle natural lighting similar to the original photo.
-- Do NOT add lighting effects that contradict the reference images.`;
-
-    polishDirective = `POLISH — MINIMAL, REFERENCE-MATCHED:
-- Apply only the level of polish visible in the reference images.
-- If references show casual real-world scenes, keep the output similarly casual.
-- If references show polished imagery, match that level.
-- Do NOT exceed the polish level shown in references.`;
-
-    environmentDirective = `ENVIRONMENT — STRICT REFERENCE MATCHING:
-- Reproduce the table surface, tableware style, and environmental details from reference images.
-- Match the color palette, material textures, and ambient feel of the references.
-- If references show wood tables, use wood. If they show marble, use marble.
-- The output environment should be recognizably the same as the reference images.
-- Do NOT add elements not visible in any reference image.`;
-
-    modeGoal = `GOAL: The output should look like it was taken in the same exact environment shown in the reference images, with the uploaded dish placed naturally into that setting. The reference images define the target environment — match them as faithfully as possible. If no references are provided, preserve the original photo's environment with only minimal cleanup.`;
   }
 
-  // ── ANTI-GENERIC RULES (always applied) ──
+  // ── ANTI-GENERIC RULES ──
   const antiGenericRules = `
 AUTHENTICITY RULES (ALWAYS APPLY):
 - Do NOT make the image look like a stock photo or generic food advertisement.
 - Do NOT default to marble surfaces, white linen, or luxury glass unless the venue references specifically show these materials.
 - Do NOT invent elaborate table styling that does not match the venue's actual environment.
-- Real-world imperfections (slightly uneven napkin, natural table grain, small water drops) add authenticity — preserve them in Authentic Social and Reference Match modes.
+- Avoid repeating the same generic background across multiple images — vary surfaces and textures subtly.
+- Real-world imperfections add authenticity — preserve them in Tabletop, Angle, and Venue Match modes.
 - The output should feel like it belongs on a REAL restaurant's social media, not a stock photo website.
-- Avoid the "perfect AI look" — slight natural variation makes images more believable.${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, or garnishes not present in the original photo.' : ''}`;
+- Avoid the "perfect AI look" — slight natural variation makes images more believable.
+- Avoid overly perfect symmetry, hyper-polished unrealistic lighting, fake reflections, and cinematic effects (except in Campaign mode).${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, or garnishes not present in the original photo.' : ''}`;
 
   const refInstruction = hasRefs
     ? `Match the specific table surfaces, interior atmosphere, lighting mood, and color palette of the provided reference images. The references show the REAL venue environment — reproduce it faithfully.`
     : `Generate a restaurant environment matching this style: ${venueTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''} Keep it authentic and believable.`;
 
-  return `You are editing a food photograph for restaurant marketing. Mode: ${plan.mode.toUpperCase()}.
+  return `You are editing a food photograph for restaurant marketing. Shot Type: ${plan.mode.toUpperCase()}.
 
 STRICT DISH LOCK RULES — THESE OVERRIDE EVERYTHING:
 - The food in the uploaded image must remain visually identical.
@@ -569,6 +606,8 @@ STRICT DISH LOCK RULES — THESE OVERRIDE EVERYTHING:
 - Do NOT add text, watermarks, logos, or any overlays.
 - Do NOT make the image look artificial, illustrated, or AI-generated.${dishLockExtra}
 ${styleSection}${negativeSection}
+
+${shotDirective}
 
 ${compositionDirective}
 
@@ -644,14 +683,14 @@ Deno.serve(async (req) => {
 
     // ═══ STEP 3 — Build structured generation plan + prompt ═══
     const plan = buildGenerationPlan(
-      realism_mode || 'authentic_social',
+      realism_mode || 'tabletop',
       background_adherence,
       composition_fidelity,
       ctx.feedbackSignals,
     );
     const prompt = buildPrompt(ctx, plan);
 
-    console.log(`[PRO-PHOTO] Mode=${plan.mode} bg_adherence=${plan.background_adherence} comp_fidelity=${plan.composition_fidelity} prop_invention=${plan.prop_invention}`);
+    console.log(`[PRO-PHOTO] ShotType=${plan.mode} bg_adherence=${plan.background_adherence} comp_fidelity=${plan.composition_fidelity} prop_invention=${plan.prop_invention}`);
 
     // Build Gemini message content
     const messageContent: any[] = [
@@ -803,7 +842,7 @@ Deno.serve(async (req) => {
         uploadId = uploadData?.id || null;
       }
 
-      const modeLabel = plan.mode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const shotLabel = plan.mode.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
       try {
         const { data: contentAsset } = await supabase.from('content_assets').insert({
           venue_id,
@@ -811,7 +850,7 @@ Deno.serve(async (req) => {
           asset_type: 'image',
           source_type: 'generated_image',
           status: 'draft',
-          title: `Pro Photo · ${modeLabel}`,
+          title: `Pro Photo · ${shotLabel}`,
           storage_path: finalStoragePath,
           public_url: finalUrl,
           mime_type: 'image/jpeg',
