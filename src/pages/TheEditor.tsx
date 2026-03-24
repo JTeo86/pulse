@@ -28,21 +28,21 @@ const SHOT_TYPES: { key: ShotType; label: string; desc: string; detail: string; 
   {
     key: 'tabletop',
     label: 'Tabletop',
-    desc: 'Clean top-down or near top-down',
-    detail: 'Simple, realistic, and perfect for everyday posts. Feels like your own photo, just better.',
+    desc: 'Top-down on a simple textured surface',
+    detail: 'Authentic everyday mode. Keeps the dish stable with minimal, texture-led backgrounds and no scene building.',
     default: true,
   },
   {
     key: 'angle',
     label: 'Angle Shot',
-    desc: 'Natural side or 3/4 angle',
-    detail: 'Depth and perspective while staying simple and believable for social media.',
+    desc: 'Natural 3/4 or side perspective',
+    detail: 'Adds depth while staying simple and believable. Uses clean textured backdrops instead of staged restaurant scenes.',
   },
   {
     key: 'venue_match',
     label: 'Venue Match',
-    desc: 'Match your venue photos',
-    detail: 'Strongest alignment to your uploaded venue and background references.',
+    desc: 'Literal venue reference match',
+    detail: 'Strongest reference-faithful mode. Prioritizes uploaded venue photos over generic styling.',
   },
   {
     key: 'campaign',
@@ -54,10 +54,10 @@ const SHOT_TYPES: { key: ShotType; label: string; desc: string; detail: string; 
 ];
 
 const BACKGROUND_OPTIONS: { key: BackgroundAdherence; label: string; desc: string }[] = [
-  { key: 'exact', label: 'Exact venue setting', desc: 'Keep original background as-is' },
-  { key: 'close', label: 'Close venue setting', desc: 'Same feel, cleaned up' },
-  { key: 'inspired', label: 'Venue-inspired', desc: 'Elevated version of your environment' },
-  { key: 'creative', label: 'Creative / editorial', desc: 'Premium styled background' },
+  { key: 'exact', label: 'Exact / strict match', desc: 'Closest possible match to source or references' },
+  { key: 'close', label: 'Close / authentic', desc: 'Same material language with light cleanup only' },
+  { key: 'inspired', label: 'Inspired / elevated', desc: 'Moderate creative lift while staying venue-aware' },
+  { key: 'creative', label: 'Creative / editorial', desc: 'Maximum styling freedom (best for Campaign)' },
 ];
 
 const COMPOSITION_OPTIONS: { key: CompositionFidelity; label: string; desc: string }[] = [
@@ -81,7 +81,7 @@ const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[]
 // ── Shot Type defaults map ───────────────────────────────────────────
 
 const SHOT_TYPE_DEFAULTS: Record<ShotType, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
-  tabletop: { bg: 'exact', comp: 'mostly_preserved' },
+  tabletop: { bg: 'close', comp: 'mostly_preserved' },
   angle: { bg: 'close', comp: 'mostly_preserved' },
   venue_match: { bg: 'exact', comp: 'locked' },
   campaign: { bg: 'inspired', comp: 'flexible' },

@@ -244,6 +244,7 @@ interface GenerationPlan {
   styling_intensity: number;
   prop_invention: boolean;
   realism_guardrails: string;
+  reference_strength: 'light' | 'medium' | 'strong' | 'literal';
 }
 
 // Normalize legacy mode values to new shot types
@@ -277,44 +278,47 @@ function buildGenerationPlan(
     case 'tabletop':
       return {
         mode: 'tabletop',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
+        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
         composition_fidelity: (compositionFidelity as CompositionFidelity) || 'mostly_preserved',
-        preservation_level: 0.92,
+        preservation_level: 0.94,
         composition_flexibility: 0.08,
-        background_flexibility: 0.1,
+        background_flexibility: 0.06,
         plating_refinement: 0.03,
-        lighting_drama: 0.1,
+        lighting_drama: 0.06,
         styling_intensity: 0.05,
         prop_invention: false,
         realism_guardrails: 'strict',
+        reference_strength: 'medium',
       };
     case 'angle':
       return {
         mode: 'angle',
         background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
         composition_fidelity: (compositionFidelity as CompositionFidelity) || 'mostly_preserved',
-        preservation_level: 0.82,
-        composition_flexibility: 0.18,
-        background_flexibility: hasAuthenticityBias ? 0.2 : 0.3,
-        plating_refinement: 0.1,
-        lighting_drama: 0.2,
-        styling_intensity: hasAuthenticityBias ? 0.1 : 0.2,
+        preservation_level: 0.9,
+        composition_flexibility: 0.12,
+        background_flexibility: hasAuthenticityBias ? 0.1 : 0.14,
+        plating_refinement: 0.06,
+        lighting_drama: 0.14,
+        styling_intensity: hasAuthenticityBias ? 0.06 : 0.1,
         prop_invention: false,
         realism_guardrails: 'strict',
+        reference_strength: 'medium',
       };
     case 'venue_match':
       return {
         mode: 'venue_match',
         background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
         composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
-        preservation_level: 0.95,
-        composition_flexibility: 0.05,
-        background_flexibility: 0.05,
+        preservation_level: 0.97,
+        composition_flexibility: 0.03,
+        background_flexibility: 0.01,
         plating_refinement: 0.02,
-        lighting_drama: 0.1,
-        styling_intensity: 0.05,
+        lighting_drama: 0.06,
+        styling_intensity: 0.02,
         prop_invention: false,
         realism_guardrails: 'strict',
+        reference_strength: 'literal',
       };
     case 'campaign':
       return {
@@ -329,6 +333,7 @@ function buildGenerationPlan(
         styling_intensity: 0.7,
         prop_invention: true,
         realism_guardrails: 'relaxed',
+        reference_strength: 'light',
       };
     default:
       return buildGenerationPlan('tabletop', backgroundAdherence, compositionFidelity, feedbackSignals);
@@ -347,6 +352,7 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
   };
   const venueTone = toneMap[ctx.venueTone] || toneMap.casual;
   const hasRefs = ctx.referenceImages.length > 0;
+  const referencesRequired = plan.mode === 'venue_match' && hasRefs;
 
   const dishLockExtra = ctx.dishLockRules.length > 0
     ? '\n' + ctx.dishLockRules.map(r => `- ${r}`).join('\n')
@@ -370,24 +376,23 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
   let backgroundDirective: string;
   switch (plan.background_adherence) {
     case 'exact':
-      backgroundDirective = `BACKGROUND — EXACT VENUE SETTING:
+      backgroundDirective = `BACKGROUND — EXACT MATCH:
 - Keep the original background and table surface as-is.
 - Only remove obvious distractions (trash, fingers, phone edges, stray crumbs).
 - Do NOT replace the table, tablecloth, countertop, or any surface.
 - Do NOT add any new surfaces, textures, or materials not already visible.
 - The setting must look like the same real location where the photo was taken.
-- Preserve all existing tableware, glasses, napkins — they are part of the authentic scene.
+- Preserve all existing tableware, glasses, napkins only if they are already in the source.
 - Do NOT invent or add props, decorations, flowers, candles, or styling elements.`;
       break;
     case 'close':
-      backgroundDirective = `BACKGROUND — CLOSE VENUE SETTING:
-- Keep the general character of the original background — same type of surface, similar color family.
-- You may clean up and subtly refine the table/surface, but it must remain recognizably similar.
-- Do NOT switch to a completely different surface type (e.g., don't replace wood with marble).
-- Minor cleanup of distracting background elements is acceptable.
-- Add gentle depth-of-field blur to the background to make the dish the clear focal point.
-- Preserve the authentic restaurant/bar/café feel — this should look like the real venue.
-- Do NOT add elaborate props or staging that was not present.`;
+      backgroundDirective = `BACKGROUND — CLOSE AUTHENTIC TEXTURE:
+- Keep a simple, texture-led surface only (stone, plaster, matte painted, worn wood, subtle composite).
+- Stay in the same material family and tonal palette as source/references.
+- No room scene building. No furniture clusters. No place settings unless they already exist in the source.
+- Keep depth subtle and believable. The background should support the dish, not tell a separate story.
+- Do NOT switch to generic luxury defaults (white marble, crystal-heavy setups, staged fine-dining scenes).
+- Do NOT add elaborate props or styling not already visible.`;
       break;
     case 'inspired':
       backgroundDirective = `BACKGROUND — VENUE-INSPIRED SETTING:
@@ -455,7 +460,8 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Present the dish in a clean top-down or near top-down composition (overhead or slight tilt, max 15° off vertical).
 - Frame the dish centrally with simple, balanced negative space.
 - The perspective should feel natural — like someone standing over the table looking down at the food.
-- Keep the composition clean and uncluttered.`;
+- Keep the composition clean and uncluttered.
+- Use a simple textured surface only; do NOT build a room scene.`;
 
     lightingDirective = `LIGHTING — GENTLE, NATURAL:
 - Correct white balance if the image has a noticeable color cast.
@@ -473,12 +479,12 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Colors must remain natural and believable.
 - This should look like a real photo, NOT like it was professionally retouched.`;
 
-    environmentDirective = `ENVIRONMENT — SIMPLE, UNCHANGED:
-- Use a simple table surface: wood, stone, or whatever the original photo shows.
-- Keep existing tableware, napkins, cutlery, glasses exactly as they are.
-- Do NOT add new props, accessories, garnishes, or decorative elements.
-- Do NOT upgrade or change crockery, glassware, or table items.
-- Preserve minor real-world imperfections (slightly wrinkled napkin, natural table grain).
+    environmentDirective = `ENVIRONMENT — SIMPLE TEXTURED BACKGROUND MODE:
+- Allowed background is primarily one textured surface (stone, plaster, matte paint, subtle venue-toned texture, natural wood).
+- No chairs, no room depth storytelling, no visible dining room build-out.
+- No added table settings, glasses, cutlery, flowers, menus, fabrics, or decorative props unless present in source.
+- Preserve minor real-world imperfections and believable lighting falloff.
+- Prioritize dish fidelity above all else; background must remain secondary and understated.
 - The scene should feel honest and real — "we took a better photo ourselves."`;
 
     modeGoal = `GOAL: The output must look like the same photograph, gently improved — as if the person had slightly better phone camera skills and the lighting was a bit better that day. A real person scrolling Instagram should NOT be able to tell this was AI-enhanced. It should feel completely authentic, believable, and suitable for posting as genuine venue content. This is NOT a studio shot — it's an improved version of a real moment.`;
@@ -506,11 +512,11 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Avoid stock-photo-level polish. Keep it real.`;
 
     environmentDirective = `ENVIRONMENT — SIMPLE BACKGROUND:
-- Use a simple background: table surface, bar counter, or neutral venue context.
-- Do NOT create elaborate styled scenes.
+- Use a simple textured surface with slight depth (table or counter feel), not a full room scene.
+- No furniture-heavy composition, no luxury dining-room templates, no staged place settings.
 - Do NOT add props that weren't in the original.
 - Keep the background non-distracting — the dish is the star.
-- Vary background subtly — avoid repeating the same generic surface across all shots.`;
+- Vary background subtly inside venue material language — avoid repeated generic marble/luxury looks.`;
 
     modeGoal = `GOAL: The output should look like a natural, well-composed social media food photo. It should have depth and visual interest from the angle, while still feeling authentic and believable. Think "talented food blogger" quality, not "ad agency campaign." Someone should think "that looks delicious" not "that looks AI-generated."`;
 
@@ -587,11 +593,26 @@ AUTHENTICITY RULES (ALWAYS APPLY):
 - Real-world imperfections add authenticity — preserve them in Tabletop, Angle, and Venue Match modes.
 - The output should feel like it belongs on a REAL restaurant's social media, not a stock photo website.
 - Avoid the "perfect AI look" — slight natural variation makes images more believable.
-- Avoid overly perfect symmetry, hyper-polished unrealistic lighting, fake reflections, and cinematic effects (except in Campaign mode).${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, or garnishes not present in the original photo.' : ''}`;
+- Avoid overly perfect symmetry, hyper-polished unrealistic lighting, fake reflections, and cinematic effects (except in Campaign mode).
+- Never fabricate a luxury dining-room backdrop for TABLETOP or ANGLE modes.${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, menus, or garnishes not present in the original photo.' : ''}`;
 
   const refInstruction = hasRefs
     ? `Match the specific table surfaces, interior atmosphere, lighting mood, and color palette of the provided reference images. The references show the REAL venue environment — reproduce it faithfully.`
     : `Generate a restaurant environment matching this style: ${venueTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''} Keep it authentic and believable.`;
+
+  const referencePriorityDirective = referencesRequired
+    ? `REFERENCE PRIORITY — LITERAL MODE (HIGHEST PRIORITY):
+- The uploaded venue references are primary anchors, not inspiration.
+- Match visible cues from references: surface material, wall tone, lighting quality, framing distance, and lens feel.
+- If a creative choice conflicts with references, references win.
+- Keep creative drift near zero.
+- Do NOT use generic defaults that are absent from references.`
+    : hasRefs
+      ? `REFERENCE PRIORITY:
+- Use references as strong guidance for materials, palette, and lighting.
+- Keep results venue-faithful and avoid generic template backgrounds.`
+      : `REFERENCE PRIORITY:
+- No venue references available. Stay conservative, authentic, and non-generic.`;
 
   return `You are editing a food photograph for restaurant marketing. Shot Type: ${plan.mode.toUpperCase()}.
 
@@ -622,6 +643,8 @@ ${antiGenericRules}
 
 VENUE REFERENCE:
 ${refInstruction}
+${referencePriorityDirective}
+Reference strength: ${plan.reference_strength.toUpperCase()}.
 ${ctx.venueName ? `Venue: "${ctx.venueName}"` : ''}
 ${ctx.brandSummary ? `Brand notes: ${ctx.brandSummary.substring(0, 400)}` : ''}
 
@@ -692,12 +715,21 @@ Deno.serve(async (req) => {
 
     console.log(`[PRO-PHOTO] ShotType=${plan.mode} bg_adherence=${plan.background_adherence} comp_fidelity=${plan.composition_fidelity} prop_invention=${plan.prop_invention}`);
 
+    const sortedReferences = [...ctx.referenceImages].sort((a, b) => {
+      if (plan.mode !== 'venue_match') return 0;
+      const aTableBias = /(table|surface|atmosphere)/i.test(a.channel) ? 1 : 0;
+      const bTableBias = /(table|surface|atmosphere)/i.test(b.channel) ? 1 : 0;
+      return bTableBias - aTableBias;
+    });
+    const referenceLimit = plan.mode === 'venue_match' ? 6 : 3;
+    const selectedReferences = sortedReferences.slice(0, referenceLimit);
+
     // Build Gemini message content
     const messageContent: any[] = [
       { type: 'text', text: prompt },
       { type: 'image_url', image_url: { url: `data:${sourceMime};base64,${sourceBase64}` } },
     ];
-    for (const ref of ctx.referenceImages) {
+    for (const ref of selectedReferences) {
       messageContent.push({ type: 'image_url', image_url: { url: ref.url } });
     }
 
@@ -728,7 +760,7 @@ Deno.serve(async (req) => {
         model_name: 'google/gemini-2.5-flash-image',
         prompt_text: prompt.substring(0, 2000),
         style_summary_used: ctx.styleSummary || null,
-        reference_asset_ids: ctx.referenceImages.map(r => r.assetId),
+        reference_asset_ids: selectedReferences.map(r => r.assetId),
         style_sources_used: ctx.styleSourcesUsed,
         dish_lock_applied: true,
         status: 'failed',
@@ -755,7 +787,7 @@ Deno.serve(async (req) => {
         model_name: 'google/gemini-2.5-flash-image',
         prompt_text: prompt.substring(0, 2000),
         style_summary_used: ctx.styleSummary || null,
-        reference_asset_ids: ctx.referenceImages.map(r => r.assetId),
+        reference_asset_ids: selectedReferences.map(r => r.assetId),
         style_sources_used: ctx.styleSourcesUsed,
         dish_lock_applied: true,
         status: 'failed',
@@ -811,8 +843,8 @@ Deno.serve(async (req) => {
       settings_json: {
         realism_mode: plan.mode,
         generation_plan: plan,
-        reference_count: ctx.referenceImages.length,
-        reference_asset_ids: ctx.referenceImages.map(r => r.assetId),
+        reference_count: selectedReferences.length,
+        reference_asset_ids: selectedReferences.map(r => r.assetId),
         model: 'google/gemini-2.5-flash-image',
         generation_time_ms: generationTimeMs,
         style_sources: ctx.styleSourcesUsed,
@@ -833,7 +865,7 @@ Deno.serve(async (req) => {
         storage_path: finalStoragePath,
         uploaded_by: user.id,
         status: 'ready',
-        notes: `Pro Photo · ${plan.mode} (${ctx.referenceImages.length} refs)`,
+        notes: `Pro Photo · ${plan.mode} (${selectedReferences.length} refs)`,
       }).select('id').single();
 
       if (uploadError) {
@@ -863,7 +895,7 @@ Deno.serve(async (req) => {
           generation_settings: {
             generation_mode: plan.mode,
             generation_plan: plan,
-            reference_count: ctx.referenceImages.length,
+            reference_count: selectedReferences.length,
             model: 'google/gemini-2.5-flash-image',
             generation_time_ms: generationTimeMs,
             style_sources: ctx.styleSourcesUsed,
@@ -891,7 +923,7 @@ Deno.serve(async (req) => {
         model_name: 'google/gemini-2.5-flash-image',
         prompt_text: prompt.substring(0, 2000),
         style_summary_used: ctx.styleSummary || null,
-        reference_asset_ids: ctx.referenceImages.map(r => r.assetId),
+        reference_asset_ids: selectedReferences.map(r => r.assetId),
         style_sources_used: ctx.styleSourcesUsed,
         dish_lock_applied: true,
         retry_count: 0,
@@ -917,7 +949,7 @@ Deno.serve(async (req) => {
       final_image_url: finalUrl,
       final_image_variants: finalImageVariants,
       storage_path: finalStoragePath,
-      reference_count: ctx.referenceImages.length,
+      reference_count: selectedReferences.length,
       background_source: ctx.referenceImages.length > 0 ? 'brand_references' : 'ai_generated',
       style_sources: ctx.styleSourcesUsed,
       style_summary: ctx.styleSummary || null,
