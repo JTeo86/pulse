@@ -64,7 +64,7 @@ async function updateSourceDiagnostics(
 // ── Google Maps Reviews via SerpAPI ──────────────────────────────────────
 
 async function ingestGoogle(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   venueId: string,
   source: { id: string; external_id: string; external_id_kind: string | null },
   apiKey: string
