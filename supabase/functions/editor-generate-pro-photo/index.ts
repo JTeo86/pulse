@@ -806,7 +806,8 @@ Deno.serve(async (req) => {
         status: 'failed',
         error_json: { status: geminiStatus, body: errBody.substring(0, 1000) },
         duration_ms: Date.now() - startTime,
-      }).catch(() => {});
+      });
+      } catch { /* fire and forget */ }
 
       if (job_id) {
         await supabase.from('editor_jobs').update({
