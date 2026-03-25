@@ -21,7 +21,7 @@ interface VideoProviderConfig {
 }
 
 async function getActiveVideoProvider(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
 ): Promise<VideoProviderConfig | null> {
   const { data: keys } = await supabase
     .from('platform_api_keys')
