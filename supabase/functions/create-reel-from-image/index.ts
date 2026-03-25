@@ -43,7 +43,7 @@ async function getActiveVideoProvider(
 }
 
 async function checkFeatureFlags(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
 ): Promise<{ videoEnabled: boolean; reelCreatorEnabled: boolean; klingProviderEnabled: boolean }> {
   const { data: flags } = await supabase
     .from('feature_flags')
