@@ -36,8 +36,8 @@ async function getActiveVideoProvider(
 
   return {
     providerKey: 'kling',
-    apiKey: (klingKey.key_value as string).trim(),
-    apiSecret: klingSecret ? (klingSecret.key_value as string).trim() : undefined,
+    apiKey: ((klingKey as any).key_value as string).trim(),
+    apiSecret: klingSecret ? ((klingSecret as any).key_value as string).trim() : undefined,
     isConfigured: true,
   };
 }
