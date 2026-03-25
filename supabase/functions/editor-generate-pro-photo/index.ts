@@ -343,14 +343,26 @@ function buildGenerationPlan(
 // ── Prompt Construction ──────────────────────────────────────────────
 
 function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
-  const toneMap: Record<string, string> = {
+  // Surface-only tone map — used ONLY for campaign mode or when no references exist.
+  // Tabletop/Angle modes never use scene descriptions.
+  const surfaceToneMap: Record<string, string> = {
+    casual: 'natural wood or light stone surface with warm ambient light',
+    premium: 'dark wood or slate surface with warm soft lighting',
+    luxury: 'polished dark stone or marble surface with controlled lighting',
+    nightlife: 'dark matte surface with moody warm lighting',
+    family: 'clean light wood or neutral surface with bright natural light',
+  };
+  const surfaceTone = surfaceToneMap[ctx.venueTone] || surfaceToneMap.casual;
+
+  // Full scene description — ONLY used for campaign mode
+  const sceneToneMap: Record<string, string> = {
     casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
     premium: 'upscale dining restaurant with dark wood, candlelight, and quality tableware',
     luxury: 'exclusive luxury restaurant with marble surfaces, crystal glassware, and dramatic low lighting',
     nightlife: 'trendy bar-restaurant with moody neon-accented lighting and dark contemporary interiors',
     family: 'bright family-friendly restaurant with clean tables and cheerful warm lighting',
   };
-  const venueTone = toneMap[ctx.venueTone] || toneMap.casual;
+  const sceneTone = sceneToneMap[ctx.venueTone] || sceneToneMap.casual;
   const hasRefs = ctx.referenceImages.length > 0;
   const referencesRequired = plan.mode === 'venue_match' && hasRefs;
 
