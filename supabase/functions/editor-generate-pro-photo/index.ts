@@ -608,9 +608,26 @@ AUTHENTICITY RULES (ALWAYS APPLY):
 - Avoid overly perfect symmetry, hyper-polished unrealistic lighting, fake reflections, and cinematic effects (except in Campaign mode).
 - Never fabricate a luxury dining-room backdrop for TABLETOP or ANGLE modes.${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, menus, or garnishes not present in the original photo.' : ''}`;
 
-  const refInstruction = hasRefs
-    ? `Match the specific table surfaces, interior atmosphere, lighting mood, and color palette of the provided reference images. The references show the REAL venue environment — reproduce it faithfully.`
-    : `Generate a restaurant environment matching this style: ${venueTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''} Keep it authentic and believable.`;
+  let refInstruction: string;
+  if (plan.mode === 'tabletop' || plan.mode === 'angle') {
+    // Tabletop/Angle: NEVER describe a restaurant scene. Surface-only.
+    if (hasRefs) {
+      refInstruction = `Use the reference images ONLY to identify the surface material, color tone, and lighting warmth of the venue. Do NOT recreate the room or scene from references. Only extract surface texture and color palette cues. Place the dish on a simple surface inspired by those cues.`;
+    } else {
+      refInstruction = `Place the dish on a simple ${surfaceTone}. Do NOT build a restaurant scene, dining room, or interior environment. The background is ONLY a flat textured surface. No furniture, no room depth, no place settings.`;
+    }
+  } else if (plan.mode === 'venue_match') {
+    if (hasRefs) {
+      refInstruction = `CRITICAL: The provided reference images define the EXACT target environment. Reproduce the table surface, wall tones, material textures, lighting direction, color temperature, and ambient feel from these references as faithfully as possible. The output must look like it was photographed in the same physical location shown in the references. Do NOT substitute with generic surfaces or lighting.`;
+    } else {
+      refInstruction = `No venue references available. Preserve the original photo's environment with minimal cleanup. Use a simple ${surfaceTone}. Do NOT invent a restaurant scene.`;
+    }
+  } else {
+    // Campaign — full scene allowed
+    refInstruction = hasRefs
+      ? `Draw inspiration from the reference images for the venue's visual identity, but you have creative freedom to elevate the environment for campaign impact.`
+      : `Create a premium restaurant environment matching this style: ${sceneTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''} Make it aspirational and campaign-worthy.`;
+  }
 
   const referencePriorityDirective = referencesRequired
     ? `REFERENCE PRIORITY — LITERAL MODE (HIGHEST PRIORITY):
