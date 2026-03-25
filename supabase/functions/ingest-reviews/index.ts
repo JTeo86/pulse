@@ -47,7 +47,7 @@ function detectGoogleIdKind(id: string): "place_id" | "data_id" | "unknown" {
 }
 
 async function updateSourceDiagnostics(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   sourceId: string,
   result: SourceResult
 ) {
