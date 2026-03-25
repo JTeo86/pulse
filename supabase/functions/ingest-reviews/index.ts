@@ -154,7 +154,7 @@ async function ingestGoogle(
 // ── OpenTable Reviews via SerpAPI ────────────────────────────────────────
 
 async function ingestOpenTable(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   venueId: string,
   source: { id: string; external_id: string; external_domain?: string | null },
   apiKey: string
