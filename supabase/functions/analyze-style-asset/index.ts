@@ -237,7 +237,7 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
       .eq("id", asset_id);
 
     // Trigger profile rebuild (fire-and-forget)
-    supabase.rpc("rebuild_venue_style_profile", { p_venue_id: asset.venue_id }).then(() => {}).catch(() => {});
+    try { await supabase.rpc("rebuild_venue_style_profile", { p_venue_id: asset.venue_id }); } catch { /* fire and forget */ }
 
     return new Response(JSON.stringify({ success: true, analysis_id: analysisRecord?.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

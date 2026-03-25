@@ -47,11 +47,11 @@ function detectGoogleIdKind(id: string): "place_id" | "data_id" | "unknown" {
 }
 
 async function updateSourceDiagnostics(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   sourceId: string,
   result: SourceResult
 ) {
-  await supabaseAdmin.from("review_sources").update({
+  await (supabaseAdmin as any).from("review_sources").update({
     last_ingested_at: new Date().toISOString(),
     last_fetch_status: result.status,
     last_fetch_count: result.fetched_count,
@@ -64,7 +64,7 @@ async function updateSourceDiagnostics(
 // ── Google Maps Reviews via SerpAPI ──────────────────────────────────────
 
 async function ingestGoogle(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   venueId: string,
   source: { id: string; external_id: string; external_id_kind: string | null },
   apiKey: string
@@ -123,7 +123,7 @@ async function ingestGoogle(
     for (const r of reviews) {
       try {
         const externalId = `google_${source.external_id}_${r.review_id || r.user?.name || ""}`;
-        const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({
+        const { error: upsertErr } = await (supabaseAdmin as any).from("reviews").upsert({
           venue_id: venueId,
           source: "google",
           external_review_id: externalId,
@@ -154,7 +154,7 @@ async function ingestGoogle(
 // ── OpenTable Reviews via SerpAPI ────────────────────────────────────────
 
 async function ingestOpenTable(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   venueId: string,
   source: { id: string; external_id: string; external_domain?: string | null },
   apiKey: string
@@ -233,7 +233,7 @@ async function ingestOpenTable(
           rating = r.overall_rating;
         }
         
-        const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({
+        const { error: upsertErr } = await (supabaseAdmin as any).from("reviews").upsert({
           venue_id: venueId,
           source: "opentable",
           external_review_id: externalId,

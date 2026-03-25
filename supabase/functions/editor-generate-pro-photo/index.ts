@@ -343,14 +343,26 @@ function buildGenerationPlan(
 // ── Prompt Construction ──────────────────────────────────────────────
 
 function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
-  const toneMap: Record<string, string> = {
+  // Surface-only tone map — used ONLY for campaign mode or when no references exist.
+  // Tabletop/Angle modes never use scene descriptions.
+  const surfaceToneMap: Record<string, string> = {
+    casual: 'natural wood or light stone surface with warm ambient light',
+    premium: 'dark wood or slate surface with warm soft lighting',
+    luxury: 'polished dark stone or marble surface with controlled lighting',
+    nightlife: 'dark matte surface with moody warm lighting',
+    family: 'clean light wood or neutral surface with bright natural light',
+  };
+  const surfaceTone = surfaceToneMap[ctx.venueTone] || surfaceToneMap.casual;
+
+  // Full scene description — ONLY used for campaign mode
+  const sceneToneMap: Record<string, string> = {
     casual: 'bright, relaxed, modern casual dining restaurant with natural wood tables and warm ambient light',
     premium: 'upscale dining restaurant with dark wood, candlelight, and quality tableware',
     luxury: 'exclusive luxury restaurant with marble surfaces, crystal glassware, and dramatic low lighting',
     nightlife: 'trendy bar-restaurant with moody neon-accented lighting and dark contemporary interiors',
     family: 'bright family-friendly restaurant with clean tables and cheerful warm lighting',
   };
-  const venueTone = toneMap[ctx.venueTone] || toneMap.casual;
+  const sceneTone = sceneToneMap[ctx.venueTone] || sceneToneMap.casual;
   const hasRefs = ctx.referenceImages.length > 0;
   const referencesRequired = plan.mode === 'venue_match' && hasRefs;
 
@@ -596,23 +608,51 @@ AUTHENTICITY RULES (ALWAYS APPLY):
 - Avoid overly perfect symmetry, hyper-polished unrealistic lighting, fake reflections, and cinematic effects (except in Campaign mode).
 - Never fabricate a luxury dining-room backdrop for TABLETOP or ANGLE modes.${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, menus, or garnishes not present in the original photo.' : ''}`;
 
-  const refInstruction = hasRefs
-    ? `Match the specific table surfaces, interior atmosphere, lighting mood, and color palette of the provided reference images. The references show the REAL venue environment — reproduce it faithfully.`
-    : `Generate a restaurant environment matching this style: ${venueTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''} Keep it authentic and believable.`;
+  let refInstruction: string;
+  if (plan.mode === 'tabletop' || plan.mode === 'angle') {
+    // Tabletop/Angle: NEVER describe a restaurant scene. Surface-only.
+    if (hasRefs) {
+      refInstruction = `Use the reference images ONLY to identify the surface material, color tone, and lighting warmth of the venue. Do NOT recreate the room or scene from references. Only extract surface texture and color palette cues. Place the dish on a simple surface inspired by those cues.`;
+    } else {
+      refInstruction = `Place the dish on a simple ${surfaceTone}. Do NOT build a restaurant scene, dining room, or interior environment. The background is ONLY a flat textured surface. No furniture, no room depth, no place settings.`;
+    }
+  } else if (plan.mode === 'venue_match') {
+    if (hasRefs) {
+      refInstruction = `CRITICAL: The provided reference images define the EXACT target environment. Reproduce the table surface, wall tones, material textures, lighting direction, color temperature, and ambient feel from these references as faithfully as possible. The output must look like it was photographed in the same physical location shown in the references. Do NOT substitute with generic surfaces or lighting.`;
+    } else {
+      refInstruction = `No venue references available. Preserve the original photo's environment with minimal cleanup. Use a simple ${surfaceTone}. Do NOT invent a restaurant scene.`;
+    }
+  } else {
+    // Campaign — full scene allowed
+    refInstruction = hasRefs
+      ? `Draw inspiration from the reference images for the venue's visual identity, but you have creative freedom to elevate the environment for campaign impact.`
+      : `Create a premium restaurant environment matching this style: ${sceneTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''} Make it aspirational and campaign-worthy.`;
+  }
 
-  const referencePriorityDirective = referencesRequired
-    ? `REFERENCE PRIORITY — LITERAL MODE (HIGHEST PRIORITY):
-- The uploaded venue references are primary anchors, not inspiration.
-- Match visible cues from references: surface material, wall tone, lighting quality, framing distance, and lens feel.
-- If a creative choice conflicts with references, references win.
-- Keep creative drift near zero.
-- Do NOT use generic defaults that are absent from references.`
-    : hasRefs
-      ? `REFERENCE PRIORITY:
-- Use references as strong guidance for materials, palette, and lighting.
-- Keep results venue-faithful and avoid generic template backgrounds.`
-      : `REFERENCE PRIORITY:
-- No venue references available. Stay conservative, authentic, and non-generic.`;
+  let referencePriorityDirective: string;
+  if (plan.mode === 'venue_match' && hasRefs) {
+    referencePriorityDirective = `REFERENCE PRIORITY — LITERAL MODE (HIGHEST PRIORITY):
+- The uploaded venue references are the ABSOLUTE PRIMARY ANCHORS — not inspiration.
+- Match visible cues from references: surface material, wall tone, lighting quality, color temperature, and ambient atmosphere.
+- If a creative choice conflicts with references, REFERENCES WIN ALWAYS.
+- Keep creative drift near zero. The output environment must be recognizably the same location as the references.
+- Do NOT substitute any element with a generic alternative.
+- Do NOT use marble, linen, or luxury defaults unless references explicitly show them.`;
+  } else if ((plan.mode === 'tabletop' || plan.mode === 'angle') && hasRefs) {
+    referencePriorityDirective = `REFERENCE USAGE — SURFACE & PALETTE ONLY:
+- Extract ONLY the surface material type and color palette from references.
+- Do NOT recreate the room, interior, or scene from references.
+- Apply the extracted surface tone and warmth to a simple flat background.
+- References inform texture and color, NOT scene composition.`;
+  } else if (hasRefs) {
+    referencePriorityDirective = `REFERENCE PRIORITY:
+- Use references as creative guidance for the venue's visual identity.
+- Keep results venue-faithful while allowing creative elevation.`;
+  } else {
+    referencePriorityDirective = `REFERENCE PRIORITY:
+- No venue references available. Stay conservative, authentic, and non-generic.
+- Use simple, believable surfaces. Do NOT default to luxury styling.`;
+  }
 
   return `You are editing a food photograph for restaurant marketing. Shot Type: ${plan.mode.toUpperCase()}.
 
@@ -721,7 +761,7 @@ Deno.serve(async (req) => {
       const bTableBias = /(table|surface|atmosphere)/i.test(b.channel) ? 1 : 0;
       return bTableBias - aTableBias;
     });
-    const referenceLimit = plan.mode === 'venue_match' ? 6 : 3;
+    const referenceLimit = plan.mode === 'venue_match' ? 8 : (plan.mode === 'campaign' ? 3 : 2);
     const selectedReferences = sortedReferences.slice(0, referenceLimit);
 
     // Build Gemini message content
@@ -766,7 +806,8 @@ Deno.serve(async (req) => {
         status: 'failed',
         error_json: { status: geminiStatus, body: errBody.substring(0, 1000) },
         duration_ms: Date.now() - startTime,
-      }).catch(() => {});
+      });
+      } catch { /* fire and forget */ }
 
       if (job_id) {
         await supabase.from('editor_jobs').update({
@@ -793,7 +834,8 @@ Deno.serve(async (req) => {
         status: 'failed',
         error_json: { reason: 'no_image_in_response' },
         duration_ms: Date.now() - startTime,
-      }).catch(() => {});
+      });
+      } catch { /* fire and forget */ }
 
       if (job_id) {
         await supabase.from('editor_jobs').update({

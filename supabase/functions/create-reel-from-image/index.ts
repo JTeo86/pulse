@@ -21,7 +21,7 @@ interface VideoProviderConfig {
 }
 
 async function getActiveVideoProvider(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
 ): Promise<VideoProviderConfig | null> {
   const { data: keys } = await supabase
     .from('platform_api_keys')
@@ -36,14 +36,14 @@ async function getActiveVideoProvider(
 
   return {
     providerKey: 'kling',
-    apiKey: (klingKey.key_value as string).trim(),
-    apiSecret: klingSecret ? (klingSecret.key_value as string).trim() : undefined,
+    apiKey: ((klingKey as any).key_value as string).trim(),
+    apiSecret: klingSecret ? ((klingSecret as any).key_value as string).trim() : undefined,
     isConfigured: true,
   };
 }
 
 async function checkFeatureFlags(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
 ): Promise<{ videoEnabled: boolean; reelCreatorEnabled: boolean; klingProviderEnabled: boolean }> {
   const { data: flags } = await supabase
     .from('feature_flags')
@@ -55,7 +55,7 @@ async function checkFeatureFlags(
       'feature.kling_provider_enabled',
     ]);
 
-  const get = (key: string) => flags?.find((f: { flag_key: string }) => f.flag_key === key)?.is_enabled ?? false;
+  const get = (key: string) => flags?.find((f: any) => f.flag_key === key)?.is_enabled ?? false;
 
   return {
     videoEnabled: get('feature.video_enabled'),
