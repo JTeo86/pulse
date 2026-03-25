@@ -629,19 +629,30 @@ AUTHENTICITY RULES (ALWAYS APPLY):
       : `Create a premium restaurant environment matching this style: ${sceneTone}.${ctx.venueCity ? ` Located in ${ctx.venueCity}.` : ''} Make it aspirational and campaign-worthy.`;
   }
 
-  const referencePriorityDirective = referencesRequired
-    ? `REFERENCE PRIORITY — LITERAL MODE (HIGHEST PRIORITY):
-- The uploaded venue references are primary anchors, not inspiration.
-- Match visible cues from references: surface material, wall tone, lighting quality, framing distance, and lens feel.
-- If a creative choice conflicts with references, references win.
-- Keep creative drift near zero.
-- Do NOT use generic defaults that are absent from references.`
-    : hasRefs
-      ? `REFERENCE PRIORITY:
-- Use references as strong guidance for materials, palette, and lighting.
-- Keep results venue-faithful and avoid generic template backgrounds.`
-      : `REFERENCE PRIORITY:
-- No venue references available. Stay conservative, authentic, and non-generic.`;
+  let referencePriorityDirective: string;
+  if (plan.mode === 'venue_match' && hasRefs) {
+    referencePriorityDirective = `REFERENCE PRIORITY — LITERAL MODE (HIGHEST PRIORITY):
+- The uploaded venue references are the ABSOLUTE PRIMARY ANCHORS — not inspiration.
+- Match visible cues from references: surface material, wall tone, lighting quality, color temperature, and ambient atmosphere.
+- If a creative choice conflicts with references, REFERENCES WIN ALWAYS.
+- Keep creative drift near zero. The output environment must be recognizably the same location as the references.
+- Do NOT substitute any element with a generic alternative.
+- Do NOT use marble, linen, or luxury defaults unless references explicitly show them.`;
+  } else if ((plan.mode === 'tabletop' || plan.mode === 'angle') && hasRefs) {
+    referencePriorityDirective = `REFERENCE USAGE — SURFACE & PALETTE ONLY:
+- Extract ONLY the surface material type and color palette from references.
+- Do NOT recreate the room, interior, or scene from references.
+- Apply the extracted surface tone and warmth to a simple flat background.
+- References inform texture and color, NOT scene composition.`;
+  } else if (hasRefs) {
+    referencePriorityDirective = `REFERENCE PRIORITY:
+- Use references as creative guidance for the venue's visual identity.
+- Keep results venue-faithful while allowing creative elevation.`;
+  } else {
+    referencePriorityDirective = `REFERENCE PRIORITY:
+- No venue references available. Stay conservative, authentic, and non-generic.
+- Use simple, believable surfaces. Do NOT default to luxury styling.`;
+  }
 
   return `You are editing a food photograph for restaurant marketing. Shot Type: ${plan.mode.toUpperCase()}.
 
