@@ -834,7 +834,8 @@ Deno.serve(async (req) => {
         status: 'failed',
         error_json: { reason: 'no_image_in_response' },
         duration_ms: Date.now() - startTime,
-      }).catch(() => {});
+      });
+      } catch { /* fire and forget */ }
 
       if (job_id) {
         await supabase.from('editor_jobs').update({
