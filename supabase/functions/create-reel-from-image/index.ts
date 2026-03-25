@@ -55,7 +55,7 @@ async function checkFeatureFlags(
       'feature.kling_provider_enabled',
     ]);
 
-  const get = (key: string) => flags?.find((f: { flag_key: string }) => f.flag_key === key)?.is_enabled ?? false;
+  const get = (key: string) => flags?.find((f: any) => f.flag_key === key)?.is_enabled ?? false;
 
   return {
     videoEnabled: get('feature.video_enabled'),

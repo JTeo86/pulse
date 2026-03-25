@@ -233,7 +233,7 @@ async function ingestOpenTable(
           rating = r.overall_rating;
         }
         
-        const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({
+        const { error: upsertErr } = await (supabaseAdmin as any).from("reviews").upsert({
           venue_id: venueId,
           source: "opentable",
           external_review_id: externalId,
