@@ -123,7 +123,7 @@ async function ingestGoogle(
     for (const r of reviews) {
       try {
         const externalId = `google_${source.external_id}_${r.review_id || r.user?.name || ""}`;
-        const { error: upsertErr } = await supabaseAdmin.from("reviews").upsert({
+        const { error: upsertErr } = await (supabaseAdmin as any).from("reviews").upsert({
           venue_id: venueId,
           source: "google",
           external_review_id: externalId,
