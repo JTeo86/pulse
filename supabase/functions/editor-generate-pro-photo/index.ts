@@ -761,7 +761,7 @@ Deno.serve(async (req) => {
       const bTableBias = /(table|surface|atmosphere)/i.test(b.channel) ? 1 : 0;
       return bTableBias - aTableBias;
     });
-    const referenceLimit = plan.mode === 'venue_match' ? 6 : 3;
+    const referenceLimit = plan.mode === 'venue_match' ? 8 : (plan.mode === 'campaign' ? 3 : 2);
     const selectedReferences = sortedReferences.slice(0, referenceLimit);
 
     // Build Gemini message content
