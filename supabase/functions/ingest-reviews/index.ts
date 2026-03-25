@@ -51,7 +51,7 @@ async function updateSourceDiagnostics(
   sourceId: string,
   result: SourceResult
 ) {
-  await supabaseAdmin.from("review_sources").update({
+  await (supabaseAdmin as any).from("review_sources").update({
     last_ingested_at: new Date().toISOString(),
     last_fetch_status: result.status,
     last_fetch_count: result.fetched_count,
