@@ -795,18 +795,19 @@ Deno.serve(async (req) => {
       const errBody = await geminiResp.text().catch(() => '');
       console.error(`[PRO-PHOTO] Gemini failed: ${geminiStatus} — ${errBody.substring(0, 500)}`);
 
-      await supabase.from('venue_style_generation_logs').insert({
-        venue_id,
-        model_name: 'google/gemini-2.5-flash-image',
-        prompt_text: prompt.substring(0, 2000),
-        style_summary_used: ctx.styleSummary || null,
-        reference_asset_ids: selectedReferences.map(r => r.assetId),
-        style_sources_used: ctx.styleSourcesUsed,
-        dish_lock_applied: true,
-        status: 'failed',
-        error_json: { status: geminiStatus, body: errBody.substring(0, 1000) },
-        duration_ms: Date.now() - startTime,
-      });
+      try {
+        await supabase.from('venue_style_generation_logs').insert({
+          venue_id,
+          model_name: 'google/gemini-2.5-flash-image',
+          prompt_text: prompt.substring(0, 2000),
+          style_summary_used: ctx.styleSummary || null,
+          reference_asset_ids: selectedReferences.map(r => r.assetId),
+          style_sources_used: ctx.styleSourcesUsed,
+          dish_lock_applied: true,
+          status: 'failed',
+          error_json: { status: geminiStatus, body: errBody.substring(0, 1000) },
+          duration_ms: Date.now() - startTime,
+        });
       } catch { /* fire and forget */ }
 
       if (job_id) {
@@ -823,18 +824,19 @@ Deno.serve(async (req) => {
     if (!generatedImage || !generatedImage.startsWith('data:image')) {
       console.error('[PRO-PHOTO] Gemini returned no image data');
 
-      await supabase.from('venue_style_generation_logs').insert({
-        venue_id,
-        model_name: 'google/gemini-2.5-flash-image',
-        prompt_text: prompt.substring(0, 2000),
-        style_summary_used: ctx.styleSummary || null,
-        reference_asset_ids: selectedReferences.map(r => r.assetId),
-        style_sources_used: ctx.styleSourcesUsed,
-        dish_lock_applied: true,
-        status: 'failed',
-        error_json: { reason: 'no_image_in_response' },
-        duration_ms: Date.now() - startTime,
-      });
+      try {
+        await supabase.from('venue_style_generation_logs').insert({
+          venue_id,
+          model_name: 'google/gemini-2.5-flash-image',
+          prompt_text: prompt.substring(0, 2000),
+          style_summary_used: ctx.styleSummary || null,
+          reference_asset_ids: selectedReferences.map(r => r.assetId),
+          style_sources_used: ctx.styleSourcesUsed,
+          dish_lock_applied: true,
+          status: 'failed',
+          error_json: { reason: 'no_image_in_response' },
+          duration_ms: Date.now() - startTime,
+        });
       } catch { /* fire and forget */ }
 
       if (job_id) {
