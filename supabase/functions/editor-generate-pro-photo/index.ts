@@ -605,16 +605,18 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 
   // ── ANTI-GENERIC RULES ──
   const antiGenericRules = `
-AUTHENTICITY RULES (ALWAYS APPLY):
-- Do NOT make the image look like a stock photo or generic food advertisement.
-- Do NOT default to marble surfaces, white linen, or luxury glass unless the venue references specifically show these materials.
-- Do NOT invent elaborate table styling that does not match the venue's actual environment.
-- Avoid repeating the same generic background across multiple images — vary surfaces and textures subtly.
-- Real-world imperfections add authenticity — preserve them in Tabletop, Angle, and Venue Match modes.
-- The output should feel like it belongs on a REAL restaurant's social media, not a stock photo website.
-- Avoid the "perfect AI look" — slight natural variation makes images more believable.
-- Avoid overly perfect symmetry, hyper-polished unrealistic lighting, fake reflections, and cinematic effects (except in Campaign mode).
-- Never fabricate a luxury dining-room backdrop for TABLETOP or ANGLE modes.${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, menus, or garnishes not present in the original photo.' : ''}`;
+ANTI-GENERIC AUTHENTICITY RULES (MANDATORY — ALWAYS APPLY):
+- Do NOT make the image look like a stock photo, food advertisement, or AI-generated content.
+- Do NOT default to marble surfaces, white linen, crystal glassware, or luxury styling unless the venue references EXPLICITLY show these materials.
+- Do NOT invent elaborate table styling, place settings, or decorative arrangements.
+- Do NOT create a "perfect" image — slight natural imperfections (texture wear, minor surface variation, subtle shadow inconsistency) make images believable.
+- Do NOT repeat the same generic background look — vary surfaces and textures subtly between generations.
+- The output must feel like it belongs on a REAL restaurant's social feed — not a food photography portfolio or stock library.
+- Avoid the "AI photography" look: overly perfect symmetry, hyper-polished surfaces, fake reflections, unnatural specular highlights, cinematic color grading (except Campaign mode).
+- NEVER fabricate a restaurant dining-room scene, luxury backdrop, or interior environment for TABLETOP or ANGLE modes.
+- NEVER add generic luxury props (crystal, silver, linen, elaborate flowers) unless they exist in the source photo.
+${!plan.prop_invention ? '- STRICTLY DO NOT add any props, decorations, flowers, candles, menus, garnishes, cutlery, glasses, or any object not already present in the source photograph.' : ''}
+- If the output looks like it could appear on a generic stock photo website, it has FAILED.`;
 
   let refInstruction: string;
   if (plan.mode === 'tabletop' || plan.mode === 'angle') {
