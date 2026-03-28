@@ -81,10 +81,10 @@ const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[]
 // ── Shot Type defaults map ───────────────────────────────────────────
 
 const SHOT_TYPE_DEFAULTS: Record<ShotType, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
-  tabletop: { bg: 'close', comp: 'mostly_preserved' },
+  tabletop: { bg: 'close', comp: 'locked' },
   angle: { bg: 'close', comp: 'mostly_preserved' },
-  venue_match: { bg: 'exact', comp: 'locked' },
-  campaign: { bg: 'inspired', comp: 'flexible' },
+  venue_match: { bg: 'exact', comp: 'mostly_preserved' },
+  campaign: { bg: 'creative', comp: 'flexible' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────

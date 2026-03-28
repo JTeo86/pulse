@@ -323,7 +323,7 @@ function buildGenerationPlan(
     case 'campaign':
       return {
         mode: 'campaign',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'inspired',
+        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'creative',
         composition_fidelity: (compositionFidelity as CompositionFidelity) || 'flexible',
         preservation_level: 0.5,
         composition_flexibility: 0.6,
