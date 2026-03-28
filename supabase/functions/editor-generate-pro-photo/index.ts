@@ -503,35 +503,38 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
     modeGoal = `GOAL: The output must look like the exact same photograph, minimally improved — as if the person had slightly better phone skills and the light was 10% better. A real person scrolling social media must NOT be able to detect any AI involvement. This is EVERYDAY social content, not a photoshoot. If the result looks "professional" or "styled," it has failed.`;
 
   } else if (plan.mode === 'angle') {
-    shotDirective = `SHOT TYPE — ANGLE SHOT:
+    shotDirective = `SHOT TYPE — ANGLE SHOT (STRICT):
 - Present the dish from a natural 3/4 angle or side perspective (approximately 30-60° from horizontal).
-- Create natural depth with the dish as the hero in the foreground.
-- Use subtle shallow depth-of-field — the dish sharp, background gently soft.
-- The angle should feel like someone sitting at the table took this photo naturally.
-- Avoid extreme low angles or overly dramatic perspectives.`;
+- The dish must be the clear hero in the foreground with natural depth behind it.
+- Use subtle shallow depth-of-field — dish sharp, background gently soft.
+- The angle should feel like someone sitting at a table took this photo naturally on their phone.
+- Do NOT use extreme low angles, overly dramatic perspectives, or editorial compositions.
+- This is a TEXTURE MODE with depth, not a scene-building mode.`;
 
-    lightingDirective = `LIGHTING — NATURAL WITH DEPTH:
-- Apply soft, natural-looking lighting that creates gentle depth.
-- Subtle fill to reduce harsh shadows under the dish without flattening.
-- Warm color temperature for an inviting, appetizing feel.
-- Do NOT add theatrical, cinematic, or dramatic lighting effects.
-- The lighting should feel like good natural restaurant light — a nice window seat or well-lit table.`;
+    lightingDirective = `LIGHTING — NATURAL WITH GENTLE DEPTH:
+- Apply soft, natural-looking lighting that creates gentle depth and dimension.
+- Subtle fill to reduce harsh shadows without flattening the image.
+- Warm color temperature for an inviting feel — but not color-graded or stylized.
+- Do NOT add theatrical, cinematic, dramatic, or directional studio lighting.
+- The lighting must feel like good natural restaurant light — nothing more.`;
 
-    polishDirective = `POLISH — CLEAN BUT BELIEVABLE:
-- Increase micro-contrast slightly on the food for texture.
-- Moderate sharpening on the dish area.
-- Colors should be natural and appetizing — NOT oversaturated.
-- The image should feel like a good food photo taken by someone who knows what they're doing.
-- Avoid stock-photo-level polish. Keep it real.`;
+    polishDirective = `POLISH — CLEAN BUT CASUAL:
+- Increase micro-contrast slightly on food for texture emphasis.
+- Moderate sharpening on dish area only.
+- Colors should be natural and appetizing — NOT oversaturated or graded.
+- The image should feel like a good food photo by someone competent, not a professional shoot.
+- Avoid stock-photo-level polish, HDR effects, or visible retouching.`;
 
-    environmentDirective = `ENVIRONMENT — SIMPLE BACKGROUND:
-- Use a simple textured surface with slight depth (table or counter feel), not a full room scene.
-- No furniture-heavy composition, no luxury dining-room templates, no staged place settings.
-- Do NOT add props that weren't in the original.
-- Keep the background non-distracting — the dish is the star.
-- Vary background subtly inside venue material language — avoid repeated generic marble/luxury looks.`;
+    environmentDirective = `ENVIRONMENT — TEXTURED SURFACE WITH SUBTLE DEPTH (STRICT):
+- Use a simple textured surface (table or counter) with a soft, non-distracting background falloff behind it.
+- The background should be a simple wall tone, soft blur, or neutral gradient — NOT a room scene.
+- ABSOLUTELY NO: furniture clusters, luxury dining-room templates, staged place settings, visible restaurant interiors, other tables, chairs, or room architecture.
+- ABSOLUTELY NO: props not already present in the source (no glasses, cutlery, napkins, flowers, candles, menus).
+- ABSOLUTELY NO: marble (unless venue references explicitly show marble), generic luxury surfaces, or fine-dining staging.
+- Keep the background secondary — the dish is the entire story.
+- Vary surface subtly within venue material language — avoid repeated generic looks.`;
 
-    modeGoal = `GOAL: The output should look like a natural, well-composed social media food photo. It should have depth and visual interest from the angle, while still feeling authentic and believable. Think "talented food blogger" quality, not "ad agency campaign." Someone should think "that looks delicious" not "that looks AI-generated."`;
+    modeGoal = `GOAL: The output should look like a natural, well-composed food photo for social media. It should have depth and visual interest from the angle while still feeling completely authentic. Think "someone who takes nice food photos" quality, not "professional photographer." Someone should think "that looks delicious" not "that looks AI-generated."`;
 
   } else if (plan.mode === 'venue_match') {
     shotDirective = `SHOT TYPE — VENUE MATCH:
