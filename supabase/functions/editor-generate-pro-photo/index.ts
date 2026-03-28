@@ -279,16 +279,16 @@ function buildGenerationPlan(
       return {
         mode: 'tabletop',
         background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
-        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'mostly_preserved',
-        preservation_level: 0.94,
-        composition_flexibility: 0.08,
-        background_flexibility: 0.06,
-        plating_refinement: 0.03,
-        lighting_drama: 0.06,
-        styling_intensity: 0.05,
+        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
+        preservation_level: 0.96,
+        composition_flexibility: 0.04,
+        background_flexibility: 0.04,
+        plating_refinement: 0.02,
+        lighting_drama: 0.04,
+        styling_intensity: 0.03,
         prop_invention: false,
         realism_guardrails: 'strict',
-        reference_strength: 'medium',
+        reference_strength: 'light',
       };
     case 'angle':
       return {
