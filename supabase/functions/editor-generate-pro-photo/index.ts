@@ -537,33 +537,37 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
     modeGoal = `GOAL: The output should look like a natural, well-composed food photo for social media. It should have depth and visual interest from the angle while still feeling completely authentic. Think "someone who takes nice food photos" quality, not "professional photographer." Someone should think "that looks delicious" not "that looks AI-generated."`;
 
   } else if (plan.mode === 'venue_match') {
-    shotDirective = `SHOT TYPE — VENUE MATCH:
+    shotDirective = `SHOT TYPE — VENUE MATCH (REFERENCE-LED):
 - Preserve the original camera angle and framing as closely as possible.
-- The composition should match what the venue's own photography looks like.
-- If venue references show a particular style of composition, mirror that.
-- Do NOT impose a composition style that differs from the venue's actual imagery.`;
+- The composition should match the style shown in the provided venue reference images.
+- If references show overhead shots, use overhead. If they show angled shots, use that angle.
+- Mirror the reference composition style — do NOT impose a different style.
+- Do NOT deviate from reference composition unless the original photo makes it impossible.`;
 
-    lightingDirective = `LIGHTING — MATCH REFERENCES:
-- Match the lighting conditions shown in the provided reference images as closely as possible.
-- Reproduce the same light direction, warmth, and shadow character visible in references.
-- If no references are provided, use gentle natural lighting similar to the original photo.
-- Do NOT add lighting effects that contradict the reference images.`;
+    lightingDirective = `LIGHTING — MATCH REFERENCES EXACTLY:
+- Reproduce the lighting conditions from the reference images as precisely as possible.
+- Match the exact light direction, color temperature, warmth, shadow depth, and ambient character.
+- If references show warm candlelit tones, replicate that. If they show bright natural light, replicate that.
+- Do NOT add any lighting effects not visible in the references.
+- Do NOT correct the lighting to be "better" — match it to be the SAME.`;
 
-    polishDirective = `POLISH — REFERENCE-MATCHED:
-- Apply only the level of polish visible in the reference images.
-- If references show casual real-world scenes, keep the output similarly casual.
-- If references show polished imagery, match that level.
-- Do NOT exceed the polish level shown in references.`;
+    polishDirective = `POLISH — MATCH REFERENCE QUALITY:
+- Apply exactly the level of polish visible in the reference images — no more, no less.
+- If references show casual real-world quality, keep the output equally casual.
+- If references show polished professional quality, match that level.
+- Do NOT exceed the polish level of the references.
+- The output should feel like it came from the same camera on the same day.`;
 
-    environmentDirective = `ENVIRONMENT — STRICT REFERENCE MATCHING:
-- Reproduce the table surface, tableware style, and environmental details from reference images.
-- Match the color palette, material textures, and ambient feel of the references.
-- If references show wood tables, use wood. If they show marble, use marble.
-- The output environment should be recognizably the same as the reference images.
-- Do NOT add elements not visible in any reference image.
-- If NO references are provided, preserve the original photo's environment with minimal cleanup.`;
+    environmentDirective = `ENVIRONMENT — STRICT REFERENCE REPRODUCTION (HIGHEST PRIORITY):
+- Reproduce the exact environment shown in reference images: table surface, tableware style, wall color, material textures, ambient details.
+- Match the color palette, material language, lighting quality, and spatial feel of the references.
+- If references show wood tables, use wood. If they show concrete, use concrete. If they show linen, use linen.
+- The output environment must be RECOGNIZABLY the same location as the references.
+- Do NOT add ANY element not visible in reference images.
+- Do NOT substitute any reference element with a generic alternative (no marble unless refs show marble).
+- If NO references are provided, preserve the original photo's environment with minimal cleanup only.`;
 
-    modeGoal = `GOAL: The output should look like it was taken in the same exact environment shown in the reference images, with the uploaded dish placed naturally into that setting. The reference images define the target environment — match them as faithfully as possible.`;
+    modeGoal = `GOAL: The output must look like it was photographed in the exact same physical location shown in the reference images, with the uploaded dish placed naturally into that setting. References define everything — surface, lighting, mood, materials, composition style. This is a LITERAL match mode, not an inspiration mode. If the result could have come from a different venue, it has failed.`;
 
   } else {
     // campaign
