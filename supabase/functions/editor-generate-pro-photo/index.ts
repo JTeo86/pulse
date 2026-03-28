@@ -197,7 +197,7 @@ async function buildVenueStyleContext(
     if (legacyAssets.length > 0) {
       styleSourcesUsed.push('style_reference_assets');
       const bucketMap: Record<string, string> = { atmosphere: 'venue_atmosphere', brand: 'brand_inspiration', plating: 'plating_style' };
-      for (const asset of legacyAssets.slice(0, 3)) {
+      for (const asset of legacyAssets) {
         const bucket = bucketMap[asset.channel] || 'venue_atmosphere';
         const isPublic = bucket === 'venue_atmosphere';
         try {
