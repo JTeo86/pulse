@@ -175,7 +175,7 @@ async function buildVenueStyleContext(
   const newAssets = refAssetsResult.data || [];
   if (newAssets.length > 0) {
     styleSourcesUsed.push('venue_style_reference_assets');
-    for (const asset of newAssets.slice(0, 3)) {
+    for (const asset of newAssets) {
       if (asset.public_url) {
         try {
           const head = await fetch(asset.public_url, { method: 'HEAD' });
@@ -197,7 +197,7 @@ async function buildVenueStyleContext(
     if (legacyAssets.length > 0) {
       styleSourcesUsed.push('style_reference_assets');
       const bucketMap: Record<string, string> = { atmosphere: 'venue_atmosphere', brand: 'brand_inspiration', plating: 'plating_style' };
-      for (const asset of legacyAssets.slice(0, 3)) {
+      for (const asset of legacyAssets) {
         const bucket = bucketMap[asset.channel] || 'venue_atmosphere';
         const isPublic = bucket === 'venue_atmosphere';
         try {
@@ -279,16 +279,16 @@ function buildGenerationPlan(
       return {
         mode: 'tabletop',
         background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
-        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'mostly_preserved',
-        preservation_level: 0.94,
-        composition_flexibility: 0.08,
-        background_flexibility: 0.06,
-        plating_refinement: 0.03,
-        lighting_drama: 0.06,
-        styling_intensity: 0.05,
+        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
+        preservation_level: 0.96,
+        composition_flexibility: 0.04,
+        background_flexibility: 0.04,
+        plating_refinement: 0.02,
+        lighting_drama: 0.04,
+        styling_intensity: 0.03,
         prop_invention: false,
         realism_guardrails: 'strict',
-        reference_strength: 'medium',
+        reference_strength: 'light',
       };
     case 'angle':
       return {
@@ -323,7 +323,7 @@ function buildGenerationPlan(
     case 'campaign':
       return {
         mode: 'campaign',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'inspired',
+        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'creative',
         composition_fidelity: (compositionFidelity as CompositionFidelity) || 'flexible',
         preservation_level: 0.5,
         composition_flexibility: 0.6,
@@ -468,98 +468,106 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
   let modeGoal: string;
 
   if (plan.mode === 'tabletop') {
-    shotDirective = `SHOT TYPE — TABLETOP:
-- Present the dish in a clean top-down or near top-down composition (overhead or slight tilt, max 15° off vertical).
-- Frame the dish centrally with simple, balanced negative space.
-- The perspective should feel natural — like someone standing over the table looking down at the food.
-- Keep the composition clean and uncluttered.
-- Use a simple textured surface only; do NOT build a room scene.`;
+    shotDirective = `SHOT TYPE — TABLETOP (STRICT):
+- MUST be true top-down or near top-down composition (overhead or max 10° tilt off vertical).
+- Frame the dish centrally or slightly offset with clean negative space.
+- The perspective should feel like someone standing directly over the table looking straight down.
+- Keep the composition clean, minimal, and uncluttered.
+- Background is ONLY a flat textured surface — NO room, NO furniture, NO depth, NO scene.
+- This is a TEXTURE MODE, not a scene mode.`;
 
-    lightingDirective = `LIGHTING — GENTLE, NATURAL:
-- Correct white balance if the image has a noticeable color cast.
-- Fix minor underexposure or overexposure gently.
-- Do NOT add dramatic directional lighting, rim lighting, backlighting, or spotlight effects.
-- Preserve the original natural shadow directions and ambient light character.
-- The lighting should feel natural and real — like a phone photo in good conditions.
-- Subtle warmth is acceptable. Avoid cool/clinical tones.`;
+    lightingDirective = `LIGHTING — FLAT, NATURAL, MINIMAL CORRECTION:
+- Correct white balance if obviously wrong. Fix minor exposure issues gently.
+- Do NOT add any directional lighting, rim light, backlight, or spotlight effects.
+- Do NOT create dramatic shadows or cinematic lighting.
+- Preserve the original ambient light character — just make it slightly cleaner.
+- The lighting must feel like a phone photo taken in decent conditions. Nothing more.`;
 
-    polishDirective = `POLISH — SUBTLE, INVISIBLE:
-- Slightly sharpen for clarity. Minor noise reduction if needed.
-- Subtle contrast adjustment — do not over-punch colors.
-- The output should look like the same photo taken with slightly better conditions.
-- No visible editing or retouching. No HDR effect. No over-saturation.
-- Colors must remain natural and believable.
-- This should look like a real photo, NOT like it was professionally retouched.`;
+    polishDirective = `POLISH — NEARLY INVISIBLE:
+- Very slight sharpening for clarity. Minor noise reduction only if obviously needed.
+- Do NOT over-punch colors, contrast, or saturation.
+- Colors must remain completely natural and ungraded.
+- No HDR effect. No visible retouching. No glow or bloom.
+- The output should be indistinguishable from a well-taken phone photo.
+- Absolutely no "professional photography" look — this must feel casual and real.`;
 
-    environmentDirective = `ENVIRONMENT — SIMPLE TEXTURED BACKGROUND MODE:
-- Allowed background is primarily one textured surface (stone, plaster, matte paint, subtle venue-toned texture, natural wood).
-- No chairs, no room depth storytelling, no visible dining room build-out.
-- No added table settings, glasses, cutlery, flowers, menus, fabrics, or decorative props unless present in source.
-- Preserve minor real-world imperfections and believable lighting falloff.
-- Prioritize dish fidelity above all else; background must remain secondary and understated.
-- The scene should feel honest and real — "we took a better photo ourselves."`;
+    environmentDirective = `ENVIRONMENT — FLAT TEXTURED SURFACE ONLY (STRICT):
+- The ONLY background allowed is a single flat textured surface: stone, plaster, matte concrete, worn wood, subtle ceramic, or a simple venue-toned matte material.
+- ABSOLUTELY NO: chairs, tables with legs, room walls, dining room interiors, window light sources, other tables, place settings, tablescapes, restaurant interiors, or any depth beyond the surface itself.
+- ABSOLUTELY NO: glasses, cutlery, napkins, flowers, candles, menus, decorative props, or any object not already present in the source photograph.
+- ABSOLUTELY NO: marble (unless venue references explicitly show marble), luxury surfaces, fine-dining staging, or editorial setups.
+- Preserve minor real-world imperfections (slight texture variation, small scratches, natural wear).
+- The surface should feel like a real table or counter — not a studio set.
+- Think "phone photo on a restaurant table" not "food photography studio."`;
 
-    modeGoal = `GOAL: The output must look like the same photograph, gently improved — as if the person had slightly better phone camera skills and the lighting was a bit better that day. A real person scrolling Instagram should NOT be able to tell this was AI-enhanced. It should feel completely authentic, believable, and suitable for posting as genuine venue content. This is NOT a studio shot — it's an improved version of a real moment.`;
+    modeGoal = `GOAL: The output must look like the exact same photograph, minimally improved — as if the person had slightly better phone skills and the light was 10% better. A real person scrolling social media must NOT be able to detect any AI involvement. This is EVERYDAY social content, not a photoshoot. If the result looks "professional" or "styled," it has failed.`;
 
   } else if (plan.mode === 'angle') {
-    shotDirective = `SHOT TYPE — ANGLE SHOT:
+    shotDirective = `SHOT TYPE — ANGLE SHOT (STRICT):
 - Present the dish from a natural 3/4 angle or side perspective (approximately 30-60° from horizontal).
-- Create natural depth with the dish as the hero in the foreground.
-- Use subtle shallow depth-of-field — the dish sharp, background gently soft.
-- The angle should feel like someone sitting at the table took this photo naturally.
-- Avoid extreme low angles or overly dramatic perspectives.`;
+- The dish must be the clear hero in the foreground with natural depth behind it.
+- Use subtle shallow depth-of-field — dish sharp, background gently soft.
+- The angle should feel like someone sitting at a table took this photo naturally on their phone.
+- Do NOT use extreme low angles, overly dramatic perspectives, or editorial compositions.
+- This is a TEXTURE MODE with depth, not a scene-building mode.`;
 
-    lightingDirective = `LIGHTING — NATURAL WITH DEPTH:
-- Apply soft, natural-looking lighting that creates gentle depth.
-- Subtle fill to reduce harsh shadows under the dish without flattening.
-- Warm color temperature for an inviting, appetizing feel.
-- Do NOT add theatrical, cinematic, or dramatic lighting effects.
-- The lighting should feel like good natural restaurant light — a nice window seat or well-lit table.`;
+    lightingDirective = `LIGHTING — NATURAL WITH GENTLE DEPTH:
+- Apply soft, natural-looking lighting that creates gentle depth and dimension.
+- Subtle fill to reduce harsh shadows without flattening the image.
+- Warm color temperature for an inviting feel — but not color-graded or stylized.
+- Do NOT add theatrical, cinematic, dramatic, or directional studio lighting.
+- The lighting must feel like good natural restaurant light — nothing more.`;
 
-    polishDirective = `POLISH — CLEAN BUT BELIEVABLE:
-- Increase micro-contrast slightly on the food for texture.
-- Moderate sharpening on the dish area.
-- Colors should be natural and appetizing — NOT oversaturated.
-- The image should feel like a good food photo taken by someone who knows what they're doing.
-- Avoid stock-photo-level polish. Keep it real.`;
+    polishDirective = `POLISH — CLEAN BUT CASUAL:
+- Increase micro-contrast slightly on food for texture emphasis.
+- Moderate sharpening on dish area only.
+- Colors should be natural and appetizing — NOT oversaturated or graded.
+- The image should feel like a good food photo by someone competent, not a professional shoot.
+- Avoid stock-photo-level polish, HDR effects, or visible retouching.`;
 
-    environmentDirective = `ENVIRONMENT — SIMPLE BACKGROUND:
-- Use a simple textured surface with slight depth (table or counter feel), not a full room scene.
-- No furniture-heavy composition, no luxury dining-room templates, no staged place settings.
-- Do NOT add props that weren't in the original.
-- Keep the background non-distracting — the dish is the star.
-- Vary background subtly inside venue material language — avoid repeated generic marble/luxury looks.`;
+    environmentDirective = `ENVIRONMENT — TEXTURED SURFACE WITH SUBTLE DEPTH (STRICT):
+- Use a simple textured surface (table or counter) with a soft, non-distracting background falloff behind it.
+- The background should be a simple wall tone, soft blur, or neutral gradient — NOT a room scene.
+- ABSOLUTELY NO: furniture clusters, luxury dining-room templates, staged place settings, visible restaurant interiors, other tables, chairs, or room architecture.
+- ABSOLUTELY NO: props not already present in the source (no glasses, cutlery, napkins, flowers, candles, menus).
+- ABSOLUTELY NO: marble (unless venue references explicitly show marble), generic luxury surfaces, or fine-dining staging.
+- Keep the background secondary — the dish is the entire story.
+- Vary surface subtly within venue material language — avoid repeated generic looks.`;
 
-    modeGoal = `GOAL: The output should look like a natural, well-composed social media food photo. It should have depth and visual interest from the angle, while still feeling authentic and believable. Think "talented food blogger" quality, not "ad agency campaign." Someone should think "that looks delicious" not "that looks AI-generated."`;
+    modeGoal = `GOAL: The output should look like a natural, well-composed food photo for social media. It should have depth and visual interest from the angle while still feeling completely authentic. Think "someone who takes nice food photos" quality, not "professional photographer." Someone should think "that looks delicious" not "that looks AI-generated."`;
 
   } else if (plan.mode === 'venue_match') {
-    shotDirective = `SHOT TYPE — VENUE MATCH:
+    shotDirective = `SHOT TYPE — VENUE MATCH (REFERENCE-LED):
 - Preserve the original camera angle and framing as closely as possible.
-- The composition should match what the venue's own photography looks like.
-- If venue references show a particular style of composition, mirror that.
-- Do NOT impose a composition style that differs from the venue's actual imagery.`;
+- The composition should match the style shown in the provided venue reference images.
+- If references show overhead shots, use overhead. If they show angled shots, use that angle.
+- Mirror the reference composition style — do NOT impose a different style.
+- Do NOT deviate from reference composition unless the original photo makes it impossible.`;
 
-    lightingDirective = `LIGHTING — MATCH REFERENCES:
-- Match the lighting conditions shown in the provided reference images as closely as possible.
-- Reproduce the same light direction, warmth, and shadow character visible in references.
-- If no references are provided, use gentle natural lighting similar to the original photo.
-- Do NOT add lighting effects that contradict the reference images.`;
+    lightingDirective = `LIGHTING — MATCH REFERENCES EXACTLY:
+- Reproduce the lighting conditions from the reference images as precisely as possible.
+- Match the exact light direction, color temperature, warmth, shadow depth, and ambient character.
+- If references show warm candlelit tones, replicate that. If they show bright natural light, replicate that.
+- Do NOT add any lighting effects not visible in the references.
+- Do NOT correct the lighting to be "better" — match it to be the SAME.`;
 
-    polishDirective = `POLISH — REFERENCE-MATCHED:
-- Apply only the level of polish visible in the reference images.
-- If references show casual real-world scenes, keep the output similarly casual.
-- If references show polished imagery, match that level.
-- Do NOT exceed the polish level shown in references.`;
+    polishDirective = `POLISH — MATCH REFERENCE QUALITY:
+- Apply exactly the level of polish visible in the reference images — no more, no less.
+- If references show casual real-world quality, keep the output equally casual.
+- If references show polished professional quality, match that level.
+- Do NOT exceed the polish level of the references.
+- The output should feel like it came from the same camera on the same day.`;
 
-    environmentDirective = `ENVIRONMENT — STRICT REFERENCE MATCHING:
-- Reproduce the table surface, tableware style, and environmental details from reference images.
-- Match the color palette, material textures, and ambient feel of the references.
-- If references show wood tables, use wood. If they show marble, use marble.
-- The output environment should be recognizably the same as the reference images.
-- Do NOT add elements not visible in any reference image.
-- If NO references are provided, preserve the original photo's environment with minimal cleanup.`;
+    environmentDirective = `ENVIRONMENT — STRICT REFERENCE REPRODUCTION (HIGHEST PRIORITY):
+- Reproduce the exact environment shown in reference images: table surface, tableware style, wall color, material textures, ambient details.
+- Match the color palette, material language, lighting quality, and spatial feel of the references.
+- If references show wood tables, use wood. If they show concrete, use concrete. If they show linen, use linen.
+- The output environment must be RECOGNIZABLY the same location as the references.
+- Do NOT add ANY element not visible in reference images.
+- Do NOT substitute any reference element with a generic alternative (no marble unless refs show marble).
+- If NO references are provided, preserve the original photo's environment with minimal cleanup only.`;
 
-    modeGoal = `GOAL: The output should look like it was taken in the same exact environment shown in the reference images, with the uploaded dish placed naturally into that setting. The reference images define the target environment — match them as faithfully as possible.`;
+    modeGoal = `GOAL: The output must look like it was photographed in the exact same physical location shown in the reference images, with the uploaded dish placed naturally into that setting. References define everything — surface, lighting, mood, materials, composition style. This is a LITERAL match mode, not an inspiration mode. If the result could have come from a different venue, it has failed.`;
 
   } else {
     // campaign
@@ -597,16 +605,18 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 
   // ── ANTI-GENERIC RULES ──
   const antiGenericRules = `
-AUTHENTICITY RULES (ALWAYS APPLY):
-- Do NOT make the image look like a stock photo or generic food advertisement.
-- Do NOT default to marble surfaces, white linen, or luxury glass unless the venue references specifically show these materials.
-- Do NOT invent elaborate table styling that does not match the venue's actual environment.
-- Avoid repeating the same generic background across multiple images — vary surfaces and textures subtly.
-- Real-world imperfections add authenticity — preserve them in Tabletop, Angle, and Venue Match modes.
-- The output should feel like it belongs on a REAL restaurant's social media, not a stock photo website.
-- Avoid the "perfect AI look" — slight natural variation makes images more believable.
-- Avoid overly perfect symmetry, hyper-polished unrealistic lighting, fake reflections, and cinematic effects (except in Campaign mode).
-- Never fabricate a luxury dining-room backdrop for TABLETOP or ANGLE modes.${!plan.prop_invention ? '\n- Do NOT add props, decorations, flowers, candles, menus, or garnishes not present in the original photo.' : ''}`;
+ANTI-GENERIC AUTHENTICITY RULES (MANDATORY — ALWAYS APPLY):
+- Do NOT make the image look like a stock photo, food advertisement, or AI-generated content.
+- Do NOT default to marble surfaces, white linen, crystal glassware, or luxury styling unless the venue references EXPLICITLY show these materials.
+- Do NOT invent elaborate table styling, place settings, or decorative arrangements.
+- Do NOT create a "perfect" image — slight natural imperfections (texture wear, minor surface variation, subtle shadow inconsistency) make images believable.
+- Do NOT repeat the same generic background look — vary surfaces and textures subtly between generations.
+- The output must feel like it belongs on a REAL restaurant's social feed — not a food photography portfolio or stock library.
+- Avoid the "AI photography" look: overly perfect symmetry, hyper-polished surfaces, fake reflections, unnatural specular highlights, cinematic color grading (except Campaign mode).
+- NEVER fabricate a restaurant dining-room scene, luxury backdrop, or interior environment for TABLETOP or ANGLE modes.
+- NEVER add generic luxury props (crystal, silver, linen, elaborate flowers) unless they exist in the source photo.
+${!plan.prop_invention ? '- STRICTLY DO NOT add any props, decorations, flowers, candles, menus, garnishes, cutlery, glasses, or any object not already present in the source photograph.' : ''}
+- If the output looks like it could appear on a generic stock photo website, it has FAILED.`;
 
   let refInstruction: string;
   if (plan.mode === 'tabletop' || plan.mode === 'angle') {
