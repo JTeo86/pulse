@@ -175,7 +175,7 @@ async function buildVenueStyleContext(
   const newAssets = refAssetsResult.data || [];
   if (newAssets.length > 0) {
     styleSourcesUsed.push('venue_style_reference_assets');
-    for (const asset of newAssets.slice(0, 3)) {
+    for (const asset of newAssets) {
       if (asset.public_url) {
         try {
           const head = await fetch(asset.public_url, { method: 'HEAD' });
