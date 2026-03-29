@@ -50,6 +50,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Verify caller belongs to this venue
+    const { data: isMember } = await supabase.rpc('is_venue_member', {
+      check_venue_id: venue_id,
+      check_user_id: user.id,
+    });
+    if (!isMember) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Get venue info
     const { data: venue } = await supabase
       .from("venues")
