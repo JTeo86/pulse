@@ -17,7 +17,7 @@ interface BrandMember {
   id: string;
   brand_id: string;
   user_id: string;
-  role: 'staff' | 'manager';
+  role: 'staff' | 'manager' | 'admin';
 }
 
 interface BrandContextType {

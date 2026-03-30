@@ -38,19 +38,19 @@ export default function CreateVenuePage() {
       // Create venue
       const { data: venue, error: venueError } = await supabase
         .from('venues')
-        .insert({ name: data.name })
+        .insert({ name: data.name, owner_user_id: user.id })
         .select()
         .single();
 
       if (venueError) throw venueError;
 
-      // Add creator as admin
+      // Add creator as manager (owner permissions come from owner_user_id)
       const { error: memberError } = await supabase
         .from('venue_members')
         .insert({
           venue_id: venue.id,
           user_id: user.id,
-          role: 'admin',
+          role: 'manager',
         });
 
       if (memberError) throw memberError;

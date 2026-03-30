@@ -47,7 +47,7 @@ export function IndustryInsight() {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
           Industry Insight
         </h2>
-        <Link to="/growth/insights">
+        <Link to="/growth/industry-insights">
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
             View All <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
