@@ -72,6 +72,7 @@ interface AppLayoutProps {
 
 // New simplified navigation structure
 const homeItem = { name: 'Home', href: '/home', icon: Home };
+const autopilotItem = { name: 'Autopilot', href: '/autopilot', icon: Zap };
 
 const studioBaseNavigation = [
   { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
