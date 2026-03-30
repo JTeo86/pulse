@@ -336,35 +336,13 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
   }
 }
 
-async function insertContentItemWithFallback(supabase: any, basePayload: Record<string, unknown>) {
-  const payload = { ...basePayload };
-
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const { data, error } = await supabase
-      .from("content_items")
-      .insert(payload)
-      .select("id")
-      .single();
-
-    if (!error) {
-      return { data, error: null };
-    }
-
-    if (error.code !== "42703") {
-      return { data: null, error };
-    }
-
-    const missingColumnMatch = error.message.match(/column ["']?content_items\.?([a-zA-Z0-9_]+)["']? does not exist/i)
-      || error.message.match(/column ["']?([a-zA-Z0-9_]+)["']? does not exist/i);
-    const missingColumn = missingColumnMatch?.[1];
-    if (!missingColumn || !(missingColumn in payload)) {
-      return { data: null, error };
-    }
-
-    delete payload[missingColumn];
-  }
-
-  return { data: null, error: { message: "Exceeded schema fallback attempts while inserting content item." } };
+async function insertContentItem(supabase: any, payload: Record<string, unknown>) {
+  const { data, error } = await supabase
+    .from("content_items")
+    .insert(payload)
+    .select("id")
+    .single();
+  return { data, error };
 }
 
 function parseAndNormalizeItems(
