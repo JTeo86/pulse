@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
-  Archive, CalendarDays, CheckCircle2, Clock3, ClipboardList, Edit3, Image as ImageIcon, Layers, List, Loader2,
+  Archive, CalendarDays, CheckCircle2, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
   Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -410,8 +410,6 @@ export default function BrandLibraryPage() {
         <div className="flex items-center gap-2">
           <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
           <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
-          <Button size="sm" variant="outline" onClick={() => navigate('/content/planner')}><ClipboardList className="w-4 h-4 mr-1" />Planner</Button>
-          <Button size="sm" variant="outline" onClick={() => navigate('/content/calendar')}><CalendarDays className="w-4 h-4 mr-1" />Calendar</Button>
         </div>
       </div>
 

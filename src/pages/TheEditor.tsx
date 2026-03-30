@@ -6,7 +6,7 @@ import {
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info, ChevronDown, ChevronRight,
   ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2,
-  Target, Layout
+  Target, Layout, ArrowLeft
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
@@ -455,6 +455,12 @@ export default function TheEditorPage() {
             ← Back to Plan
           </button>
         </div>
+      )}
+
+      {!planId && (
+        <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/content/library')}>
+          <ArrowLeft className="w-4 h-4" /> Back to Content
+        </Button>
       )}
 
       {/* Header */}

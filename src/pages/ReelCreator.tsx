@@ -126,9 +126,9 @@ export default function ReelCreator() {
   if (!flags.isLoading && !reelEnabled) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="w-4 h-4" />
+        <div className="space-y-2">
+          <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/content/library')}>
+            <ArrowLeft className="w-4 h-4" /> Back to Content
           </Button>
           <PageHeader title="Reel Creator" description="Transform your images into scroll-stopping video content." />
         </div>
@@ -154,9 +154,9 @@ export default function ReelCreator() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="w-4 h-4" />
+      <div className="space-y-2">
+        <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/content/library')}>
+          <ArrowLeft className="w-4 h-4" /> Back to Content
         </Button>
         <PageHeader
           title="Reel Creator"
