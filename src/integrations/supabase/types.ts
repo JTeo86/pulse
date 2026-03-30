@@ -189,20 +189,20 @@ export type Database = {
           content_item_ids: string[] | null
           created_at: string
           error_message: string | null
-          failed_count: number
-          generated_count: number
+          failed_count: number | null
+          generated_count: number | null
           generated_item_payloads: Json | null
           id: string
-          items_failed: number
-          items_generated: number
-          items_saved: number
+          items_failed: number | null
+          items_generated: number | null
+          items_saved: number | null
           output_summary: Json | null
           parse_error: string | null
           raw_ai_output: string | null
-          run_status: string
+          run_status: string | null
           run_type: string
           save_error_details: Json | null
-          saved_count: number
+          saved_count: number | null
           saved_library_item_ids: string[] | null
           started_at: string | null
           status: string
@@ -213,20 +213,20 @@ export type Database = {
           content_item_ids?: string[] | null
           created_at?: string
           error_message?: string | null
-          failed_count?: number
-          generated_count?: number
+          failed_count?: number | null
+          generated_count?: number | null
           generated_item_payloads?: Json | null
           id?: string
-          items_failed?: number
-          items_generated?: number
-          items_saved?: number
+          items_failed?: number | null
+          items_generated?: number | null
+          items_saved?: number | null
           output_summary?: Json | null
           parse_error?: string | null
           raw_ai_output?: string | null
-          run_status?: string
+          run_status?: string | null
           run_type: string
           save_error_details?: Json | null
-          saved_count?: number
+          saved_count?: number | null
           saved_library_item_ids?: string[] | null
           started_at?: string | null
           status?: string
@@ -237,20 +237,20 @@ export type Database = {
           content_item_ids?: string[] | null
           created_at?: string
           error_message?: string | null
-          failed_count?: number
-          generated_count?: number
+          failed_count?: number | null
+          generated_count?: number | null
           generated_item_payloads?: Json | null
           id?: string
-          items_failed?: number
-          items_generated?: number
-          items_saved?: number
+          items_failed?: number | null
+          items_generated?: number | null
+          items_saved?: number | null
           output_summary?: Json | null
           parse_error?: string | null
           raw_ai_output?: string | null
-          run_status?: string
+          run_status?: string | null
           run_type?: string
           save_error_details?: Json | null
-          saved_count?: number
+          saved_count?: number | null
           saved_library_item_ids?: string[] | null
           started_at?: string | null
           status?: string
@@ -648,28 +648,30 @@ export type Database = {
       content_items: {
         Row: {
           asset_type: string | null
-          buffer_payload: Json | null
-          buffer_update_id: string | null
-          caption_draft: string | null
-          caption_final: string | null
-          campaign_tag: string | null
-          change_reason: string | null
-          created_at: string
-          id: string
-          intent: string | null
           autopilot_run_id: string | null
           badges: string[] | null
+          buffer_payload: Json | null
+          buffer_update_id: string | null
+          campaign_tag: string | null
+          caption_draft: string | null
+          caption_final: string | null
+          change_reason: string | null
           content_brief: string | null
+          created_at: string
           creative_brief: string | null
           cta: string | null
           hashtags: string[] | null
+          id: string
+          intent: string | null
           media_master_url: string | null
           media_variants: Json | null
+          run_type: string | null
           scheduled_for: string | null
           source: string
           source_plan_publish_item_id: string | null
           source_plan_title: string | null
           status: string | null
+          storage_path: string | null
           suggested_scheduled_for: string | null
           title: string | null
           updated_at: string
@@ -680,28 +682,30 @@ export type Database = {
         }
         Insert: {
           asset_type?: string | null
-          buffer_payload?: Json | null
-          buffer_update_id?: string | null
-          caption_draft?: string | null
-          caption_final?: string | null
-          campaign_tag?: string | null
-          change_reason?: string | null
-          created_at?: string
-          id?: string
-          intent?: string | null
           autopilot_run_id?: string | null
           badges?: string[] | null
+          buffer_payload?: Json | null
+          buffer_update_id?: string | null
+          campaign_tag?: string | null
+          caption_draft?: string | null
+          caption_final?: string | null
+          change_reason?: string | null
           content_brief?: string | null
+          created_at?: string
           creative_brief?: string | null
           cta?: string | null
           hashtags?: string[] | null
+          id?: string
+          intent?: string | null
           media_master_url?: string | null
           media_variants?: Json | null
+          run_type?: string | null
           scheduled_for?: string | null
           source?: string
           source_plan_publish_item_id?: string | null
           source_plan_title?: string | null
           status?: string | null
+          storage_path?: string | null
           suggested_scheduled_for?: string | null
           title?: string | null
           updated_at?: string
@@ -712,28 +716,30 @@ export type Database = {
         }
         Update: {
           asset_type?: string | null
-          buffer_payload?: Json | null
-          buffer_update_id?: string | null
-          caption_draft?: string | null
-          caption_final?: string | null
-          campaign_tag?: string | null
-          change_reason?: string | null
-          created_at?: string
-          id?: string
-          intent?: string | null
           autopilot_run_id?: string | null
           badges?: string[] | null
+          buffer_payload?: Json | null
+          buffer_update_id?: string | null
+          campaign_tag?: string | null
+          caption_draft?: string | null
+          caption_final?: string | null
+          change_reason?: string | null
           content_brief?: string | null
+          created_at?: string
           creative_brief?: string | null
           cta?: string | null
           hashtags?: string[] | null
+          id?: string
+          intent?: string | null
           media_master_url?: string | null
           media_variants?: Json | null
+          run_type?: string | null
           scheduled_for?: string | null
           source?: string
           source_plan_publish_item_id?: string | null
           source_plan_title?: string | null
           status?: string | null
+          storage_path?: string | null
           suggested_scheduled_for?: string | null
           title?: string | null
           updated_at?: string

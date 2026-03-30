@@ -211,6 +211,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     for (const [index, item] of items.entries()) {
       const insertPayload: Record<string, unknown> = {
         venue_id: venueId,
+        source: "autopilot",
         run_type: runType,
         autopilot_run_id: runId,
         title: item.title,
@@ -230,7 +231,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         source_plan_title: `Autopilot ${runType === "weekly_campaign" ? "Weekly" : runType === "review_content" ? "Review" : "Daily"} — ${new Date().toISOString().split("T")[0]}`,
       };
 
-      const { data: ci, error: ciErr } = await insertContentItemWithFallback(supabase, insertPayload);
+      const { data: ci, error: ciErr } = await insertContentItem(supabase, insertPayload);
 
       if (ciErr || !ci) {
         saveErrorDetails.push({
@@ -336,35 +337,13 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
   }
 }
 
-async function insertContentItemWithFallback(supabase: any, basePayload: Record<string, unknown>) {
-  const payload = { ...basePayload };
-
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const { data, error } = await supabase
-      .from("content_items")
-      .insert(payload)
-      .select("id")
-      .single();
-
-    if (!error) {
-      return { data, error: null };
-    }
-
-    if (error.code !== "42703") {
-      return { data: null, error };
-    }
-
-    const missingColumnMatch = error.message.match(/column ["']?content_items\.?([a-zA-Z0-9_]+)["']? does not exist/i)
-      || error.message.match(/column ["']?([a-zA-Z0-9_]+)["']? does not exist/i);
-    const missingColumn = missingColumnMatch?.[1];
-    if (!missingColumn || !(missingColumn in payload)) {
-      return { data: null, error };
-    }
-
-    delete payload[missingColumn];
-  }
-
-  return { data: null, error: { message: "Exceeded schema fallback attempts while inserting content item." } };
+async function insertContentItem(supabase: any, payload: Record<string, unknown>) {
+  const { data, error } = await supabase
+    .from("content_items")
+    .insert(payload)
+    .select("id")
+    .single();
+  return { data, error };
 }
 
 function parseAndNormalizeItems(
