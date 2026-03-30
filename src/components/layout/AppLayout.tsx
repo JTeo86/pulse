@@ -1,37 +1,23 @@
-import { ReactNode, useState, useEffect, useCallback } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home,
-  Camera,
-  Film,
-  Sparkles,
   Zap,
   FolderOpen,
   Calendar,
-  Megaphone,
   MessageSquareText,
-  TrendingUp,
-  Palette,
-  Plug,
-  Users,
+  Settings,
   ChevronDown,
-  ChevronRight,
   LogOut,
   Menu,
   X,
-  PanelLeft,
   Shield,
   Plus,
-  Network,
-  Gift,
-  Wallet,
-  Link2
+  Camera
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
-import { useReferralAccess } from '@/hooks/use-referral-access';
-import { useGalleryFlags } from '@/hooks/use-gallery-flags';
 import { useTodaysActions } from '@/hooks/use-todays-actions';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -46,9 +32,7 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
+  SidebarGroup, SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
@@ -60,53 +44,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
-// New simplified navigation structure
-const homeItem = { name: 'Home', href: '/home', icon: Home };
-const autopilotItem = { name: 'Autopilot', href: '/autopilot', icon: Zap };
-
-const studioBaseNavigation = [
-  { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
-];
-
-const reelCreatorItem: NavItem = { name: 'Reel Creator', href: '/studio/reel-creator', icon: Film };
-
-const contentNavigation = [
+const primaryNavigation: NavItem[] = [
+  { name: 'Home', href: '/home', icon: Home },
+  { name: 'Autopilot', href: '/autopilot', icon: Zap },
   { name: 'Library', href: '/content/library', icon: FolderOpen },
-  { name: 'Planner', href: '/content/planner', icon: Megaphone },
-  { name: 'Content Calendar', href: '/content/calendar', icon: Calendar },
-];
-
-const reputationNavigation = [
+  { name: 'Calendar', href: '/content/calendar', icon: Calendar },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
-];
-
-const growthBaseNavigation = [
-  { name: 'Performance', href: '/growth/performance', icon: TrendingUp },
-  { name: 'Industry Insights', href: '/growth/industry-insights', icon: Sparkles },
-];
-
-const growthReferralItems: NavItem[] = [
-  { name: 'Referrals', href: '/growth/referrals', icon: Link2 },
-  { name: 'Partners', href: '/growth/partners', icon: Network },
-  { name: 'Offers', href: '/growth/offers', icon: Gift },
-  { name: 'Payouts', href: '/growth/payouts', icon: Wallet },
-];
-
-const venueNavigation = [
-  { name: 'Brand Basics', href: '/venue/brand-basics', icon: Palette },
-  { name: 'Visual Style', href: '/venue/visual-style', icon: Sparkles },
-  { name: 'Integrations', href: '/venue/integrations', icon: Plug },
-  { name: 'Team', href: '/venue/team', icon: Users },
+  { name: 'Setup', href: '/setup', icon: Settings },
 ];
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
@@ -114,29 +63,10 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 // Quick action items for Create dropdown
 const quickActions = [
   { name: 'Generate Photo', href: '/studio/pro-photo', icon: Camera },
-  { name: 'Create Reel', href: '/studio/reel-creator', icon: Film },
   { name: 'Add to Calendar', href: '/content/calendar', icon: Calendar },
   { name: 'Respond to Reviews', href: '/reputation/reviews', icon: MessageSquareText },
   { name: 'Upload Dish', href: '/studio/pro-photo', icon: Plus },
 ];
-
-// localStorage key for collapsible section state
-const SECTION_STATE_KEY = 'sidebar-sections-state';
-
-function getSectionState(): Record<string, boolean> {
-  try {
-    const stored = localStorage.getItem(SECTION_STATE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch { return {}; }
-}
-
-function setSectionState(key: string, open: boolean) {
-  try {
-    const current = getSectionState();
-    current[key] = open;
-    localStorage.setItem(SECTION_STATE_KEY, JSON.stringify(current));
-  } catch { /* ignore */ }
-}
 
 function usePlatformAdmin() {
   const { user } = useAuth();
@@ -161,19 +91,7 @@ function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
   const isPlatformAdmin = usePlatformAdmin();
-  const { venueHasAccess: hasReferralAccess } = useReferralAccess();
   const { dueCount } = useTodaysActions();
-  const galleryFlags = useGalleryFlags();
-
-  const studioNavigation = [
-    studioBaseNavigation[0], // Pro Photo
-    ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
-  ];
-
-  const growthNavigation = [
-    ...growthBaseNavigation,
-    ...(hasReferralAccess ? growthReferralItems : []),
-  ];
 
   const handleSignOut = async () => {
     await signOut();
@@ -212,56 +130,6 @@ function AppSidebar() {
       );
     }
     return linkContent;
-  };
-
-  const CollapsibleSection = ({ label, items, sectionKey }: { label: string; items: NavItem[]; sectionKey: string }) => {
-    const savedState = getSectionState();
-    const [open, setOpen] = useState(savedState[sectionKey] !== false); // default open
-
-    const handleToggle = useCallback((val: boolean) => {
-      setOpen(val);
-      setSectionState(sectionKey, val);
-    }, [sectionKey]);
-
-    if (isCollapsed) {
-      return (
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-0.5">
-              {items.map((item) => (
-                <SidebarMenuItem key={item.name}>
-                  <NavItemComponent item={item} />
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      );
-    }
-
-    return (
-      <Collapsible open={open} onOpenChange={handleToggle}>
-        <SidebarGroup>
-          <CollapsibleTrigger className="flex items-center w-full px-3 mb-1 cursor-pointer group">
-            <SidebarGroupLabel className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider flex-1 text-left pointer-events-none">
-              {label}
-            </SidebarGroupLabel>
-            <ChevronRight className={`w-3 h-3 text-muted-foreground/40 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <SidebarGroupContent>
-              <SidebarMenu className="space-y-0.5">
-                {items.map((item) => (
-                  <SidebarMenuItem key={item.name}>
-                    <NavItemComponent item={item} />
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </CollapsibleContent>
-        </SidebarGroup>
-      </Collapsible>
-    );
   };
 
   return (
@@ -311,44 +179,29 @@ function AppSidebar() {
       )}
 
       <SidebarContent className="py-2">
-        {/* Home - Top level item with alert badge */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
-              <SidebarMenuItem>
-                <div className="relative">
-                  <NavItemComponent item={homeItem} />
-                  {dueCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 pointer-events-none">
-                      {dueCount > 9 ? '9+' : dueCount}
-                    </span>
-                  )}
-                </div>
-              </SidebarMenuItem>
+              {primaryNavigation.map((item) => (
+                <SidebarMenuItem key={item.name}>
+                  <div className="relative">
+                    <NavItemComponent item={item} />
+                    {item.href === '/home' && dueCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 pointer-events-none">
+                        {dueCount > 9 ? '9+' : dueCount}
+                      </span>
+                    )}
+                  </div>
+                </SidebarMenuItem>
+              ))}
+              {isPlatformAdmin && (
+                <SidebarMenuItem>
+                  <NavItemComponent item={platformAdminItem} />
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {/* Autopilot - prominent top-level */}
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-0.5">
-              <SidebarMenuItem>
-                <NavItemComponent item={autopilotItem} />
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <CollapsibleSection label="Studio" items={studioNavigation} sectionKey="studio" />
-        <CollapsibleSection label="Content" items={contentNavigation} sectionKey="content" />
-        <CollapsibleSection label="Reputation" items={reputationNavigation} sectionKey="reputation" />
-        <CollapsibleSection label="Growth" items={growthNavigation} sectionKey="growth" />
-        <CollapsibleSection label="Venue" items={venueNavigation} sectionKey="venue" />
-        
-        {isPlatformAdmin && (
-          <CollapsibleSection label="Platform" items={[platformAdminItem]} sectionKey="platform" />
-        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
@@ -397,8 +250,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, signOut } = useAuth();
   const { isAdmin } = useVenue();
   const isPlatformAdmin = usePlatformAdmin();
-  const { venueHasAccess: hasReferralAccess } = useReferralAccess();
-  const galleryFlags = useGalleryFlags();
   const { dueCount: mobileDueCount } = useTodaysActions();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -407,20 +258,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  const mobileStudioNav = [
-    studioBaseNavigation[0],
-    ...((galleryFlags.video_enabled && galleryFlags.reel_creator_enabled) ? [reelCreatorItem] : []),
-  ];
-
-  // Build mobile nav with same ordering
   const allNavItems: NavItem[] = [
-    homeItem,
-    autopilotItem,
-    ...mobileStudioNav,
-    ...contentNavigation,
-    ...reputationNavigation,
-    ...(hasReferralAccess ? [...growthBaseNavigation, ...growthReferralItems] : growthBaseNavigation),
-    ...venueNavigation,
+    ...primaryNavigation,
     ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
 

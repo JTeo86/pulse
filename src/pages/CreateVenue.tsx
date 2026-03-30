@@ -72,7 +72,7 @@ export default function CreateVenuePage() {
         description: `${data.name} is ready to go!`,
       });
 
-      navigate('/dashboard');
+      navigate('/setup?onboarding=1');
     } catch (error: any) {
       toast({
         variant: 'destructive',

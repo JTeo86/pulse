@@ -81,9 +81,31 @@ export default function AutopilotPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Settings</CardTitle>
-            <CardDescription>Configure generation cadence and guardrails</CardDescription>
+            <CardDescription>Configure cadence and asset-first guardrails</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <p className="text-sm font-medium">Require asset source</p>
+                  <p className="text-xs text-muted-foreground">Skip run if no eligible image source exists.</p>
+                </div>
+                <Switch
+                  checked={settings?.require_asset_for_runs ?? true}
+                  onCheckedChange={(checked) => upsertSettings.mutate({ require_asset_for_runs: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <p className="text-sm font-medium">Allow copy-only fallback</p>
+                  <p className="text-xs text-muted-foreground">Only used when no eligible asset is found.</p>
+                </div>
+                <Switch
+                  checked={settings?.allow_copy_only_fallback ?? false}
+                  onCheckedChange={(checked) => upsertSettings.mutate({ allow_copy_only_fallback: checked })}
+                />
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2"><Calendar className="w-4 h-4 text-muted-foreground" />Frequency</Label>
@@ -126,6 +148,17 @@ export default function AutopilotPage() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '16:00', '18:00'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-muted-foreground" />Mode</Label>
+                <Select value={settings?.mode || 'conservative'} onValueChange={(v) => upsertSettings.mutate({ mode: v as any })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="conservative">Conservative</SelectItem>
+                    <SelectItem value="creative">Creative</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

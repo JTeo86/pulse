@@ -17,10 +17,8 @@ import Landing from "./pages/Landing";
 import CreateVenue from "./pages/CreateVenue";
 import Home from "./pages/Home";
 import Studio from "./pages/Studio";
-import BrandBasics from "./pages/BrandBasics";
 import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
-import VisualStyle from "./pages/VisualStyle";
 import ReelCreator from "./pages/ReelCreator";
 import ContentScheduler from "./pages/ContentScheduler";
 import Planner from "./pages/Planner";
@@ -28,7 +26,6 @@ import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
 import IndustryInsights from "./pages/growth/IndustryInsights";
 import AIInsights from "./pages/AIInsights";
-import Team from "./pages/Team";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
@@ -52,6 +49,7 @@ import { PartnerLayout } from "./components/partner/PartnerLayout";
 import GuestSubmissions from "./pages/GuestSubmissions";
 import GuestUploadPage from "./pages/GuestUploadPage";
 import Autopilot from "./pages/Autopilot";
+import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
@@ -149,6 +147,7 @@ function AppRoutes() {
         
         {/* Autopilot */}
         <Route path="/autopilot" element={<Autopilot />} />
+        <Route path="/setup" element={<Setup />} />
 
         {/* Content Section */}
         <Route path="/content/library" element={<BrandLibrary />} />
@@ -172,10 +171,10 @@ function AppRoutes() {
         <Route path="/growth/offers" element={<OffersPage />} />
 
         {/* Venue Section */}
-        <Route path="/venue/brand-basics" element={<BrandBasics />} />
-        <Route path="/venue/visual-style" element={<VisualStyle />} />
+        <Route path="/venue/brand-basics" element={<Navigate to="/setup" replace />} />
+        <Route path="/venue/visual-style" element={<Navigate to="/setup" replace />} />
         <Route path="/venue/integrations" element={<Integrations />} />
-        <Route path="/venue/team" element={<Team />} />
+        <Route path="/venue/team" element={<Navigate to="/setup" replace />} />
         <Route path="/venue/guest-photos" element={<GuestSubmissions />} />
 
         {/* Admin Section */}
