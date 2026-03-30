@@ -52,7 +52,7 @@ interface LibraryItem {
 }
 
 type LibraryTab = 'all' | 'autopilot' | 'uploads' | 'pro_photo' | 'archived';
-type WorkflowStatusFilter = 'all' | 'draft' | 'approved' | 'scheduled' | 'published';
+type InventoryStateFilter = 'all' | 'asset_ready' | 'needs_image' | 'drafts_only';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -65,7 +65,7 @@ export default function BrandLibraryPage() {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'autopilot' : 'all') as LibraryTab);
-  const [statusFilter, setStatusFilter] = useState<WorkflowStatusFilter>('all');
+  const [inventoryFilter, setInventoryFilter] = useState<InventoryStateFilter>('all');
   const [view, setView] = useState<'card' | 'list'>('card');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheduleTarget, setScheduleTarget] = useState<LibraryItem | null>(null);
@@ -280,14 +280,21 @@ export default function BrandLibraryPage() {
       if (tab === 'archived') {
         if (item.status !== 'archived') return false;
       } else {
+        if (['scheduled', 'published'].includes(item.status)) return false;
         if (item.status === 'archived') return false;
         if (tab !== 'all' && category !== tab) return false;
       }
 
-      if (statusFilter !== 'all' && item.status !== statusFilter) return false;
+      const hasAsset = !!(item.resolvedUrl || item.media_url);
+      const hasCopy = !!(item.caption_draft || item.caption_final || item.title);
+      const isDraft = isDraftLike(item.status);
+
+      if (inventoryFilter === 'asset_ready' && !hasAsset) return false;
+      if (inventoryFilter === 'needs_image' && !(!hasAsset && hasCopy && item.origin === 'content_item')) return false;
+      if (inventoryFilter === 'drafts_only' && !isDraft) return false;
       return true;
     });
-  }, [items, tab, statusFilter, autopilotRunIdFilter, contentItemIdsFilter]);
+  }, [items, tab, inventoryFilter, autopilotRunIdFilter, contentItemIdsFilter]);
 
   const toggleSelect = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -420,24 +427,32 @@ export default function BrandLibraryPage() {
 
       {tab !== 'archived' && (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs text-muted-foreground mr-1">Status:</p>
+          <p className="text-xs text-muted-foreground mr-1">Inventory filter:</p>
           {([
-            { value: 'all', label: 'All statuses' },
-            { value: 'draft', label: 'Draft' },
-            { value: 'approved', label: 'Approved' },
-            { value: 'scheduled', label: 'Scheduled' },
-            { value: 'published', label: 'Published' },
+            { value: 'all', label: 'All inventory' },
+            { value: 'asset_ready', label: 'Asset ready' },
+            { value: 'needs_image', label: 'Needs image' },
+            { value: 'drafts_only', label: 'Drafts only' },
           ] as const).map((option) => (
             <Button
               key={option.value}
               size="sm"
-              variant={statusFilter === option.value ? 'default' : 'outline'}
-              onClick={() => setStatusFilter(option.value)}
+              variant={inventoryFilter === option.value ? 'default' : 'outline'}
+              onClick={() => setInventoryFilter(option.value)}
               className="h-8"
             >
               {option.label}
             </Button>
           ))}
+        </div>
+      )}
+
+      {tab !== 'archived' && (
+        <div className="rounded-lg border bg-muted/30 p-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-muted-foreground">Scheduled and published posts now live in Calendar.</p>
+          <Button size="sm" variant="outline" onClick={() => navigate('/content/calendar')}>
+            <CalendarDays className="w-4 h-4 mr-1" /> Open Calendar
+          </Button>
         </div>
       )}
 
@@ -491,7 +506,7 @@ export default function BrandLibraryPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-1">
-                    <Badge variant="secondary">{item.status}</Badge>
+                    <Badge variant="secondary">{getStatusBadgeLabel(item.status)}</Badge>
                     <Badge variant="outline">{getSourceLabel(item)}</Badge>
                     <Badge variant={hasAsset ? 'default' : 'outline'}>{hasAsset ? 'full content' : 'copy-only'}</Badge>
                     <Badge variant={assetState.variant}>{assetState.label}</Badge>
@@ -570,7 +585,7 @@ export default function BrandLibraryPage() {
                   <span className="line-clamp-1">{item.title || 'Untitled'}</span>
                 </div>
                 <div className="text-xs text-muted-foreground line-clamp-1">{hasAsset ? 'Asset ready' : 'Copy generated · Asset pending'}</div>
-                <Badge variant="secondary" className="w-fit">{item.status}</Badge>
+                <Badge variant="secondary" className="w-fit">{getStatusBadgeLabel(item.status)}</Badge>
                 <Badge variant="outline" className="w-fit">{item.source}</Badge>
               </div>
             );
@@ -783,6 +798,17 @@ function getSourceLabel(item: LibraryItem): string {
   if (category === 'pro_photo') return 'Pro Photo';
   if (category === 'uploads') return 'Upload';
   return item.source;
+}
+
+function isDraftLike(status: string): boolean {
+  return ['draft', 'needs_changes', 'pending_review'].includes(status);
+}
+
+function getStatusBadgeLabel(status: string): string {
+  if (status === 'approved') return 'Ready';
+  if (status === 'scheduled') return 'Scheduled (Calendar)';
+  if (status === 'published') return 'Published (Calendar)';
+  return status.replace(/_/g, ' ');
 }
 
 function extractFirstUrl(value: unknown): string | null {
