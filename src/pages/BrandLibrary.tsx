@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   Archive, CalendarDays, CheckCircle2, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
-  PlusCircle, Rocket, Sparkles, Trash2
+  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -21,7 +21,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl, isSignedUrl } from '@/hooks/use-resolved-media';
 
-/* ─── Unified library item shape ─── */
 interface LibraryItem {
   id: string;
   venue_id: string;
@@ -35,9 +34,10 @@ interface LibraryItem {
   media_url: string | null;
   storage_path: string | null;
   resolvedUrl: string | null;
+  resolvedFrom?: 'content_item' | 'content_asset' | 'edited_asset' | 'editor_job' | 'media_variants' | null;
   scheduled_for: string | null;
   created_at: string;
-  // content_item extras
+  media_variants?: unknown;
   run_type?: string | null;
   autopilot_run_id?: string | null;
   cta?: string | null;
@@ -51,6 +51,8 @@ interface LibraryItem {
 }
 
 type LibraryTab = 'all' | 'autopilot' | 'generated' | 'manual' | 'approved' | 'scheduled' | 'published' | 'archived';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default function BrandLibraryPage() {
   const { currentVenue } = useVenue();
@@ -68,6 +70,8 @@ export default function BrandLibraryPage() {
   const [editTarget, setEditTarget] = useState<LibraryItem | null>(null);
   const [editedCaption, setEditedCaption] = useState('');
   const [editedBrief, setEditedBrief] = useState('');
+  const [previewItem, setPreviewItem] = useState<LibraryItem | null>(null);
+  const [brokenImageKeys, setBrokenImageKeys] = useState<Set<string>>(new Set());
 
   const autopilotRunIdFilter = searchParams.get('autopilotRunId');
   const contentItemIdsFilter = useMemo(() => {
@@ -83,19 +87,17 @@ export default function BrandLibraryPage() {
 
     const unified: LibraryItem[] = [];
 
-    // 1) Fetch content_items (autopilot + manual + planner items)
     const { data: ciData, error: ciErr } = await supabase
       .from('content_items')
-      .select('id, venue_id, status, title, caption_draft, caption_final, asset_type, media_master_url, storage_path, scheduled_for, created_at, run_type, autopilot_run_id, cta, hashtags, content_brief, creative_brief, suggested_scheduled_for, campaign_tag, badges, source, source_plan_publish_item_id, source_plan_title')
+      .select('id, venue_id, status, title, caption_draft, caption_final, asset_type, media_master_url, storage_path, media_variants, scheduled_for, created_at, run_type, autopilot_run_id, cta, hashtags, content_brief, creative_brief, suggested_scheduled_for, campaign_tag, badges, source, source_plan_publish_item_id, source_plan_title')
       .eq('venue_id', currentVenue.id)
       .order('created_at', { ascending: false })
       .limit(250);
 
     if (ciErr) {
-      // Fallback: try minimal select for older schemas
       const { data: fallback } = await supabase
         .from('content_items')
-        .select('id, venue_id, status, caption_draft, caption_final, asset_type, media_master_url, scheduled_for, created_at, source_plan_publish_item_id, source_plan_title')
+        .select('id, venue_id, status, caption_draft, caption_final, asset_type, media_master_url, storage_path, media_variants, scheduled_for, created_at, source_plan_publish_item_id, source_plan_title')
         .eq('venue_id', currentVenue.id)
         .order('created_at', { ascending: false })
         .limit(250);
@@ -108,7 +110,6 @@ export default function BrandLibraryPage() {
       });
     }
 
-    // 2) Fetch content_assets (Pro Photo outputs, uploads, etc.)
     const { data: caData } = await supabase
       .from('content_assets')
       .select('id, venue_id, source_type, status, title, public_url, thumbnail_url, storage_path, asset_type, created_at')
@@ -116,28 +117,26 @@ export default function BrandLibraryPage() {
       .order('created_at', { ascending: false })
       .limit(250);
 
-    // Deduplicate: content_assets already referenced by content_items won't be doubled
     const ciIds = new Set(unified.map((i) => i.id));
     (caData || []).forEach((row: any) => {
       if (ciIds.has(row.id)) return;
       unified.push(mapContentAsset(row));
     });
 
-    // Sort by created_at desc
     unified.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    // Resolve image URLs for items with storage_path but no good URL
     await resolveUrls(unified);
+    await enrichImageSources(unified, currentVenue.id);
 
     setItems(unified);
+    setBrokenImageKeys(new Set());
     setLoading(false);
   }, [currentVenue]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  /* ─── URL resolution for items with storage paths ─── */
-  async function resolveUrls(items: LibraryItem[]) {
-    const needsResolution = items.filter((i) => i.storage_path && (!i.resolvedUrl || isSignedUrl(i.resolvedUrl)));
+  async function resolveUrls(list: LibraryItem[]) {
+    const needsResolution = list.filter((i) => i.storage_path && (!i.resolvedUrl || isSignedUrl(i.resolvedUrl)));
     if (!needsResolution.length) return;
 
     await Promise.all(needsResolution.map(async (item) => {
@@ -153,7 +152,122 @@ export default function BrandLibraryPage() {
     }));
   }
 
-  /* ─── Filtering ─── */
+  async function enrichImageSources(list: LibraryItem[], venueId: string) {
+    const contentItems = list.filter((item) => item.origin === 'content_item');
+    const candidateAssetIds = new Set<string>();
+    const candidateEditedAssetIds = new Set<string>();
+    const candidateEditorJobIds = new Set<string>();
+
+    for (const item of contentItems) {
+      const variant = item.media_variants;
+      extractIdCandidates(variant, ['asset_id', 'content_asset_id', 'output_asset_id', 'source_asset_id']).forEach((id) => candidateAssetIds.add(id));
+      extractIdCandidates(variant, ['edited_asset_id']).forEach((id) => candidateEditedAssetIds.add(id));
+      extractIdCandidates(variant, ['editor_job_id', 'job_id']).forEach((id) => candidateEditorJobIds.add(id));
+    }
+
+    const [assetsRes, editedRes, jobsRes] = await Promise.all([
+      candidateAssetIds.size
+        ? supabase
+          .from('content_assets')
+          .select('id, public_url, thumbnail_url, storage_path')
+          .eq('venue_id', venueId)
+          .in('id', Array.from(candidateAssetIds))
+        : Promise.resolve({ data: [] as any[] }),
+      candidateEditedAssetIds.size
+        ? supabase
+          .from('edited_assets')
+          .select('id, output_urls')
+          .eq('venue_id', venueId)
+          .in('id', Array.from(candidateEditedAssetIds))
+        : Promise.resolve({ data: [] as any[] }),
+      candidateEditorJobIds.size
+        ? supabase
+          .from('editor_jobs')
+          .select('id, final_image_url, final_video_url, output_asset_id')
+          .eq('venue_id', venueId)
+          .in('id', Array.from(candidateEditorJobIds))
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const assetsById = new Map((assetsRes.data || []).map((row: any) => [row.id, row]));
+    const editedById = new Map((editedRes.data || []).map((row: any) => [row.id, row]));
+    const jobsById = new Map((jobsRes.data || []).map((row: any) => [row.id, row]));
+
+    for (const item of contentItems) {
+      if (item.resolvedUrl || item.media_url) continue;
+
+      const directVariantUrl = extractFirstUrl(item.media_variants);
+      if (directVariantUrl) {
+        item.resolvedUrl = directVariantUrl;
+        item.resolvedFrom = 'media_variants';
+        continue;
+      }
+
+      const assetIds = extractIdCandidates(item.media_variants, ['asset_id', 'content_asset_id', 'output_asset_id', 'source_asset_id']);
+      for (const assetId of assetIds) {
+        const asset = assetsById.get(assetId);
+        if (!asset) continue;
+        const resolved = await resolveAssetMediaUrl({
+          public_url: asset.public_url,
+          thumbnail_url: asset.thumbnail_url,
+          storage_path: asset.storage_path,
+        });
+        if (resolved) {
+          item.resolvedUrl = resolved;
+          item.media_url = asset.public_url || asset.thumbnail_url || resolved;
+          item.storage_path = item.storage_path || asset.storage_path || null;
+          item.resolvedFrom = 'content_asset';
+          break;
+        }
+      }
+      if (item.resolvedUrl) continue;
+
+      const editorJobIds = extractIdCandidates(item.media_variants, ['editor_job_id', 'job_id']);
+      for (const jobId of editorJobIds) {
+        const job = jobsById.get(jobId);
+        if (!job) continue;
+
+        if (job.output_asset_id && assetsById.has(job.output_asset_id)) {
+          const output = assetsById.get(job.output_asset_id);
+          const resolved = await resolveAssetMediaUrl({
+            public_url: output.public_url,
+            thumbnail_url: output.thumbnail_url,
+            storage_path: output.storage_path,
+          });
+          if (resolved) {
+            item.resolvedUrl = resolved;
+            item.media_url = output.public_url || output.thumbnail_url || resolved;
+            item.storage_path = item.storage_path || output.storage_path || null;
+            item.resolvedFrom = 'content_asset';
+            break;
+          }
+        }
+
+        const fallbackJobUrl = job.final_image_url || job.final_video_url;
+        if (fallbackJobUrl) {
+          item.resolvedUrl = fallbackJobUrl;
+          item.media_url = fallbackJobUrl;
+          item.resolvedFrom = 'editor_job';
+          break;
+        }
+      }
+      if (item.resolvedUrl) continue;
+
+      const editedAssetIds = extractIdCandidates(item.media_variants, ['edited_asset_id']);
+      for (const editedId of editedAssetIds) {
+        const edited = editedById.get(editedId);
+        const outputUrls = Array.isArray(edited?.output_urls) ? edited.output_urls : [];
+        const outputUrl = outputUrls.find((entry: unknown) => typeof entry === 'string' && entry.startsWith('http')) as string | undefined;
+        if (outputUrl) {
+          item.resolvedUrl = outputUrl;
+          item.media_url = outputUrl;
+          item.resolvedFrom = 'edited_asset';
+          break;
+        }
+      }
+    }
+  }
+
   const visibleItems = useMemo(() => {
     return items.filter((item) => {
       if (autopilotRunIdFilter && item.autopilot_run_id !== autopilotRunIdFilter) return false;
@@ -167,7 +281,6 @@ export default function BrandLibraryPage() {
     });
   }, [items, tab, autopilotRunIdFilter, contentItemIdsFilter]);
 
-  /* ─── Actions (content_items only) ─── */
   const toggleSelect = (id: string, checked: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -256,7 +369,20 @@ export default function BrandLibraryPage() {
     fetchItems();
   };
 
-  const getImageUrl = (item: LibraryItem) => item.resolvedUrl || item.media_url || null;
+  const getDisplayImageUrl = (item: LibraryItem) => {
+    const key = buildItemKey(item);
+    if (brokenImageKeys.has(key)) return null;
+    return item.resolvedUrl || item.media_url || null;
+  };
+
+  const markImageBroken = (item: LibraryItem) => {
+    setBrokenImageKeys((prev) => new Set(prev).add(buildItemKey(item)));
+  };
+
+  const openPreview = (item: LibraryItem) => {
+    if (!getDisplayImageUrl(item)) return;
+    setPreviewItem(item);
+  };
 
   return (
     <div className="space-y-6">
@@ -298,14 +424,28 @@ export default function BrandLibraryPage() {
       ) : view === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {visibleItems.map((item) => {
-            const imgUrl = getImageUrl(item);
+            const displayImageUrl = getDisplayImageUrl(item);
+            const hasAsset = !!displayImageUrl;
+            const assetState = getAssetState(item, hasAsset);
+            const autopilotSource = getAutopilotSourceLabel(item);
+
             return (
-              <Card key={`${item.origin}-${item.id}`} className="overflow-hidden">
-                {imgUrl ? (
-                  <img src={imgUrl} alt={item.title || ''} className="h-40 w-full object-cover" loading="lazy" />
+              <Card key={buildItemKey(item)} className="overflow-hidden">
+                {hasAsset ? (
+                  <button type="button" className="block w-full h-40 bg-muted" onClick={() => openPreview(item)}>
+                    <img
+                      src={displayImageUrl!}
+                      alt={item.title || 'Content preview'}
+                      className="h-40 w-full object-cover"
+                      loading="lazy"
+                      onError={() => markImageBroken(item)}
+                    />
+                  </button>
                 ) : (
-                  <div className="h-40 bg-muted flex items-center justify-center">
-                    <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
+                  <div className="h-40 bg-muted/50 flex flex-col items-center justify-center text-center px-4">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground/40 mb-2" />
+                    <p className="text-sm font-medium">No asset yet</p>
+                    <p className="text-xs text-muted-foreground">This is a copy-only draft.</p>
                   </div>
                 )}
                 <CardContent className="p-4 space-y-3">
@@ -320,11 +460,37 @@ export default function BrandLibraryPage() {
                   <div className="flex flex-wrap gap-1">
                     <Badge variant="secondary">{item.status}</Badge>
                     <Badge variant="outline">{item.source}</Badge>
+                    <Badge variant={hasAsset ? 'default' : 'outline'}>{hasAsset ? 'full content' : 'copy-only'}</Badge>
+                    <Badge variant={assetState.variant}>{assetState.label}</Badge>
                     {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
                     {item.origin === 'content_asset' && <Badge variant="outline">Asset</Badge>}
                   </div>
 
+                  {autopilotSource && (
+                    <p className="text-xs text-muted-foreground">{autopilotSource}</p>
+                  )}
+
                   {item.caption_draft && <p className="text-sm line-clamp-3">{item.caption_draft}</p>}
+
+                  {item.origin === 'content_item' && !hasAsset && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}><Wand2 className="w-4 h-4 mr-1" />Generate Image</Button>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=attach`)}><Link2 className="w-4 h-4 mr-1" />Attach Image</Button>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}`)}><Eye className="w-4 h-4 mr-1" />Open in Pro Photo</Button>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=regenerate`)}><RefreshCw className="w-4 h-4 mr-1" />Regenerate</Button>
+                    </div>
+                  )}
+
+                  {item.origin === 'content_item' && hasAsset && (
+                    <Button size="sm" variant="outline" className="w-full" onClick={() => openPreview(item)}><Eye className="w-4 h-4 mr-1" />Preview</Button>
+                  )}
+
+                  {item.origin === 'content_item' && !hasAsset && item.asset_type && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-800">Asset expected ({item.asset_type}) but missing.</p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-2">
                     {item.origin === 'content_item' && (
@@ -347,29 +513,50 @@ export default function BrandLibraryPage() {
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
-          <div className="grid grid-cols-[32px_1fr_1fr_100px_100px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
+          <div className="grid grid-cols-[32px_1fr_1fr_120px_120px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
             <div />
             <div>Title</div>
-            <div>Caption</div>
+            <div>State</div>
             <div>Status</div>
             <div>Source</div>
           </div>
-          {visibleItems.map((item) => (
-            <div key={`${item.origin}-${item.id}`} className="grid grid-cols-[32px_1fr_1fr_100px_100px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
-              <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
-              <div className="flex items-center gap-2">
-                {getImageUrl(item) ? <img src={getImageUrl(item)!} alt="" className="w-8 h-8 rounded object-cover" /> : <div className="w-8 h-8 rounded bg-muted" />}
-                <span className="line-clamp-1">{item.title || 'Untitled'}</span>
+          {visibleItems.map((item) => {
+            const displayImageUrl = getDisplayImageUrl(item);
+            const hasAsset = !!displayImageUrl;
+            return (
+              <div key={buildItemKey(item)} className="grid grid-cols-[32px_1fr_1fr_120px_120px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
+                <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
+                <div className="flex items-center gap-2 min-w-0">
+                  {displayImageUrl ? (
+                    <button type="button" onClick={() => openPreview(item)} className="w-8 h-8 rounded overflow-hidden">
+                      <img src={displayImageUrl} alt="" className="w-8 h-8 rounded object-cover" onError={() => markImageBroken(item)} />
+                    </button>
+                  ) : (
+                    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center"><ImageIcon className="w-4 h-4 text-muted-foreground/60" /></div>
+                  )}
+                  <span className="line-clamp-1">{item.title || 'Untitled'}</span>
+                </div>
+                <div className="text-xs text-muted-foreground line-clamp-1">{hasAsset ? 'Asset ready' : 'Copy generated · Asset pending'}</div>
+                <Badge variant="secondary" className="w-fit">{item.status}</Badge>
+                <Badge variant="outline" className="w-fit">{item.source}</Badge>
               </div>
-              <div className="line-clamp-1 text-muted-foreground">{item.caption_draft || '-'}</div>
-              <Badge variant="secondary" className="w-fit">{item.status}</Badge>
-              <Badge variant="outline" className="w-fit">{item.source}</Badge>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Schedule dialog */}
+      <Dialog open={!!previewItem && !!(previewItem && getDisplayImageUrl(previewItem))} onOpenChange={(open) => !open && setPreviewItem(null)}>
+        <DialogContent className="max-w-5xl p-0 overflow-hidden">
+          <div className="bg-black/90">
+            {previewItem && getDisplayImageUrl(previewItem) ? (
+              <img src={getDisplayImageUrl(previewItem)!} alt={previewItem.title || 'Preview'} className="w-full max-h-[80vh] object-contain" />
+            ) : (
+              <div className="h-[360px] flex items-center justify-center text-muted-foreground">No preview available</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!scheduleTarget} onOpenChange={(v) => !v && setScheduleTarget(null)}>
         <DialogContent>
           <DialogHeader>
@@ -394,7 +581,6 @@ export default function BrandLibraryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit dialog */}
       <Dialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -423,13 +609,11 @@ export default function BrandLibraryPage() {
   );
 }
 
-/* ─── Mappers ─── */
-
 function mapContentItem(row: any): LibraryItem {
   const source = row.source === 'autopilot' ? 'autopilot'
     : row.autopilot_run_id || row.run_type ? 'autopilot'
-    : row.source_plan_publish_item_id ? 'planner'
-    : 'manual';
+      : row.source_plan_publish_item_id ? 'planner'
+        : 'manual';
   return {
     id: row.id,
     venue_id: row.venue_id,
@@ -443,8 +627,10 @@ function mapContentItem(row: any): LibraryItem {
     media_url: row.media_master_url || null,
     storage_path: row.storage_path || null,
     resolvedUrl: null,
+    resolvedFrom: row.media_master_url || row.storage_path ? 'content_item' : null,
     scheduled_for: row.scheduled_for || null,
     created_at: row.created_at,
+    media_variants: row.media_variants ?? null,
     run_type: row.run_type || null,
     autopilot_run_id: row.autopilot_run_id || null,
     cta: row.cta || null,
@@ -472,7 +658,106 @@ function mapContentAsset(row: any): LibraryItem {
     media_url: row.public_url || row.thumbnail_url || null,
     storage_path: row.storage_path || null,
     resolvedUrl: null,
+    resolvedFrom: row.public_url || row.thumbnail_url || row.storage_path ? 'content_asset' : null,
     scheduled_for: null,
     created_at: row.created_at,
   };
+}
+
+function buildItemKey(item: LibraryItem): string {
+  return `${item.origin}:${item.id}`;
+}
+
+function getAssetState(item: LibraryItem, hasAsset: boolean): { label: string; variant: 'outline' | 'secondary' | 'default' } {
+  if (item.origin === 'content_asset') {
+    return { label: hasAsset ? 'Asset ready' : 'Asset missing', variant: hasAsset ? 'default' : 'secondary' };
+  }
+
+  const hasCopy = !!(item.caption_draft || item.caption_final || item.title);
+  if (hasAsset) {
+    return { label: 'Asset ready', variant: 'default' };
+  }
+
+  if (!hasCopy) {
+    return { label: 'Copy pending', variant: 'secondary' };
+  }
+
+  return { label: 'Asset pending', variant: 'outline' };
+}
+
+function getAutopilotSourceLabel(item: LibraryItem): string | null {
+  if (item.source !== 'autopilot') return null;
+
+  if (item.campaign_tag) return `Source: campaign/event · ${item.campaign_tag}`;
+
+  const badges = (item.badges || []).map((b) => b.toLowerCase());
+  if (badges.some((b) => b.includes('review'))) return 'Source: based on recent reviews';
+  if (badges.some((b) => b.includes('event') || b.includes('campaign'))) return 'Source: based on active campaign/event';
+
+  if (item.run_type === 'review_content') return 'Source: based on recent reviews';
+  if (item.run_type === 'weekly_campaign') return 'Source: based on campaign/event context';
+
+  const brief = `${item.content_brief || ''} ${item.creative_brief || ''}`.toLowerCase();
+  if (brief.includes('cuisine') || brief.includes('tone') || brief.includes('brand')) {
+    return 'Source: based on brand profile (cuisine/tone)';
+  }
+
+  if (brief.trim().length > 0) return 'Source: based on venue context';
+
+  return 'Source: based on brand profile';
+}
+
+function extractFirstUrl(value: unknown): string | null {
+  if (!value) return null;
+  const queue: unknown[] = [value];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    if (typeof current === 'string' && current.startsWith('http')) {
+      return current;
+    }
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    if (typeof current === 'object') {
+      const objectValues = Object.values(current as Record<string, unknown>);
+      queue.push(...objectValues);
+    }
+  }
+
+  return null;
+}
+
+function extractIdCandidates(value: unknown, keys: string[]): string[] {
+  if (!value) return [];
+  const matches = new Set<string>();
+  const queue: unknown[] = [value];
+  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    if (typeof current !== 'object') continue;
+
+    for (const [key, raw] of Object.entries(current as Record<string, unknown>)) {
+      if (typeof raw === 'string' && normalizedKeys.has(key.toLowerCase()) && UUID_RE.test(raw)) {
+        matches.add(raw);
+      }
+      if (raw && typeof raw === 'object') queue.push(raw);
+      if (Array.isArray(raw)) queue.push(...raw);
+    }
+  }
+
+  return Array.from(matches);
 }
