@@ -209,31 +209,28 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     const saveErrorDetails: SaveErrorDetail[] = [];
 
     for (const [index, item] of items.entries()) {
-      const { data: ci, error: ciErr } = await supabase
-        .from("content_items")
-        .insert({
-          venue_id: venueId,
-          source: "autopilot",
-          run_type: runType,
-          autopilot_run_id: runId,
-          title: item.title,
-          caption_draft: item.caption,
-          caption_final: null,
-          cta: item.cta,
-          hashtags: item.hashtags,
-          content_brief: item.content_brief,
-          creative_brief: item.creative_brief,
-          asset_type: item.asset_type,
-          intent: "standard",
-          status: "draft",
-          suggested_scheduled_for: item.suggested_scheduled_for,
-          scheduled_for: null,
-          campaign_tag: item.campaign_tag,
-          badges: item.badges,
-          source_plan_title: `Autopilot ${runType === "weekly_campaign" ? "Weekly" : runType === "review_content" ? "Review" : "Daily"} — ${new Date().toISOString().split("T")[0]}`,
-        })
-        .select("id")
-        .single();
+      const insertPayload: Record<string, unknown> = {
+        venue_id: venueId,
+        run_type: runType,
+        autopilot_run_id: runId,
+        title: item.title,
+        caption_draft: item.caption,
+        caption_final: null,
+        cta: item.cta,
+        hashtags: item.hashtags,
+        content_brief: item.content_brief,
+        creative_brief: item.creative_brief,
+        asset_type: item.asset_type,
+        intent: "standard",
+        status: "draft",
+        suggested_scheduled_for: item.suggested_scheduled_for,
+        scheduled_for: null,
+        campaign_tag: item.campaign_tag,
+        badges: item.badges,
+        source_plan_title: `Autopilot ${runType === "weekly_campaign" ? "Weekly" : runType === "review_content" ? "Review" : "Daily"} — ${new Date().toISOString().split("T")[0]}`,
+      };
+
+      const { data: ci, error: ciErr } = await insertContentItemWithFallback(supabase, insertPayload);
 
       if (ciErr || !ci) {
         saveErrorDetails.push({
@@ -257,7 +254,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
       ...saveErrorDetails,
     ];
 
-    const runStatus = parseError
+    const runStatus: "failed" | "partial" | "completed" = parseError
       ? "failed"
       : generatedCount === 0
         ? "failed"
@@ -273,7 +270,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         ? `Saved ${savedCount}/${generatedCount} items. ${combinedSaveErrorDetails[0]?.message || "One or more save errors occurred."}`
         : null;
 
-    await supabase.from("autopilot_runs").update({
+    const { error: runUpdateError } = await supabase.from("autopilot_runs").update({
       status: runStatus,
       completed_at: new Date().toISOString(),
       content_item_ids: contentItemIds,
@@ -304,9 +301,8 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         saved_library_item_ids: contentItemIds,
       },
     }).eq("id", runId);
-
-    if (runStatus === "failed") {
-      throw new Error(errorMessage || "Autopilot run failed");
+    if (runUpdateError) {
+      throw runUpdateError;
     }
 
     return {
@@ -328,12 +324,47 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
       status: "failed",
       completed_at: new Date().toISOString(),
       error_message: err.message,
-      items_failed: 1,
-      failed_count: 1,
       run_status: "failed",
+      generated_count: 0,
+      saved_count: 0,
+      failed_count: 0,
+      items_generated: 0,
+      items_saved: 0,
+      items_failed: 0,
     }).eq("id", runId);
     throw err;
   }
+}
+
+async function insertContentItemWithFallback(supabase: any, basePayload: Record<string, unknown>) {
+  const payload = { ...basePayload };
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const { data, error } = await supabase
+      .from("content_items")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    if (error.code !== "42703") {
+      return { data: null, error };
+    }
+
+    const missingColumnMatch = error.message.match(/column ["']?content_items\.?([a-zA-Z0-9_]+)["']? does not exist/i)
+      || error.message.match(/column ["']?([a-zA-Z0-9_]+)["']? does not exist/i);
+    const missingColumn = missingColumnMatch?.[1];
+    if (!missingColumn || !(missingColumn in payload)) {
+      return { data: null, error };
+    }
+
+    delete payload[missingColumn];
+  }
+
+  return { data: null, error: { message: "Exceeded schema fallback attempts while inserting content item." } };
 }
 
 function parseAndNormalizeItems(
