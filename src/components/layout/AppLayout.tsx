@@ -415,6 +415,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Build mobile nav with same ordering
   const allNavItems: NavItem[] = [
     homeItem,
+    autopilotItem,
     ...mobileStudioNav,
     ...contentNavigation,
     ...reputationNavigation,

@@ -147,6 +147,9 @@ function AppRoutes() {
         <Route path="/studio/reel-creator" element={<ReelCreator />} />
         <Route path="/studio/reels" element={<ReelCreator />} />
         
+        {/* Autopilot */}
+        <Route path="/autopilot" element={<Autopilot />} />
+
         {/* Content Section */}
         <Route path="/content/library" element={<BrandLibrary />} />
         <Route path="/content/planner" element={<Planner />} />
