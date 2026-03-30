@@ -189,21 +189,9 @@ export type Database = {
           content_item_ids: string[] | null
           created_at: string
           error_message: string | null
-          failed_count: number
-          generated_count: number
-          generated_item_payloads: Json | null
           id: string
-          items_failed: number
-          items_generated: number
-          items_saved: number
           output_summary: Json | null
-          parse_error: string | null
-          raw_ai_output: string | null
-          run_status: string
           run_type: string
-          save_error_details: Json | null
-          saved_count: number
-          saved_library_item_ids: string[] | null
           started_at: string | null
           status: string
           venue_id: string
@@ -213,21 +201,9 @@ export type Database = {
           content_item_ids?: string[] | null
           created_at?: string
           error_message?: string | null
-          failed_count?: number
-          generated_count?: number
-          generated_item_payloads?: Json | null
           id?: string
-          items_failed?: number
-          items_generated?: number
-          items_saved?: number
           output_summary?: Json | null
-          parse_error?: string | null
-          raw_ai_output?: string | null
-          run_status?: string
           run_type: string
-          save_error_details?: Json | null
-          saved_count?: number
-          saved_library_item_ids?: string[] | null
           started_at?: string | null
           status?: string
           venue_id: string
@@ -237,21 +213,9 @@ export type Database = {
           content_item_ids?: string[] | null
           created_at?: string
           error_message?: string | null
-          failed_count?: number
-          generated_count?: number
-          generated_item_payloads?: Json | null
           id?: string
-          items_failed?: number
-          items_generated?: number
-          items_saved?: number
           output_summary?: Json | null
-          parse_error?: string | null
-          raw_ai_output?: string | null
-          run_status?: string
           run_type?: string
-          save_error_details?: Json | null
-          saved_count?: number
-          saved_library_item_ids?: string[] | null
           started_at?: string | null
           status?: string
           venue_id?: string
@@ -652,26 +616,16 @@ export type Database = {
           buffer_update_id: string | null
           caption_draft: string | null
           caption_final: string | null
-          campaign_tag: string | null
           change_reason: string | null
           created_at: string
           id: string
           intent: string | null
-          autopilot_run_id: string | null
-          badges: string[] | null
-          content_brief: string | null
-          creative_brief: string | null
-          cta: string | null
-          hashtags: string[] | null
           media_master_url: string | null
           media_variants: Json | null
           scheduled_for: string | null
-          source: string
           source_plan_publish_item_id: string | null
           source_plan_title: string | null
           status: string | null
-          suggested_scheduled_for: string | null
-          title: string | null
           updated_at: string
           upload_id: string | null
           used_background_asset_ids: Json | null
@@ -684,26 +638,16 @@ export type Database = {
           buffer_update_id?: string | null
           caption_draft?: string | null
           caption_final?: string | null
-          campaign_tag?: string | null
           change_reason?: string | null
           created_at?: string
           id?: string
           intent?: string | null
-          autopilot_run_id?: string | null
-          badges?: string[] | null
-          content_brief?: string | null
-          creative_brief?: string | null
-          cta?: string | null
-          hashtags?: string[] | null
           media_master_url?: string | null
           media_variants?: Json | null
           scheduled_for?: string | null
-          source?: string
           source_plan_publish_item_id?: string | null
           source_plan_title?: string | null
           status?: string | null
-          suggested_scheduled_for?: string | null
-          title?: string | null
           updated_at?: string
           upload_id?: string | null
           used_background_asset_ids?: Json | null
@@ -716,26 +660,16 @@ export type Database = {
           buffer_update_id?: string | null
           caption_draft?: string | null
           caption_final?: string | null
-          campaign_tag?: string | null
           change_reason?: string | null
           created_at?: string
           id?: string
           intent?: string | null
-          autopilot_run_id?: string | null
-          badges?: string[] | null
-          content_brief?: string | null
-          creative_brief?: string | null
-          cta?: string | null
-          hashtags?: string[] | null
           media_master_url?: string | null
           media_variants?: Json | null
           scheduled_for?: string | null
-          source?: string
           source_plan_publish_item_id?: string | null
           source_plan_title?: string | null
           status?: string | null
-          suggested_scheduled_for?: string | null
-          title?: string | null
           updated_at?: string
           upload_id?: string | null
           used_background_asset_ids?: Json | null
@@ -743,13 +677,6 @@ export type Database = {
           venue_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "content_items_autopilot_run_id_fkey"
-            columns: ["autopilot_run_id"]
-            isOneToOne: false
-            referencedRelation: "autopilot_runs"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "content_items_source_plan_publish_item_id_fkey"
             columns: ["source_plan_publish_item_id"]
