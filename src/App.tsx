@@ -51,6 +51,7 @@ import PartnerProfile from "./pages/partner/PartnerProfile";
 import { PartnerLayout } from "./components/partner/PartnerLayout";
 import GuestSubmissions from "./pages/GuestSubmissions";
 import GuestUploadPage from "./pages/GuestUploadPage";
+import Autopilot from "./pages/Autopilot";
 import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
@@ -146,6 +147,9 @@ function AppRoutes() {
         <Route path="/studio/reel-creator" element={<ReelCreator />} />
         <Route path="/studio/reels" element={<ReelCreator />} />
         
+        {/* Autopilot */}
+        <Route path="/autopilot" element={<Autopilot />} />
+
         {/* Content Section */}
         <Route path="/content/library" element={<BrandLibrary />} />
         <Route path="/content/planner" element={<Planner />} />

@@ -183,6 +183,94 @@ export type Database = {
         }
         Relationships: []
       }
+      autopilot_runs: {
+        Row: {
+          completed_at: string | null
+          content_item_ids: string[] | null
+          created_at: string
+          error_message: string | null
+          id: string
+          output_summary: Json | null
+          run_type: string
+          started_at: string | null
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          content_item_ids?: string[] | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          output_summary?: Json | null
+          run_type: string
+          started_at?: string | null
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          content_item_ids?: string[] | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          output_summary?: Json | null
+          run_type?: string
+          started_at?: string | null
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autopilot_runs_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autopilot_settings: {
+        Row: {
+          approval_mode: string
+          content_volume: string
+          created_at: string
+          frequency: string
+          is_enabled: boolean
+          run_time: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          approval_mode?: string
+          content_volume?: string
+          created_at?: string
+          frequency?: string
+          is_enabled?: boolean
+          run_time?: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          approval_mode?: string
+          content_volume?: string
+          created_at?: string
+          frequency?: string
+          is_enabled?: boolean
+          run_time?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autopilot_settings_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       background_assets: {
         Row: {
           allow_in_production: boolean

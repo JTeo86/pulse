@@ -6,6 +6,7 @@ import {
   Camera,
   Film,
   Sparkles,
+  Zap,
   FolderOpen,
   Calendar,
   Megaphone,
@@ -71,6 +72,7 @@ interface AppLayoutProps {
 
 // New simplified navigation structure
 const homeItem = { name: 'Home', href: '/home', icon: Home };
+const autopilotItem = { name: 'Autopilot', href: '/autopilot', icon: Zap };
 
 const studioBaseNavigation = [
   { name: 'Pro Photo', href: '/studio/pro-photo', icon: Camera },
@@ -327,6 +329,17 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Autopilot - prominent top-level */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-0.5">
+              <SidebarMenuItem>
+                <NavItemComponent item={autopilotItem} />
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <CollapsibleSection label="Studio" items={studioNavigation} sectionKey="studio" />
         <CollapsibleSection label="Content" items={contentNavigation} sectionKey="content" />
         <CollapsibleSection label="Reputation" items={reputationNavigation} sectionKey="reputation" />
@@ -402,6 +415,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Build mobile nav with same ordering
   const allNavItems: NavItem[] = [
     homeItem,
+    autopilotItem,
     ...mobileStudioNav,
     ...contentNavigation,
     ...reputationNavigation,
