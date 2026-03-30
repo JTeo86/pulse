@@ -23,7 +23,6 @@ import { useToast } from '@/hooks/use-toast';
 interface LibraryItem {
   id: string;
   venue_id: string;
-  source: 'manual' | 'autopilot' | 'planner';
   run_type: 'daily_content' | 'weekly_campaign' | 'review_content' | null;
   status: 'draft' | 'approved' | 'scheduled' | 'published' | 'archived' | 'failed' | 'needs_changes';
   title: string | null;
@@ -40,6 +39,8 @@ interface LibraryItem {
   campaign_tag: string | null;
   autopilot_run_id: string | null;
   badges: string[] | null;
+  source_plan_publish_item_id: string | null;
+  source_plan_title: string | null;
   created_at: string;
 }
 
@@ -63,24 +64,59 @@ export default function BrandLibraryPage() {
   const [editedBrief, setEditedBrief] = useState('');
 
   const autopilotRunIdFilter = searchParams.get('autopilotRunId');
+  const contentItemIdsFilter = useMemo(() => {
+    const raw = searchParams.get('contentItemIds');
+    if (!raw) return null;
+    const ids = raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+    return ids.length ? new Set(ids) : null;
+  }, [searchParams]);
+
+  const deriveItemSource = useCallback((item: Partial<LibraryItem>) => {
+    if (item.autopilot_run_id || item.run_type) return 'autopilot';
+    if (item.source_plan_publish_item_id) return 'planner';
+    return 'manual';
+  }, []);
 
   const fetchItems = useCallback(async () => {
     if (!currentVenue) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('content_items')
-      .select('id, venue_id, source, run_type, status, title, caption_draft, caption_final, cta, hashtags, content_brief, creative_brief, asset_type, media_master_url, suggested_scheduled_for, scheduled_for, campaign_tag, autopilot_run_id, badges, created_at')
-      .eq('venue_id', currentVenue.id)
-      .order('created_at', { ascending: false })
-      .limit(250);
+    const selectCandidates = [
+      'id, venue_id, run_type, status, title, caption_draft, caption_final, cta, hashtags, content_brief, creative_brief, asset_type, media_master_url, suggested_scheduled_for, scheduled_for, campaign_tag, autopilot_run_id, badges, source_plan_publish_item_id, source_plan_title, created_at',
+      'id, venue_id, run_type, status, title, caption_draft, caption_final, asset_type, media_master_url, suggested_scheduled_for, scheduled_for, autopilot_run_id, source_plan_publish_item_id, source_plan_title, created_at',
+      'id, venue_id, status, caption_draft, caption_final, asset_type, media_master_url, scheduled_for, created_at',
+    ];
+
+    let loadedData: any[] = [];
+    let lastError: any = null;
+
+    for (const selectClause of selectCandidates) {
+      const { data, error } = await supabase
+        .from('content_items')
+        .select(selectClause)
+        .eq('venue_id', currentVenue.id)
+        .order('created_at', { ascending: false })
+        .limit(250);
+
+      if (!error) {
+        loadedData = data || [];
+        lastError = null;
+        break;
+      }
+
+      lastError = error;
+      if (error.code !== '42703') break;
+    }
 
     setLoading(false);
-    if (error) {
-      toast({ variant: 'destructive', title: 'Failed to load content library', description: error.message });
+    if (lastError) {
+      toast({ variant: 'destructive', title: 'Failed to load content library', description: lastError.message });
       return;
     }
 
-    setItems((data || []) as any);
+    setItems(loadedData as LibraryItem[]);
   }, [currentVenue, toast]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
@@ -88,14 +124,16 @@ export default function BrandLibraryPage() {
   const visibleItems = useMemo(() => {
     return items.filter((item) => {
       if (autopilotRunIdFilter && item.autopilot_run_id !== autopilotRunIdFilter) return false;
+      if (contentItemIdsFilter && !contentItemIdsFilter.has(item.id)) return false;
+      const source = deriveItemSource(item);
       if (tab === 'all') return true;
-      if (tab === 'autopilot') return item.source === 'autopilot';
-      if (tab === 'manual') return item.source === 'manual';
+      if (tab === 'autopilot') return source === 'autopilot';
+      if (tab === 'manual') return source === 'manual';
       return item.status === tab;
     });
-  }, [items, tab, autopilotRunIdFilter]);
+  }, [items, tab, autopilotRunIdFilter, contentItemIdsFilter, deriveItemSource]);
 
-  const aiDrafts = useMemo(() => visibleItems.filter((i) => i.source === 'autopilot' && i.status === 'draft'), [visibleItems]);
+  const aiDrafts = useMemo(() => visibleItems.filter((i) => deriveItemSource(i) === 'autopilot' && i.status === 'draft'), [visibleItems, deriveItemSource]);
   const readyToSchedule = useMemo(() => visibleItems.filter((i) => ['approved', 'draft'].includes(i.status) && !!i.caption_draft), [visibleItems]);
 
   const toggleSelect = (id: string, checked: boolean) => {
@@ -128,7 +166,7 @@ export default function BrandLibraryPage() {
       status: 'scheduled',
       scheduled_for: schedule,
       caption_final: item.caption_final || item.caption_draft || null,
-      source_plan_title: item.source === 'autopilot' ? 'Library Scheduled (Autopilot)' : 'Library Scheduled',
+      source_plan_title: deriveItemSource(item) === 'autopilot' ? 'Library Scheduled (Autopilot)' : 'Library Scheduled',
     };
     const { error } = await supabase.from('content_items').update(patch).eq('id', item.id);
     if (error) {
@@ -172,7 +210,7 @@ export default function BrandLibraryPage() {
   };
 
   const quickFilters = [
-    { label: `Autopilot (${visibleItems.filter(i => i.source === 'autopilot').length})`, onClick: () => setTab('autopilot') },
+    { label: `Autopilot (${visibleItems.filter(i => deriveItemSource(i) === 'autopilot').length})`, onClick: () => setTab('autopilot') },
     { label: `AI Drafts (${aiDrafts.length})`, onClick: () => setTab('all') },
     { label: `Ready to Schedule (${readyToSchedule.length})`, onClick: () => setTab('approved') },
   ];
@@ -235,7 +273,7 @@ export default function BrandLibraryPage() {
 
                 <div className="flex flex-wrap gap-1">
                   <Badge variant="secondary">{item.status}</Badge>
-                  <Badge variant="outline">{item.source}</Badge>
+                  <Badge variant="outline">{deriveItemSource(item)}</Badge>
                   {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
                   {(item.badges || []).slice(0, 2).map((b) => <Badge key={b} variant="outline">{b}</Badge>)}
                 </div>
@@ -271,7 +309,7 @@ export default function BrandLibraryPage() {
               <div>{item.title || 'Untitled'}</div>
               <div className="line-clamp-1 text-muted-foreground">{item.caption_draft || item.caption_final || '-'}</div>
               <Badge variant="secondary" className="w-fit">{item.status}</Badge>
-              <Badge variant="outline" className="w-fit">{item.source}</Badge>
+              <Badge variant="outline" className="w-fit">{deriveItemSource(item)}</Badge>
             </div>
           ))}
         </div>

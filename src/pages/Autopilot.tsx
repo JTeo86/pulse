@@ -203,7 +203,7 @@ export default function AutopilotPage() {
                         variant="outline"
                         className="gap-2"
                         disabled={!hasSavedItems}
-                        onClick={() => navigate(`/content/library?source=autopilot&autopilotRunId=${run.id}`)}
+                        onClick={() => navigate(`/content/library?source=autopilot&autopilotRunId=${run.id}&contentItemIds=${(savedIds || []).join(',')}`)}
                       >
                         Open generated items <ExternalLink className="w-3.5 h-3.5" />
                       </Button>
