@@ -50,15 +50,6 @@ export default function AutopilotPage() {
             Generated items land in Content drafts by default. Review them, approve, and send to Calendar when ready.
           </AlertDescription>
         </Alert>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => navigate('/content/planner')}>
-            <Sparkles className="w-4 h-4" /> Open Planner
-          </Button>
-          <Button variant="outline" className="gap-2" onClick={() => navigate('/content/library')}>
-            <ExternalLink className="w-4 h-4" /> Open Content
-          </Button>
-        </div>
-
         <Card className="border-accent/20">
           <CardHeader>
             <div className="flex items-center justify-between">

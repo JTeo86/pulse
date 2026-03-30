@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
-  Archive, CalendarDays, CheckCircle2, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
+  Archive, ArrowLeft, CalendarDays, CheckCircle2, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
   Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -394,6 +394,11 @@ export default function BrandLibraryPage() {
 
   return (
     <div className="space-y-6">
+      {autopilotRunIdFilter && (
+        <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/autopilot')}>
+          <ArrowLeft className="w-4 h-4" /> Back to Autopilot
+        </Button>
+      )}
       <PageHeader title="Content" description="Your content inventory. Review assets and drafts here, then send ready posts to Calendar." />
 
       <div className="flex items-center justify-between gap-2 flex-wrap">

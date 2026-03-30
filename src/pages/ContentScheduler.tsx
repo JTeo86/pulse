@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Image, Trash2, CheckSquare, Plus } from 'lucide-react';
+import { Calendar, Clock, Trash2, CheckSquare, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
@@ -44,7 +44,7 @@ export default function ContentScheduler() {
         plan_publish_items!content_items_source_plan_publish_item_id_fkey ( plan_id )
       `)
       .eq('venue_id', currentVenue.id)
-      .in('status', ['scheduled', 'draft', 'published'])
+      .in('status', ['scheduled', 'published'])
       .order('scheduled_for', { ascending: true, nullsFirst: false });
 
     const mapped: ScheduledItem[] = (data || []).map((row: any) => ({
@@ -158,7 +158,6 @@ export default function ContentScheduler() {
   };
 
   const scheduledItems = items.filter((i) => i.status === 'scheduled' && i.scheduled_for);
-  const draftItems = items.filter((i) => i.status === 'draft');
   const publishedItems = items.filter((i) => i.status === 'published');
 
   const selectableItems = [...scheduledItems, ...publishedItems];
@@ -247,7 +246,7 @@ export default function ContentScheduler() {
         <EmptyState
           icon={Calendar}
           title="No content on your calendar"
-          description="Create a one-off post or build Post Packs in the Planner to populate your calendar."
+          description="Create a one-off post or build Post Packs in Plans to populate your calendar."
           action={
             <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
               <Plus className="w-4 h-4" /> Create Post
@@ -271,24 +270,6 @@ export default function ContentScheduler() {
                     selectable={selectionMode}
                     selected={selectedIds.has(item.id)}
                     onSelectChange={(checked) => toggleSelect(item.id, checked)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {draftItems.length > 0 && (
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Image className="w-5 h-5 text-muted-foreground" />
-                Drafts ({draftItems.length})
-              </h2>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {draftItems.map((item) => (
-                  <CalendarContentCard
-                    key={item.id}
-                    item={item}
-                    onDelete={() => handleDelete(item)}
                   />
                 ))}
               </div>

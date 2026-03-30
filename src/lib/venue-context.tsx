@@ -14,7 +14,7 @@ interface VenueMember {
   id: string;
   venue_id: string;
   user_id: string;
-  role: 'staff' | 'manager';
+  role: 'staff' | 'manager' | 'admin';
 }
 
 interface VenueContextType {
@@ -157,7 +157,7 @@ export function VenueProvider({ children }: { children: ReactNode }) {
   // Owner is determined by venues.owner_user_id
   const isOwner = !!(user && currentVenue?.owner_user_id === user.id);
   // isAdmin: owner is always admin; also treat as admin if no member record but is owner
-  const isAdmin = isOwner || currentMember?.role === 'manager';
+  const isAdmin = isOwner || currentMember?.role === 'manager' || currentMember?.role === 'admin';
 
   return (
     <VenueContext.Provider value={{

@@ -99,8 +99,8 @@ export function CalendarContentCard({
     if (item.source_plan_id) {
       navigate(`/content/planner/plan/${item.source_plan_id}`);
     } else {
-      // Fallback: go to planner list
-      navigate('/content/planner');
+      // Fallback: go to plans view on Home
+      navigate('/home?tab=plans');
     }
   };
 
