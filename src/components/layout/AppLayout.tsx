@@ -329,6 +329,17 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Autopilot - prominent top-level */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-0.5">
+              <SidebarMenuItem>
+                <NavItemComponent item={autopilotItem} />
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <CollapsibleSection label="Studio" items={studioNavigation} sectionKey="studio" />
         <CollapsibleSection label="Content" items={contentNavigation} sectionKey="content" />
         <CollapsibleSection label="Reputation" items={reputationNavigation} sectionKey="reputation" />
