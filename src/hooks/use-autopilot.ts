@@ -18,10 +18,14 @@ export interface AutopilotRun {
   id: string;
   venue_id: string;
   run_type: 'daily_content' | 'weekly_campaign' | 'review_content';
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'partial_failed';
   output_summary: Record<string, any>;
   content_item_ids: string[];
   error_message: string | null;
+  parse_error: string | null;
+  items_generated: number;
+  items_saved: number;
+  items_failed: number;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -101,11 +105,16 @@ export function useAutopilotTrigger() {
         body: { venue_id: venueId, run_type: runType },
       });
       if (error) throw error;
-      return data;
+      const result = data?.results?.[0];
+      if (!result) throw new Error('Autopilot returned no result');
+      if (result.status === 'failed' || result.status === 'error') {
+        throw new Error(result.error_message || result.error || 'Autopilot run failed');
+      }
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['autopilot-runs', venueId] });
-      toast.success('Autopilot run completed');
+      toast.success(`Autopilot generated ${result.items_saved ?? 0} item${(result.items_saved ?? 0) === 1 ? '' : 's'} in Library`);
     },
     onError: (err: any) => toast.error(err.message || 'Autopilot run failed'),
   });

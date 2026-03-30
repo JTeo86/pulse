@@ -6,6 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+type RunType = "daily_content" | "weekly_campaign" | "review_content";
+
+type GeneratedItem = {
+  title: string;
+  caption: string;
+  cta: string | null;
+  hashtags: string[];
+  asset_type: "static" | "video";
+  content_brief: string | null;
+  creative_brief: string | null;
+  suggested_scheduled_for: string | null;
+  campaign_tag: string | null;
+  badges: string[];
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -16,14 +31,12 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const body = await req.json().catch(() => ({}));
 
-    // Auth: require either service role key (cron) or valid user JWT with venue membership
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "");
     let venueId: string | null = body.venue_id || null;
-    let runType: string = body.run_type || "daily_content";
+    let runType: RunType = body.run_type || "daily_content";
 
     if (venueId && token !== serviceKey) {
-      // User-initiated run — validate membership
       const supabaseAuth = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
       });
@@ -46,7 +59,6 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // If no venue_id, this is a cron call — find all enabled venues due for a run
     let venueIds: string[] = [];
     if (venueId) {
       venueIds = [venueId];
@@ -58,12 +70,12 @@ Deno.serve(async (req: Request) => {
       }
       const { data: settings } = await supabase
         .from("autopilot_settings")
-        .select("venue_id, frequency, run_time")
+        .select("venue_id, frequency")
         .eq("is_enabled", true);
 
       if (settings) {
         const now = new Date();
-        const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon
+        const dayOfWeek = now.getDay();
         for (const s of settings) {
           const shouldRun = s.frequency === "daily"
             || (s.frequency === "3x_week" && [1, 3, 5].includes(dayOfWeek))
@@ -72,7 +84,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Weekly campaign on Mondays
+      const dayOfWeek = new Date().getDay();
       if (dayOfWeek === 1) runType = "weekly_campaign";
     }
 
@@ -81,9 +93,9 @@ Deno.serve(async (req: Request) => {
     for (const vid of venueIds) {
       try {
         const result = await runAutopilot(supabase, vid, runType);
-        results.push({ venue_id: vid, status: "ok", ...result });
+        results.push({ venue_id: vid, ...result });
       } catch (err: any) {
-        results.push({ venue_id: vid, status: "error", error: err.message });
+        results.push({ venue_id: vid, status: "failed", error: err.message });
       }
     }
 
@@ -97,7 +109,6 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// ─── Context Builder ───────────────────────────────────────────────
 async function buildVenueContext(supabase: any, venueId: string) {
   const [venueRes, profileRes, brandKitRes, reviewsRes, contentRes, eventsRes] = await Promise.all([
     supabase.from("venues").select("name, city, country_code, timezone, website_url, instagram_handle").eq("id", venueId).single(),
@@ -116,11 +127,7 @@ async function buildVenueContext(supabase: any, venueId: string) {
   const upcomingEvents = eventsRes.data || [];
 
   return {
-    venue,
-    profile,
-    brandKit,
     pendingReviews,
-    recentContent,
     upcomingEvents,
     contextString: [
       `Venue: ${venue?.name || "Unknown"} (${venue?.city || venue?.country_code || "Unknown"})`,
@@ -138,16 +145,13 @@ async function buildVenueContext(supabase: any, venueId: string) {
   };
 }
 
-// ─── Main Runner ───────────────────────────────────────────────────
-async function runAutopilot(supabase: any, venueId: string, runType: string) {
-  // Check settings
+async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
   const { data: settings } = await supabase
     .from("autopilot_settings")
     .select("*")
     .eq("venue_id", venueId)
     .maybeSingle();
 
-  // Create run record
   const { data: run, error: runErr } = await supabase
     .from("autopilot_runs")
     .insert({
@@ -167,16 +171,12 @@ async function runAutopilot(supabase: any, venueId: string, runType: string) {
     const volume = settings?.content_volume || "medium";
     const contentCount = volume === "low" ? 1 : volume === "high" ? 3 : 2;
 
-    let prompt: string;
-    if (runType === "weekly_campaign") {
-      prompt = buildWeeklyCampaignPrompt(ctx, contentCount);
-    } else if (runType === "review_content") {
-      prompt = buildReviewContentPrompt(ctx);
-    } else {
-      prompt = buildDailyContentPrompt(ctx, contentCount);
-    }
+    const prompt = runType === "weekly_campaign"
+      ? buildWeeklyCampaignPrompt(ctx, contentCount)
+      : runType === "review_content"
+        ? buildReviewContentPrompt(ctx)
+        : buildDailyContentPrompt(ctx, contentCount);
 
-    // Call AI
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -193,66 +193,168 @@ async function runAutopilot(supabase: any, venueId: string, runType: string) {
     if (!aiResponse.ok) throw new Error(`AI request failed: ${aiResponse.status}`);
 
     const aiData = await aiResponse.json();
-    const rawContent = aiData.choices?.[0]?.message?.content || "[]";
-    const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const rawContent = String(aiData.choices?.[0]?.message?.content || "");
+    const { items, parseError } = parseAndNormalizeItems(rawContent, runType);
 
-    let items: any[];
-    try {
-      items = JSON.parse(cleaned);
-      if (!Array.isArray(items)) items = [items];
-    } catch {
-      items = [];
-    }
-
-    // Save each generated item as a content_item draft
     const contentItemIds: string[] = [];
-    const approvalMode = settings?.approval_mode || "require_approval";
+    const saveErrors: string[] = [];
 
     for (const item of items) {
-      const status = approvalMode === "auto_schedule" ? "scheduled" : "draft";
       const { data: ci, error: ciErr } = await supabase
         .from("content_items")
         .insert({
           venue_id: venueId,
-          caption_draft: item.caption || item.content || "",
-          caption_final: approvalMode === "auto_schedule" ? (item.caption || item.content || "") : null,
-          asset_type: item.asset_type || "image",
+          source: "autopilot",
+          run_type: runType,
+          autopilot_run_id: runId,
+          title: item.title,
+          caption_draft: item.caption,
+          caption_final: null,
+          cta: item.cta,
+          hashtags: item.hashtags,
+          content_brief: item.content_brief,
+          creative_brief: item.creative_brief,
+          asset_type: item.asset_type,
           intent: "standard",
-          status,
-          scheduled_for: item.scheduled_for || null,
-          source_plan_title: `Autopilot ${runType === "weekly_campaign" ? "Weekly" : "Daily"} — ${new Date().toISOString().split("T")[0]}`,
+          status: "draft",
+          suggested_scheduled_for: item.suggested_scheduled_for,
+          scheduled_for: null,
+          campaign_tag: item.campaign_tag,
+          badges: item.badges,
+          source_plan_title: `Autopilot ${runType === "weekly_campaign" ? "Weekly" : runType === "review_content" ? "Review" : "Daily"} — ${new Date().toISOString().split("T")[0]}`,
         })
         .select("id")
         .single();
 
-      if (!ciErr && ci) contentItemIds.push(ci.id);
+      if (ciErr || !ci) {
+        saveErrors.push(ciErr?.message || "Unknown save error");
+      } else {
+        contentItemIds.push(ci.id);
+      }
     }
 
-    // Update run as completed
+    const itemsGenerated = items.length;
+    const itemsSaved = contentItemIds.length;
+    const itemsFailed = (parseError ? itemsGenerated || 1 : 0) + Math.max(0, itemsGenerated - itemsSaved);
+
+    const runStatus = parseError
+      ? "failed"
+      : itemsGenerated === 0
+        ? "failed"
+        : itemsSaved === 0
+          ? "failed"
+          : itemsFailed > 0
+            ? "partial_failed"
+            : "completed";
+
+    const errorMessage = parseError
+      ? `Autopilot JSON parse failed: ${parseError}`
+      : saveErrors.length > 0
+        ? `Saved ${itemsSaved}/${itemsGenerated} items. ${saveErrors[0]}`
+        : null;
+
     await supabase.from("autopilot_runs").update({
-      status: "completed",
+      status: runStatus,
       completed_at: new Date().toISOString(),
       content_item_ids: contentItemIds,
+      raw_ai_output: rawContent,
+      parse_error: parseError,
+      items_generated: itemsGenerated,
+      items_saved: itemsSaved,
+      items_failed: itemsFailed,
+      error_message: errorMessage,
       output_summary: {
-        items_generated: items.length,
-        items_saved: contentItemIds.length,
+        items_generated: itemsGenerated,
+        items_saved: itemsSaved,
+        items_failed: itemsFailed,
         run_type: runType,
-        approval_mode: approvalMode,
+        parse_error: parseError,
+        save_errors: saveErrors,
       },
     }).eq("id", runId);
 
-    return { items_generated: items.length, items_saved: contentItemIds.length };
+    if (runStatus === "failed") {
+      throw new Error(errorMessage || "Autopilot run failed");
+    }
+
+    return {
+      status: runStatus,
+      run_id: runId,
+      items_generated: itemsGenerated,
+      items_saved: itemsSaved,
+      items_failed: itemsFailed,
+      content_item_ids: contentItemIds,
+      error_message: errorMessage,
+    };
   } catch (err: any) {
     await supabase.from("autopilot_runs").update({
       status: "failed",
       completed_at: new Date().toISOString(),
       error_message: err.message,
+      items_failed: 1,
     }).eq("id", runId);
     throw err;
   }
 }
 
-// ─── Prompt Builders ───────────────────────────────────────────────
+function parseAndNormalizeItems(rawContent: string, runType: RunType): { items: GeneratedItem[]; parseError: string | null } {
+  const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  let parsed: any;
+
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (err: any) {
+    return { items: [], parseError: err.message || "Invalid JSON output" };
+  }
+
+  const arr = Array.isArray(parsed) ? parsed : [parsed];
+  const normalized = arr.map((item, idx) => normalizeItem(item, idx, runType)).filter(Boolean) as GeneratedItem[];
+  return { items: normalized, parseError: null };
+}
+
+function normalizeItem(item: any, index: number, runType: RunType): GeneratedItem | null {
+  if (!item || typeof item !== "object") return null;
+
+  const caption = String(item.caption || item.content || "").trim();
+  if (!caption) return null;
+
+  const hashtagValues = Array.isArray(item.hashtags)
+    ? item.hashtags
+    : typeof item.hashtags === "string"
+      ? item.hashtags.split(/\s+/)
+      : caption.split(/\s+/).filter((token: string) => token.startsWith("#"));
+
+  const hashtags = hashtagValues
+    .map((tag: string) => String(tag).trim())
+    .filter(Boolean)
+    .map((tag: string) => (tag.startsWith("#") ? tag : `#${tag}`));
+
+  const assetTypeRaw = String(item.asset_type || "image").toLowerCase();
+  const asset_type = assetTypeRaw.includes("reel") || assetTypeRaw.includes("video") ? "video" : "static";
+
+  const title = String(item.title || `Autopilot ${runType.replace("_", " ")} #${index + 1}`).slice(0, 120);
+  const suggested = item.suggested_scheduled_time || item.scheduled_for || null;
+
+  const badges = ["Autopilot"];
+  if (runType === "review_content") badges.push("Review-based");
+  if (runType === "weekly_campaign") badges.push("Weekly Campaign");
+  if (!item.asset_url) badges.push("Needs Asset");
+  badges.push("Ready to Schedule");
+
+  return {
+    title,
+    caption,
+    cta: item.cta ? String(item.cta) : null,
+    hashtags,
+    asset_type,
+    content_brief: item.content_brief ? String(item.content_brief) : null,
+    creative_brief: item.creative_brief ? String(item.creative_brief) : (item.content_brief ? String(item.content_brief) : null),
+    suggested_scheduled_for: suggested ? new Date(suggested).toISOString() : null,
+    campaign_tag: item.campaign_tag ? String(item.campaign_tag) : null,
+    badges,
+  };
+}
+
 function buildDailyContentPrompt(ctx: any, count: number): string {
   const today = new Date();
   const dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][today.getDay()];
@@ -277,11 +379,15 @@ Each piece should:
 ${ctx.pendingReviews.length > 0 ? `Consider turning this positive review into social proof: "${ctx.pendingReviews[0]?.review_text?.substring(0, 200) || ""}"` : ""}
 
 Return a JSON array where each item has:
-- "caption": the full post caption with hashtags
+- "title": short working title
+- "caption": the full post caption
 - "asset_type": "image" or "reel"
 - "content_brief": short description of what visual to create (max 100 chars)
+- "creative_brief": optional richer art direction
 - "cta": call-to-action text
-- "scheduled_for": suggested ISO datetime for posting (use today's date, optimal times)
+- "hashtags": array of hashtags
+- "suggested_scheduled_time": suggested ISO datetime for posting (use today's date, optimal times)
+- "campaign_tag": optional campaign tag
 
 Return ONLY the JSON array.`;
 }
@@ -309,45 +415,38 @@ Each piece should:
 ${ctx.upcomingEvents.length > 0 ? `Tie content to these upcoming campaigns: ${ctx.upcomingEvents.map((e: any) => e.title).join(", ")}` : ""}
 
 Return a JSON array where each item has:
-- "caption": the full post caption with hashtags
-- "asset_type": "image" or "reel"
-- "content_brief": short description of what visual to create (max 100 chars)
-- "cta": call-to-action text
+- "title"
+- "caption"
+- "asset_type"
+- "content_brief"
+- "creative_brief"
+- "cta"
+- "hashtags"
 - "day": one of ${JSON.stringify(days)}
-- "scheduled_for": suggested ISO datetime for posting
+- "suggested_scheduled_time": suggested ISO datetime for posting
+- "campaign_tag"
 
 Return ONLY the JSON array.`;
 }
 
 function buildReviewContentPrompt(ctx: any): string {
-  const reviews = ctx.pendingReviews.slice(0, 3);
-  if (reviews.length === 0) {
-    return `Return an empty JSON array: []`;
-  }
-
-  return `You are an expert hospitality social media manager specializing in social proof content.
+  return `You are an expert hospitality social strategist.
 
 VENUE CONTEXT:
 ${ctx.contextString}
 
-RECENT POSITIVE REVIEWS:
-${reviews.map((r: any, i: number) => `${i + 1}. Rating: ${r.rating}/5 — "${r.review_text?.substring(0, 300) || "Great experience"}"`).join("\n")}
+Generate 2 social posts that transform recent guest sentiment into marketing content.
 
-Create ${Math.min(reviews.length, 2)} social media posts that:
-- Turn these reviews into compelling social proof content
-- Quote the review naturally (can paraphrase)
-- Add a warm, grateful response tone matching the venue's brand
-- Include emojis and 5-8 relevant hashtags
-- End with a CTA (book now, visit us, etc.)
-
-Also create ${Math.min(reviews.length, 2)} reply suggestion(s) for the reviews.
-
-Return a JSON array where each item has:
-- "caption": the full social post caption
-- "asset_type": "image"
-- "content_brief": visual suggestion for the post (max 100 chars)
-- "cta": call-to-action text
-- "reply_suggestion": a suggested reply to the original review (or null if this is just a social post)
+Return a JSON array with fields:
+- "title"
+- "caption"
+- "asset_type"
+- "content_brief"
+- "creative_brief"
+- "cta"
+- "hashtags"
+- "suggested_scheduled_time"
+- "campaign_tag"
 
 Return ONLY the JSON array.`;
 }

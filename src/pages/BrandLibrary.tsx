@@ -1,581 +1,330 @@
-import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { format } from 'date-fns';
 import {
-  Image,
-  Film,
-  Upload,
-  Sparkles,
-  Trash2,
-  Loader2,
-  Pencil,
-  CheckSquare,
-  X,
+  Archive, CalendarDays, CheckCircle2, Clock3, Edit3, Layers, List, Loader2,
+  PlusCircle, Rocket, Sparkles, Trash2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
-import { batchResolveSignedUrls } from '@/hooks/use-resolved-media';
-import { MediaImage } from '@/components/ui/media-image';
 import { PageHeader } from '@/components/ui/page-header';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { AssetCard } from '@/components/gallery/AssetCard';
-import { AssetLightbox } from '@/components/gallery/AssetLightbox';
-import { VersionHistoryPanel } from '@/components/gallery/VersionHistoryPanel';
-import {
-  ContentAsset,
-  useContentAssets,
-  useCreateVariation,
-  useCreateReel,
-  useToggleFavorite,
-  useDeleteAsset,
-  useUpdateAssetStatus,
-  useBulkDeleteAssets,
-} from '@/hooks/use-content-assets';
-import { useGalleryFlags } from '@/hooks/use-gallery-flags';
 
-interface UploadItem {
+interface LibraryItem {
   id: string;
-  storage_path: string;
-  status: string;
+  venue_id: string;
+  source: 'manual' | 'autopilot' | 'planner';
+  run_type: 'daily_content' | 'weekly_campaign' | 'review_content' | null;
+  status: 'draft' | 'approved' | 'scheduled' | 'published' | 'archived' | 'failed' | 'needs_changes';
+  title: string | null;
+  caption_draft: string | null;
+  caption_final: string | null;
+  cta: string | null;
+  hashtags: string[] | null;
+  content_brief: string | null;
+  creative_brief: string | null;
+  asset_type: string | null;
+  media_master_url: string | null;
+  suggested_scheduled_for: string | null;
+  scheduled_for: string | null;
+  campaign_tag: string | null;
+  autopilot_run_id: string | null;
+  badges: string[] | null;
   created_at: string;
-  notes: string | null;
 }
 
+type LibraryTab = 'all' | 'autopilot' | 'manual' | 'approved' | 'scheduled' | 'published' | 'archived';
+
 export default function BrandLibraryPage() {
-  const { currentVenue: currentBrand, isAdmin, isDemoMode } = useVenue();
-  const navigate = useNavigate();
+  const { currentVenue } = useVenue();
   const { toast } = useToast();
-  const canEdit = isAdmin && !isDemoMode;
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  // Feature flags
-  const flags = useGalleryFlags();
-  const reelEnabled = flags.video_enabled && flags.reel_creator_enabled;
+  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'autopilot' : 'all') as LibraryTab);
+  const [view, setView] = useState<'card' | 'list'>('card');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [scheduleTarget, setScheduleTarget] = useState<LibraryItem | null>(null);
+  const [scheduleDateTime, setScheduleDateTime] = useState('');
+  const [editTarget, setEditTarget] = useState<LibraryItem | null>(null);
+  const [editedCaption, setEditedCaption] = useState('');
+  const [editedBrief, setEditedBrief] = useState('');
 
-  // Content assets
-  const { data: imageAssets = [], isLoading: imagesLoading } = useContentAssets('image');
-  const { data: videoAssets = [], isLoading: videosLoading } = useContentAssets('video');
+  const autopilotRunIdFilter = searchParams.get('autopilotRunId');
 
-  // Mutations
-  const createVariation = useCreateVariation();
-  const createReel = useCreateReel();
-  const toggleFavorite = useToggleFavorite();
-  const deleteAsset = useDeleteAsset();
-  const updateStatus = useUpdateAssetStatus();
-  const bulkDeleteAssets = useBulkDeleteAssets();
+  const fetchItems = useCallback(async () => {
+    if (!currentVenue) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('content_items')
+      .select('id, venue_id, source, run_type, status, title, caption_draft, caption_final, cta, hashtags, content_brief, creative_brief, asset_type, media_master_url, suggested_scheduled_for, scheduled_for, campaign_tag, autopilot_run_id, badges, created_at')
+      .eq('venue_id', currentVenue.id)
+      .order('created_at', { ascending: false })
+      .limit(250);
 
-  // Variation tracking
-  const [variatingId, setVariatingId] = useState<string | null>(null);
-  const [reelingId, setReelingId] = useState<string | null>(null);
+    setLoading(false);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Failed to load content library', description: error.message });
+      return;
+    }
 
-  // Version history panel
-  const [lineageAsset, setLineageAsset] = useState<ContentAsset | null>(null);
+    setItems((data || []) as any);
+  }, [currentVenue, toast]);
 
-  // Lightbox
-  const [lightboxAsset, setLightboxAsset] = useState<ContentAsset | null>(null);
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  // Selection mode
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-  const [selectedUploadIds, setSelectedUploadIds] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState('images');
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const visibleItems = useMemo(() => {
+    return items.filter((item) => {
+      if (autopilotRunIdFilter && item.autopilot_run_id !== autopilotRunIdFilter) return false;
+      if (tab === 'all') return true;
+      if (tab === 'autopilot') return item.source === 'autopilot';
+      if (tab === 'manual') return item.source === 'manual';
+      return item.status === tab;
+    });
+  }, [items, tab, autopilotRunIdFilter]);
 
-  // Raw uploads (legacy)
-  const [uploads, setUploads] = useState<UploadItem[]>([]);
-  const [uploadsLoading, setUploadsLoading] = useState(true);
-  const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
-  const [uploadUrls, setUploadUrls] = useState<Record<string, string>>({});
+  const aiDrafts = useMemo(() => visibleItems.filter((i) => i.source === 'autopilot' && i.status === 'draft'), [visibleItems]);
+  const readyToSchedule = useMemo(() => visibleItems.filter((i) => ['approved', 'draft'].includes(i.status) && !!i.caption_draft), [visibleItems]);
 
-  // Clear selections when leaving selection mode
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
-    setSelectedAssetIds(new Set());
-    setSelectedUploadIds(new Set());
-  };
-
-  // Toggle asset selection
-  const toggleAssetSelection = (asset: ContentAsset) => {
-    setSelectedAssetIds((prev) => {
+  const toggleSelect = (id: string, checked: boolean) => {
+    setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(asset.id)) next.delete(asset.id);
-      else next.add(asset.id);
+      if (checked) next.add(id); else next.delete(id);
       return next;
     });
   };
 
-  // Toggle upload selection
-  const toggleUploadSelection = (uploadId: string) => {
-    setSelectedUploadIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(uploadId)) next.delete(uploadId);
-      else next.add(uploadId);
-      return next;
-    });
+  const updateMany = async (ids: string[], patch: Partial<LibraryItem>) => {
+    if (!ids.length) return;
+    const { error } = await supabase.from('content_items').update(patch as any).in('id', ids);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Bulk update failed', description: error.message });
+      return;
+    }
+    setSelected(new Set());
+    fetchItems();
   };
 
-  // Select all / deselect all for current tab
-  const currentTabItems = useMemo(() => {
-    if (activeTab === 'images') return imageAssets;
-    if (activeTab === 'reels') return videoAssets;
-    return [];
-  }, [activeTab, imageAssets, videoAssets]);
-
-  const allCurrentSelected = useMemo(() => {
-    if (activeTab === 'uploads') {
-      return uploads.length > 0 && uploads.every((u) => selectedUploadIds.has(u.id));
+  const handleSendToCalendar = async (item: LibraryItem, forcedDate?: string | null) => {
+    const schedule = forcedDate || item.suggested_scheduled_for || item.scheduled_for;
+    if (!schedule) {
+      setScheduleTarget(item);
+      return;
     }
-    return currentTabItems.length > 0 && currentTabItems.every((a) => selectedAssetIds.has(a.id));
-  }, [activeTab, currentTabItems, selectedAssetIds, uploads, selectedUploadIds]);
 
-  const toggleSelectAll = () => {
-    if (activeTab === 'uploads') {
-      if (allCurrentSelected) {
-        setSelectedUploadIds(new Set());
-      } else {
-        setSelectedUploadIds(new Set(uploads.map((u) => u.id)));
-      }
-    } else {
-      if (allCurrentSelected) {
-        // Deselect all in current tab
-        setSelectedAssetIds((prev) => {
-          const next = new Set(prev);
-          currentTabItems.forEach((a) => next.delete(a.id));
-          return next;
-        });
-      } else {
-        setSelectedAssetIds((prev) => {
-          const next = new Set(prev);
-          currentTabItems.forEach((a) => next.add(a.id));
-          return next;
-        });
-      }
-    }
-  };
-
-  const totalSelected = activeTab === 'uploads' ? selectedUploadIds.size : selectedAssetIds.size;
-
-  // Bulk delete handlers
-  const handleBulkDeleteAssets = async () => {
-    const assetsToDelete = [...imageAssets, ...videoAssets].filter((a) => selectedAssetIds.has(a.id));
-    if (assetsToDelete.length === 0) return;
-    setIsBulkDeleting(true);
-    try {
-      await bulkDeleteAssets.mutateAsync(assetsToDelete);
-      exitSelectionMode();
-    } finally {
-      setIsBulkDeleting(false);
-    }
-  };
-
-  const handleBulkDeleteUploads = async () => {
-    const uploadsToDelete = uploads.filter((u) => selectedUploadIds.has(u.id));
-    if (uploadsToDelete.length === 0) return;
-    setIsBulkDeleting(true);
-    try {
-      const paths = uploadsToDelete.map((u) => u.storage_path);
-      await supabase.storage.from('venue-assets').remove(paths);
-      const ids = uploadsToDelete.map((u) => u.id);
-      await supabase.from('uploads').delete().in('id', ids);
-      setUploads((prev) => prev.filter((u) => !selectedUploadIds.has(u.id)));
-      toast({ title: `${uploadsToDelete.length} upload${uploadsToDelete.length > 1 ? 's' : ''} deleted` });
-      exitSelectionMode();
-    } catch {
-      toast({ title: 'Bulk delete failed', variant: 'destructive' });
-    } finally {
-      setIsBulkDeleting(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!currentBrand) return;
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from('uploads')
-          .select('*')
-          .eq('venue_id', currentBrand.id)
-          .order('created_at', { ascending: false });
-        if (data) setUploads(data as UploadItem[]);
-      } finally {
-        setUploadsLoading(false);
-      }
-    })();
-  }, [currentBrand]);
-
-  useEffect(() => {
-    const loadUrls = async () => {
-      const paths = uploads.map((u) => u.storage_path);
-      const signedMap = await batchResolveSignedUrls(paths);
-      const urls: Record<string, string> = {};
-      for (const u of uploads) {
-        const url = signedMap.get(u.storage_path);
-        if (url) urls[u.id] = url;
-      }
-      setUploadUrls(urls);
+    const patch = {
+      status: 'scheduled',
+      scheduled_for: schedule,
+      caption_final: item.caption_final || item.caption_draft || null,
+      source_plan_title: item.source === 'autopilot' ? 'Library Scheduled (Autopilot)' : 'Library Scheduled',
     };
-    if (uploads.length > 0) loadUrls();
-  }, [uploads]);
-
-  const handleDeleteUpload = async (upload: UploadItem) => {
-    setDeletingUploadId(upload.id);
-    try {
-      await supabase.storage.from('venue-assets').remove([upload.storage_path]);
-      await supabase.from('uploads').delete().eq('id', upload.id);
-      toast({ title: 'Photo deleted' });
-      setUploads((prev) => prev.filter((u) => u.id !== upload.id));
-    } catch {
-      toast({ title: 'Delete failed', variant: 'destructive' });
-    } finally {
-      setDeletingUploadId(null);
+    const { error } = await supabase.from('content_items').update(patch).eq('id', item.id);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Failed to send to calendar', description: error.message });
+      return;
     }
+
+    toast({ title: 'Sent to calendar', description: 'Item moved to scheduled status.' });
+    fetchItems();
   };
 
-  const handleCreateVariation = async (asset: ContentAsset) => {
-    if (!currentBrand) return;
-    setVariatingId(asset.id);
-    try {
-      await createVariation.mutateAsync({
-        parent_asset_id: asset.id,
-        venue_id: currentBrand.id,
-      });
-    } finally {
-      setVariatingId(null);
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from('content_items').delete().eq('id', id);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Delete failed', description: error.message });
+      return;
     }
+    toast({ title: 'Item deleted' });
+    fetchItems();
   };
 
-  const handleCreateReel = (asset: ContentAsset) => {
-    navigate(`/studio/reel-creator?source=${asset.id}`);
+  const openEdit = (item: LibraryItem) => {
+    setEditTarget(item);
+    setEditedCaption(item.caption_draft || item.caption_final || '');
+    setEditedBrief(item.creative_brief || item.content_brief || '');
   };
 
-  const handleToggleFavorite = (asset: ContentAsset) => {
-    toggleFavorite.mutate({ assetId: asset.id, isFavorite: !asset.is_favorite });
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    const { error } = await supabase
+      .from('content_items')
+      .update({ caption_draft: editedCaption, creative_brief: editedBrief })
+      .eq('id', editTarget.id);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Save failed', description: error.message });
+      return;
+    }
+    toast({ title: 'Library item updated' });
+    setEditTarget(null);
+    fetchItems();
   };
 
-  const handleDelete = (asset: ContentAsset) => {
-    deleteAsset.mutate(asset);
-  };
-
-  const handleUpdateStatus = (asset: ContentAsset, status: string) => {
-    updateStatus.mutate({ assetId: asset.id, status });
-  };
-
-  const isLoading = imagesLoading || videosLoading || uploadsLoading || flags.isLoading;
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const quickFilters = [
+    { label: `Autopilot (${visibleItems.filter(i => i.source === 'autopilot').length})`, onClick: () => setTab('autopilot') },
+    { label: `AI Drafts (${aiDrafts.length})`, onClick: () => setTab('all') },
+    { label: `Ready to Schedule (${readyToSchedule.length})`, onClick: () => setTab('approved') },
+  ];
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <PageHeader
-        title="Content Gallery"
-        description="Your asset command center — manage generated content, create variations, and produce reels."
-      />
+    <div className="space-y-6">
+      <PageHeader title="Content Library" description="Inventory-first workflow: draft in Library, execute from Calendar." />
 
-      <Tabs defaultValue="images" className="space-y-6" onValueChange={(v) => setActiveTab(v)}>
-        <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {quickFilters.map((f) => <Button key={f.label} variant="outline" size="sm" onClick={f.onClick}>{f.label}</Button>)}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
           <TabsList>
-            <TabsTrigger value="images" className="gap-2">
-              <Sparkles className="w-4 h-4" />
-              Generated Images ({imageAssets.length})
-            </TabsTrigger>
-            {reelEnabled && (
-              <TabsTrigger value="reels" className="gap-2">
-                <Film className="w-4 h-4" />
-                Reels ({videoAssets.length})
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="uploads" className="gap-2">
-              <Upload className="w-4 h-4" />
-              Raw Uploads ({uploads.length})
-            </TabsTrigger>
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="autopilot">Autopilot</TabsTrigger>
+            <TabsTrigger value="manual">Manual</TabsTrigger>
+            <TabsTrigger value="approved">Approved</TabsTrigger>
+            <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+            <TabsTrigger value="published">Published</TabsTrigger>
+            <TabsTrigger value="archived">Archived</TabsTrigger>
           </TabsList>
+        </Tabs>
 
-          {canEdit && (
-            <Button
-              variant={selectionMode ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
-              className="gap-2"
-            >
-              {selectionMode ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
-              {selectionMode ? 'Cancel' : 'Select'}
-            </Button>
-          )}
+        <div className="flex items-center gap-2">
+          <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
+          <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
+          <Button size="sm" variant="outline" onClick={() => navigate('/content/planner')}><CalendarDays className="w-4 h-4 mr-1" />Open Calendar</Button>
         </div>
+      </div>
 
-        {/* Selection toolbar */}
-        {selectionMode && (
-          <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-muted/50">
-            <Checkbox
-              checked={allCurrentSelected}
-              onCheckedChange={toggleSelectAll}
-              className="h-4 w-4"
-            />
-            <span className="text-sm text-muted-foreground">
-              {allCurrentSelected ? 'Deselect all' : 'Select all'}
-            </span>
-            {totalSelected > 0 && (
-              <span className="text-sm font-medium text-foreground ml-auto">
-                {totalSelected} selected
-              </span>
-            )}
+      {selected.size > 0 && (
+        <div className="rounded-lg border p-3 flex flex-wrap items-center gap-2">
+          <p className="text-sm text-muted-foreground mr-2">{selected.size} selected</p>
+          <Button size="sm" onClick={() => updateMany(Array.from(selected), { status: 'approved', caption_final: null as any })}><CheckCircle2 className="w-4 h-4 mr-1" />Approve selected</Button>
+          <Button size="sm" variant="outline" onClick={() => updateMany(Array.from(selected), { status: 'scheduled' as any })}><CalendarDays className="w-4 h-4 mr-1" />Send selected to calendar</Button>
+          <Button size="sm" variant="outline" onClick={() => updateMany(Array.from(selected), { status: 'archived' as any })}><Archive className="w-4 h-4 mr-1" />Archive selected</Button>
+          <Button size="sm" variant="destructive" onClick={() => Promise.all(Array.from(selected).map((id) => handleDelete(id))).then(() => setSelected(new Set()))}><Trash2 className="w-4 h-4 mr-1" />Delete selected</Button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+      ) : visibleItems.length === 0 ? (
+        <EmptyState icon={Sparkles} title="No content items yet" description="Run Autopilot or create manual content to build your Library inventory." />
+      ) : view === 'card' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {visibleItems.map((item) => (
+            <Card key={item.id} className="overflow-hidden">
+              {item.media_master_url ? <img src={item.media_master_url} alt="" className="h-40 w-full object-cover" /> : <div className="h-40 bg-muted flex items-center justify-center text-xs text-muted-foreground">No asset yet</div>}
+              <CardContent className="p-4 space-y-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <p className="font-medium text-sm line-clamp-1">{item.title || 'Untitled content item'}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(item.created_at), 'MMM d, yyyy')}</p>
+                  </div>
+                  <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant="secondary">{item.status}</Badge>
+                  <Badge variant="outline">{item.source}</Badge>
+                  {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
+                  {(item.badges || []).slice(0, 2).map((b) => <Badge key={b} variant="outline">{b}</Badge>)}
+                </div>
+
+                <p className="text-sm line-clamp-3">{item.caption_draft || item.caption_final || 'No caption yet.'}</p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="outline" onClick={() => supabase.from('content_items').update({ status: 'approved' }).eq('id', item.id).then(fetchItems)}><CheckCircle2 className="w-4 h-4 mr-1" />Approve</Button>
+                  <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Edit</Button>
+                  <Button size="sm" onClick={() => handleSendToCalendar(item)}><CalendarDays className="w-4 h-4 mr-1" />Send to Calendar</Button>
+                  <Button size="sm" variant="secondary" onClick={() => handleSendToCalendar(item, new Date().toISOString())}><Rocket className="w-4 h-4 mr-1" />Schedule now</Button>
+                  <Button size="sm" variant="ghost" onClick={() => toast({ title: 'Generate asset brief queued', description: 'Open Pro Photo/Reel from this brief in next step.' })}><PlusCircle className="w-4 h-4 mr-1" />Generate Asset</Button>
+                  <Button size="sm" variant="ghost" onClick={() => supabase.from('content_items').update({ status: 'archived' }).eq('id', item.id).then(fetchItems)}><Archive className="w-4 h-4 mr-1" />Archive</Button>
+                </div>
+
+                <Button size="sm" variant="destructive" className="w-full" onClick={() => handleDelete(item.id)}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border overflow-hidden">
+          <div className="grid grid-cols-[32px_1.2fr_1fr_120px_120px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
+            <div />
+            <div>Title</div>
+            <div>Caption</div>
+            <div>Status</div>
+            <div>Source</div>
           </div>
-        )}
+          {visibleItems.map((item) => (
+            <div key={item.id} className="grid grid-cols-[32px_1.2fr_1fr_120px_120px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
+              <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
+              <div>{item.title || 'Untitled'}</div>
+              <div className="line-clamp-1 text-muted-foreground">{item.caption_draft || item.caption_final || '-'}</div>
+              <Badge variant="secondary" className="w-fit">{item.status}</Badge>
+              <Badge variant="outline" className="w-fit">{item.source}</Badge>
+            </div>
+          ))}
+        </div>
+      )}
 
-        {/* Generated Images Tab */}
-        <TabsContent value="images" className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              AI-generated images and variations. Each asset can be turned into a reel or derived into new versions.
-            </p>
-            <Button onClick={() => navigate('/studio/pro-photo')} className="btn-primary-editorial flex-shrink-0">
-              <Pencil className="w-4 h-4 mr-2" />
-              Generate New
+      <Dialog open={!!scheduleTarget} onOpenChange={(v) => !v && setScheduleTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pick a schedule time</DialogTitle>
+            <DialogDescription>This item has no suggested time yet. Pick when to move it into your calendar.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Scheduled date & time</Label>
+            <Input type="datetime-local" value={scheduleDateTime} onChange={(e) => setScheduleDateTime(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setScheduleTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!scheduleTarget || !scheduleDateTime) return;
+                handleSendToCalendar(scheduleTarget, new Date(scheduleDateTime).toISOString());
+                setScheduleTarget(null);
+                setScheduleDateTime('');
+              }}
+            >
+              <Clock3 className="w-4 h-4 mr-1" /> Schedule
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit library item</DialogTitle>
+            <DialogDescription>Update caption and creative brief before approval/scheduling.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Caption draft</Label>
+              <Textarea value={editedCaption} onChange={(e) => setEditedCaption(e.target.value)} className="min-h-32" />
+            </div>
+            <div className="space-y-1">
+              <Label>Creative brief</Label>
+              <Textarea value={editedBrief} onChange={(e) => setEditedBrief(e.target.value)} className="min-h-24" />
+            </div>
           </div>
-
-          {imageAssets.length === 0 ? (
-            <EmptyState
-              icon={Sparkles}
-              title="No generated images yet"
-              description="Create your first Pro Photo in the Studio to see it here."
-            />
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {imageAssets.map((asset) => (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  onCreateVariation={handleCreateVariation}
-                  onCreateReel={handleCreateReel}
-                  onViewLineage={setLineageAsset}
-                  onToggleFavorite={handleToggleFavorite}
-                  onDelete={handleDelete}
-                  onUpdateStatus={handleUpdateStatus}
-                  onPreview={setLightboxAsset}
-                  showVariation={flags.gallery_variations_enabled}
-                  showReel={reelEnabled}
-                  showLineage={flags.gallery_lineage_enabled}
-                  isCreatingVariation={variatingId === asset.id}
-                  isCreatingReel={reelingId === asset.id}
-                  canEdit={canEdit}
-                  selectionMode={selectionMode}
-                  selected={selectedAssetIds.has(asset.id)}
-                  onSelect={toggleAssetSelection}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Reels Tab */}
-        {reelEnabled && (
-          <TabsContent value="reels" className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Video reels generated from your images.
-            </p>
-
-            {videoAssets.length === 0 ? (
-              <EmptyState
-                icon={Film}
-                title="No reels yet"
-                description="Create a reel from any generated image to see it here."
-              />
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {videoAssets.map((asset) => (
-                  <AssetCard
-                    key={asset.id}
-                    asset={asset}
-                    onViewLineage={setLineageAsset}
-                    onToggleFavorite={handleToggleFavorite}
-                    onDelete={handleDelete}
-                    onUpdateStatus={handleUpdateStatus}
-                    onPreview={setLightboxAsset}
-                    showVariation={false}
-                    showReel={false}
-                    showLineage={flags.gallery_lineage_enabled}
-                    canEdit={canEdit}
-                    selectionMode={selectionMode}
-                    selected={selectedAssetIds.has(asset.id)}
-                    onSelect={toggleAssetSelection}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        )}
-
-        {/* Raw Uploads Tab */}
-        <TabsContent value="uploads" className="space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Photos uploaded via the Editor for content creation. Manage and delete them here.
-            </p>
-            <Button onClick={() => navigate('/studio/pro-photo')} className="btn-primary-editorial flex-shrink-0">
-              <Pencil className="w-4 h-4 mr-2" />
-              Open Editor
-            </Button>
-          </div>
-
-          {uploads.length === 0 ? (
-            <EmptyState
-              icon={Image}
-              title="No photos yet"
-              description="Photos will appear here once you upload them in the Editor."
-            />
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {uploads.map((upload, index) => (
-                <motion.div
-                  key={upload.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.2, delay: index * 0.02 }}
-                  className={`aspect-square rounded-lg overflow-hidden border bg-muted relative group cursor-pointer ${
-                    selectionMode && selectedUploadIds.has(upload.id)
-                      ? 'border-primary ring-2 ring-primary/30'
-                      : 'border-border'
-                  }`}
-                  onClick={() => selectionMode && toggleUploadSelection(upload.id)}
-                >
-                  {selectionMode && (
-                    <div className="absolute top-2 right-2 z-20" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedUploadIds.has(upload.id)}
-                        onCheckedChange={() => toggleUploadSelection(upload.id)}
-                        className="h-5 w-5 border-2 border-white bg-black/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                      />
-                    </div>
-                  )}
-                  <MediaImage
-                    src={uploadUrls[upload.id] || null}
-                    alt={upload.notes || ''}
-                    aspectClassName=""
-                    containerClassName="w-full h-full"
-                  />
-                  {canEdit && !selectionMode && (
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="icon" className="h-8 w-8" disabled={deletingUploadId === upload.id}>
-                            {deletingUploadId === upload.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete photo?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete this photo from your library.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteUpload(upload)} className="bg-destructive hover:bg-destructive/90">
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  )}
-                  {upload.notes && (
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                      <p className="text-xs text-white truncate">{upload.notes}</p>
-                    </div>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Sticky bulk action bar */}
-      <AnimatePresence>
-        {selectionMode && totalSelected > 0 && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
-          >
-            <div className="flex items-center gap-3 px-5 py-3 rounded-full border border-border bg-card shadow-xl">
-              <span className="text-sm font-medium text-foreground whitespace-nowrap">
-                {totalSelected} selected
-              </span>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" className="gap-2" disabled={isBulkDeleting}>
-                    {isBulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    Delete
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {totalSelected} {totalSelected === 1 ? 'item' : 'items'}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete the selected {totalSelected === 1 ? 'item' : 'items'} and {totalSelected === 1 ? 'its' : 'their'} files. This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={activeTab === 'uploads' ? handleBulkDeleteUploads : handleBulkDeleteAssets}
-                      className="bg-destructive hover:bg-destructive/90"
-                    >
-                      Delete {totalSelected} {totalSelected === 1 ? 'item' : 'items'}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <Button variant="ghost" size="sm" onClick={exitSelectionMode}>
-                Cancel
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Asset Lightbox */}
-      <AssetLightbox
-        asset={lightboxAsset}
-        assets={activeTab === 'reels' ? videoAssets : imageAssets}
-        open={!!lightboxAsset}
-        onClose={() => setLightboxAsset(null)}
-        onNavigate={setLightboxAsset}
-      />
-
-      {/* Version History Panel */}
-      <VersionHistoryPanel
-        asset={lineageAsset}
-        open={!!lineageAsset}
-        onClose={() => setLineageAsset(null)}
-        onCreateVariation={handleCreateVariation}
-        onCreateReel={handleCreateReel}
-        onToggleFavorite={handleToggleFavorite}
-      />
-    </motion.div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button onClick={saveEdit}>Save changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
