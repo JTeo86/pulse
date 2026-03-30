@@ -268,31 +268,40 @@ export type Database = {
       }
       autopilot_settings: {
         Row: {
+          allow_copy_only_fallback: boolean
           approval_mode: string
           content_volume: string
           created_at: string
           frequency: string
           is_enabled: boolean
+          mode: string
+          require_asset_for_runs: boolean
           run_time: string
           updated_at: string
           venue_id: string
         }
         Insert: {
+          allow_copy_only_fallback?: boolean
           approval_mode?: string
           content_volume?: string
           created_at?: string
           frequency?: string
           is_enabled?: boolean
+          mode?: string
+          require_asset_for_runs?: boolean
           run_time?: string
           updated_at?: string
           venue_id: string
         }
         Update: {
+          allow_copy_only_fallback?: boolean
           approval_mode?: string
           content_volume?: string
           created_at?: string
           frequency?: string
           is_enabled?: boolean
+          mode?: string
+          require_asset_for_runs?: boolean
           run_time?: string
           updated_at?: string
           venue_id?: string

@@ -19,6 +19,10 @@ type GeneratedItem = {
   suggested_scheduled_for: string | null;
   campaign_tag: string | null;
   badges: string[];
+  asset_url?: string | null;
+  storage_path?: string | null;
+  source_asset_id?: string | null;
+  source_asset_title?: string | null;
 };
 
 type SaveErrorDetail = {
@@ -179,12 +183,51 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     const ctx = await buildVenueContext(supabase, venueId);
     const volume = settings?.content_volume || "medium";
     const contentCount = volume === "low" ? 1 : volume === "high" ? 3 : 2;
+    const sourceSelection = await selectAssetSources(supabase, venueId, contentCount);
+    const requireAsset = settings?.require_asset_for_runs ?? true;
+    const allowCopyOnlyFallback = settings?.allow_copy_only_fallback ?? false;
+
+    if (sourceSelection.totalEligible === 0 && requireAsset && !allowCopyOnlyFallback) {
+      const skippedReason = "No eligible image sources available";
+      await supabase.from("autopilot_runs").update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        run_status: "completed",
+        error_message: skippedReason,
+        items_generated: 0,
+        items_saved: 0,
+        items_failed: 0,
+        generated_count: 0,
+        saved_count: 0,
+        failed_count: 0,
+        output_summary: {
+          run_type: runType,
+          skipped: true,
+          skipped_reason: skippedReason,
+          source_summary: sourceSelection.summary,
+        },
+      }).eq("id", runId);
+
+      return {
+        status: "completed",
+        run_id: runId,
+        items_generated: 0,
+        items_saved: 0,
+        items_failed: 0,
+        generated_count: 0,
+        saved_count: 0,
+        failed_count: 0,
+        content_item_ids: [],
+        saved_library_item_ids: [],
+        error_message: skippedReason,
+      };
+    }
 
     const prompt = runType === "weekly_campaign"
-      ? buildWeeklyCampaignPrompt(ctx, contentCount)
+      ? buildWeeklyCampaignPrompt(ctx, contentCount, sourceSelection.assets, settings?.mode || "conservative")
       : runType === "review_content"
-        ? buildReviewContentPrompt(ctx)
-        : buildDailyContentPrompt(ctx, contentCount);
+        ? buildReviewContentPrompt(ctx, sourceSelection.assets, settings?.mode || "conservative")
+        : buildDailyContentPrompt(ctx, contentCount, sourceSelection.assets, settings?.mode || "conservative");
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -209,6 +252,9 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     const saveErrorDetails: SaveErrorDetail[] = [];
 
     for (const [index, item] of items.entries()) {
+      const sourceAsset = sourceSelection.assets.length > 0
+        ? sourceSelection.assets[index % sourceSelection.assets.length]
+        : null;
       const insertPayload: Record<string, unknown> = {
         venue_id: venueId,
         source: "autopilot",
@@ -224,6 +270,13 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         asset_type: item.asset_type,
         intent: "standard",
         status: "draft",
+        media_master_url: sourceAsset?.asset_url || null,
+        storage_path: sourceAsset?.storage_path || null,
+        media_variants: sourceAsset ? {
+          source_asset_id: sourceAsset.source_asset_id,
+          source_asset_title: sourceAsset.source_asset_title,
+          source_priority: sourceAsset.source_priority,
+        } : null,
         suggested_scheduled_for: item.suggested_scheduled_for,
         scheduled_for: null,
         campaign_tag: item.campaign_tag,
@@ -297,6 +350,8 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         failed_count: failedCount,
         run_status: runStatus,
         run_type: runType,
+        source_summary: sourceSelection.summary,
+        source_priority_used: sourceSelection.assets[0]?.source_priority || null,
         parse_error: parseError,
         save_error_details: combinedSaveErrorDetails,
         saved_library_item_ids: contentItemIds,
@@ -432,7 +487,108 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
   };
 }
 
-function buildDailyContentPrompt(ctx: any, count: number): string {
+async function selectAssetSources(supabase: any, venueId: string, requestedCount: number) {
+  const reusableAssetsRes = await supabase
+    .from("content_assets")
+    .select("id, title, public_url, storage_path, metadata, status")
+    .eq("venue_id", venueId)
+    .eq("asset_type", "image")
+    .in("status", ["approved", "draft", "scheduled", "published"])
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const reusableAssets = (reusableAssetsRes.data || []).filter((asset: any) =>
+    asset?.metadata?.autopilot_reusable === true,
+  );
+
+  const plansRes = await supabase
+    .from("venue_event_plans")
+    .select("id")
+    .eq("venue_id", venueId)
+    .in("status", ["active", "draft"])
+    .limit(30);
+
+  const planIds = (plansRes.data || []).map((p: any) => p.id);
+  const plannerAssets: any[] = [];
+  if (planIds.length > 0) {
+    const publishRes = await supabase
+      .from("plan_publish_items")
+      .select("content_asset_id")
+      .in("plan_id", planIds)
+      .not("content_asset_id", "is", null)
+      .limit(200);
+    const ids = Array.from(new Set((publishRes.data || []).map((p: any) => p.content_asset_id).filter(Boolean)));
+    if (ids.length > 0) {
+      const assetsRes = await supabase
+        .from("content_assets")
+        .select("id, title, public_url, storage_path")
+        .eq("venue_id", venueId)
+        .in("id", ids)
+        .eq("asset_type", "image");
+      plannerAssets.push(...(assetsRes.data || []));
+    }
+  }
+
+  const approvedLibraryRes = await supabase
+    .from("content_items")
+    .select("id, title, media_master_url, storage_path, badges, status")
+    .eq("venue_id", venueId)
+    .eq("status", "approved")
+    .not("media_master_url", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const approvedLibraryAssets = (approvedLibraryRes.data || []).filter((item: any) =>
+    Array.isArray(item.badges) && item.badges.includes("Reusable"),
+  );
+
+  const mapped = [
+    ...reusableAssets.map((a: any) => ({
+      source_priority: 1,
+      source: "autopilot_asset_pool",
+      source_asset_id: a.id,
+      source_asset_title: a.title || "Asset",
+      asset_url: a.public_url,
+      storage_path: a.storage_path,
+    })),
+    ...plannerAssets.map((a: any) => ({
+      source_priority: 2,
+      source: "planner_linked_asset",
+      source_asset_id: a.id,
+      source_asset_title: a.title || "Planner asset",
+      asset_url: a.public_url,
+      storage_path: a.storage_path,
+    })),
+    ...approvedLibraryAssets.map((i: any) => ({
+      source_priority: 3,
+      source: "approved_library_asset",
+      source_asset_id: i.id,
+      source_asset_title: i.title || "Library asset",
+      asset_url: i.media_master_url,
+      storage_path: i.storage_path,
+    })),
+  ].filter((item) => !!item.asset_url || !!item.storage_path);
+
+  return {
+    assets: mapped.slice(0, Math.max(requestedCount, 1)),
+    totalEligible: mapped.length,
+    summary: {
+      priority_1: reusableAssets.length,
+      priority_2: plannerAssets.length,
+      priority_3: approvedLibraryAssets.length,
+      eligible_total: mapped.length,
+    },
+  };
+}
+
+function buildAssetBrief(assets: any[]): string {
+  if (!assets.length) return "No image assets available. Return copy-only drafts.";
+  return assets
+    .map((asset, i) => `${i + 1}. ${asset.source_asset_title} [priority ${asset.source_priority}]`)
+    .join("\n");
+}
+
+function buildDailyContentPrompt(ctx: any, count: number, assets: any[], mode: string): string {
   const today = new Date();
   const dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][today.getDay()];
 
@@ -444,6 +600,10 @@ ${ctx.contextString}
 TODAY: ${dayName}, ${today.toISOString().split("T")[0]}
 
 Generate exactly ${count} social media content piece(s) for today.
+Autopilot mode: ${mode}.
+
+ELIGIBLE IMAGE SOURCES (highest priority first):
+${buildAssetBrief(assets)}
 
 Each piece should:
 - Be immediately postable on Instagram/TikTok
@@ -465,11 +625,12 @@ Return a JSON array where each item has:
 - "hashtags": array of hashtags
 - "suggested_scheduled_time": suggested ISO datetime for posting (use today's date, optimal times)
 - "campaign_tag": optional campaign tag
+- "source_asset_index": numeric index from the eligible source list when available
 
 Return ONLY the JSON array.`;
 }
 
-function buildWeeklyCampaignPrompt(ctx: any, dailyCount: number): string {
+function buildWeeklyCampaignPrompt(ctx: any, dailyCount: number, assets: any[], mode: string): string {
   const weekStart = new Date();
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -481,6 +642,10 @@ ${ctx.contextString}
 WEEK STARTING: ${weekStart.toISOString().split("T")[0]}
 
 Create a 7-day content campaign plan. Generate ${dailyCount * 5} content pieces spread across the week.
+Autopilot mode: ${mode}.
+
+ELIGIBLE IMAGE SOURCES (highest priority first):
+${buildAssetBrief(assets)}
 
 Each piece should:
 - Be specific to this venue
@@ -506,11 +671,15 @@ Return a JSON array where each item has:
 Return ONLY the JSON array.`;
 }
 
-function buildReviewContentPrompt(ctx: any): string {
+function buildReviewContentPrompt(ctx: any, assets: any[], mode: string): string {
   return `You are an expert hospitality social strategist.
 
 VENUE CONTEXT:
 ${ctx.contextString}
+Autopilot mode: ${mode}.
+
+ELIGIBLE IMAGE SOURCES (highest priority first):
+${buildAssetBrief(assets)}
 
 Generate 2 social posts that transform recent guest sentiment into marketing content.
 

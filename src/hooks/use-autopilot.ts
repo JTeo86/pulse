@@ -9,6 +9,9 @@ export interface AutopilotSettings {
   frequency: 'daily' | '3x_week' | 'weekly';
   content_volume: 'low' | 'medium' | 'high';
   approval_mode: 'require_approval' | 'auto_schedule';
+  require_asset_for_runs: boolean;
+  allow_copy_only_fallback: boolean;
+  mode: 'conservative' | 'creative';
   run_time: string;
   created_at: string;
   updated_at: string;
