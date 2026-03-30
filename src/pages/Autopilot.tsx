@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -7,17 +6,20 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useNavigate } from 'react-router-dom';
 import {
-  Zap, Play, Clock, FileText, TrendingUp, MessageSquareText,
-  CheckCircle2, XCircle, Loader2, Calendar, Sparkles
+  Zap, Play, Clock, FileText, MessageSquareText,
+  CheckCircle2, XCircle, Loader2, Calendar, Sparkles, ExternalLink, AlertTriangle
 } from 'lucide-react';
 import { useAutopilotSettings, useAutopilotRuns, useAutopilotTrigger } from '@/hooks/use-autopilot';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function AutopilotPage() {
   const { settings, loading, upsertSettings } = useAutopilotSettings();
   const { data: runs, isLoading: runsLoading } = useAutopilotRuns();
   const trigger = useAutopilotTrigger();
+  const navigate = useNavigate();
 
   const isEnabled = settings?.is_enabled ?? false;
 
@@ -37,11 +39,18 @@ export default function AutopilotPage() {
     <>
       <PageHeader
         title="Autopilot"
-        description="AI-driven marketing that runs automatically for your venue"
+        description="Autopilot creates content into your Library first, then you approve and schedule it."
       />
 
-      <div className="p-6 space-y-6 max-w-4xl">
-        {/* Master Switch */}
+      <div className="p-6 space-y-6 max-w-5xl">
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Autopilot → Library → Calendar</AlertTitle>
+          <AlertDescription>
+            Generated items now land in Content Library drafts by default. Review them, approve, and send to calendar when ready.
+          </AlertDescription>
+        </Alert>
+
         <Card className="border-accent/20">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -69,24 +78,16 @@ export default function AutopilotPage() {
           </CardHeader>
         </Card>
 
-        {/* Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Settings</CardTitle>
-            <CardDescription>Configure how Autopilot generates content for your venue</CardDescription>
+            <CardDescription>Configure generation cadence and guardrails</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Frequency */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  Frequency
-                </Label>
-                <Select
-                  value={settings?.frequency || 'daily'}
-                  onValueChange={(v) => upsertSettings.mutate({ frequency: v as any })}
-                >
+                <Label className="flex items-center gap-2"><Calendar className="w-4 h-4 text-muted-foreground" />Frequency</Label>
+                <Select value={settings?.frequency || 'daily'} onValueChange={(v) => upsertSettings.mutate({ frequency: v as any })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="daily">Every day</SelectItem>
@@ -96,16 +97,9 @@ export default function AutopilotPage() {
                 </Select>
               </div>
 
-              {/* Content Volume */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-muted-foreground" />
-                  Content Volume
-                </Label>
-                <Select
-                  value={settings?.content_volume || 'medium'}
-                  onValueChange={(v) => upsertSettings.mutate({ content_volume: v as any })}
-                >
+                <Label className="flex items-center gap-2"><FileText className="w-4 h-4 text-muted-foreground" />Content Volume</Label>
+                <Select value={settings?.content_volume || 'medium'} onValueChange={(v) => upsertSettings.mutate({ content_volume: v as any })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="low">Low (1 piece)</SelectItem>
@@ -115,39 +109,23 @@ export default function AutopilotPage() {
                 </Select>
               </div>
 
-              {/* Approval Mode */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
-                  Approval Mode
-                </Label>
-                <Select
-                  value={settings?.approval_mode || 'require_approval'}
-                  onValueChange={(v) => upsertSettings.mutate({ approval_mode: v as any })}
-                >
+                <Label className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-muted-foreground" />Approval Mode</Label>
+                <Select value={settings?.approval_mode || 'require_approval'} onValueChange={(v) => upsertSettings.mutate({ approval_mode: v as any })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="require_approval">Require approval</SelectItem>
-                    <SelectItem value="auto_schedule">Auto-schedule</SelectItem>
+                    <SelectItem value="require_approval">Require approval (default)</SelectItem>
+                    <SelectItem value="auto_schedule">Auto-schedule (advanced)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Run Time */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  Daily Run Time
-                </Label>
-                <Select
-                  value={settings?.run_time?.substring(0, 5) || '09:00'}
-                  onValueChange={(v) => upsertSettings.mutate({ run_time: v + ':00' })}
-                >
+                <Label className="flex items-center gap-2"><Clock className="w-4 h-4 text-muted-foreground" />Daily Run Time</Label>
+                <Select value={settings?.run_time?.substring(0, 5) || '09:00'} onValueChange={(v) => upsertSettings.mutate({ run_time: `${v}:00` })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '16:00', '18:00'].map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
+                    {['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '14:00', '16:00', '18:00'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -155,87 +133,71 @@ export default function AutopilotPage() {
           </CardContent>
         </Card>
 
-        {/* Manual Trigger */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Manual Run</CardTitle>
-            <CardDescription>Trigger Autopilot manually to generate content now</CardDescription>
+            <CardDescription>Generate into Library immediately</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={() => trigger.mutate('daily_content')}
-                disabled={trigger.isPending}
-                className="gap-2"
-              >
-                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                Generate Daily Content
+              <Button onClick={() => trigger.mutate('daily_content')} disabled={trigger.isPending} className="gap-2">
+                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}Generate Daily Content
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => trigger.mutate('weekly_campaign')}
-                disabled={trigger.isPending}
-                className="gap-2"
-              >
-                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                Generate Weekly Campaign
+              <Button variant="outline" onClick={() => trigger.mutate('weekly_campaign')} disabled={trigger.isPending} className="gap-2">
+                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}Generate Weekly Campaign
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => trigger.mutate('review_content')}
-                disabled={trigger.isPending}
-                className="gap-2"
-              >
-                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareText className="w-4 h-4" />}
-                Generate Review Content
+              <Button variant="outline" onClick={() => trigger.mutate('review_content')} disabled={trigger.isPending} className="gap-2">
+                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareText className="w-4 h-4" />}Generate Review Content
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Run History */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Run History</CardTitle>
-            <CardDescription>Recent Autopilot activity</CardDescription>
+            <CardDescription>Diagnostics and direct links to generated library items</CardDescription>
           </CardHeader>
           <CardContent>
             {runsLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
-              </div>
-            ) : !runs || runs.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                No runs yet. Enable Autopilot or trigger a manual run above.
-              </p>
+              <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
+            ) : !runs?.length ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No runs yet. Enable Autopilot or trigger a manual run above.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {runs.map((run) => (
-                  <div key={run.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-                    <div className="flex items-center gap-3">
-                      <RunStatusIcon status={run.status} />
-                      <div>
-                        <p className="text-sm font-medium">
-                          {run.run_type === 'daily_content' ? 'Daily Content' :
-                           run.run_type === 'weekly_campaign' ? 'Weekly Campaign' : 'Review Content'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
-                        </p>
+                  <div key={run.id} className="p-4 rounded-lg bg-muted/30 border border-border/50 space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <RunStatusIcon status={run.status} />
+                        <div>
+                          <p className="text-sm font-medium">
+                            {run.run_type === 'daily_content' ? 'Daily Content' : run.run_type === 'weekly_campaign' ? 'Weekly Campaign' : 'Review Content'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}</p>
+                        </div>
                       </div>
+                      <Badge variant={run.status === 'failed' ? 'destructive' : 'secondary'} className="capitalize">{run.status.replace('_', ' ')}</Badge>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {run.status === 'completed' && run.output_summary && (
-                        <Badge variant="secondary" className="text-xs">
-                          {(run.output_summary as any).items_saved || 0} items
-                        </Badge>
-                      )}
-                      {run.status === 'failed' && (
-                        <Badge variant="destructive" className="text-xs">Failed</Badge>
-                      )}
-                      {run.status === 'running' && (
-                        <Badge className="text-xs bg-accent/20 text-accent border-accent/30">Running</Badge>
-                      )}
+
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <Stat label="Generated" value={run.items_generated ?? (run.output_summary as any)?.items_generated ?? 0} />
+                      <Stat label="Saved to Library" value={run.items_saved ?? (run.output_summary as any)?.items_saved ?? 0} />
+                      <Stat label="Failed" value={run.items_failed ?? (run.output_summary as any)?.items_failed ?? 0} />
+                    </div>
+
+                    {run.error_message && <p className="text-xs text-destructive">{run.error_message}</p>}
+
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        disabled={!run.content_item_ids?.length}
+                        onClick={() => navigate(`/content/library?source=autopilot&autopilotRunId=${run.id}`)}
+                      >
+                        Open generated items <ExternalLink className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -250,13 +212,14 @@ export default function AutopilotPage() {
 
 function RunStatusIcon({ status }: { status: string }) {
   switch (status) {
-    case 'completed':
-      return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-    case 'failed':
-      return <XCircle className="w-5 h-5 text-destructive" />;
-    case 'running':
-      return <Loader2 className="w-5 h-5 text-accent animate-spin" />;
-    default:
-      return <Clock className="w-5 h-5 text-muted-foreground" />;
+    case 'completed': return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+    case 'partial_failed': return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+    case 'failed': return <XCircle className="w-5 h-5 text-destructive" />;
+    case 'running': return <Loader2 className="w-5 h-5 text-accent animate-spin" />;
+    default: return <Clock className="w-5 h-5 text-muted-foreground" />;
   }
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return <div className="rounded-md border border-border/60 bg-background px-2 py-1.5"><p className="text-muted-foreground">{label}</p><p className="text-sm font-semibold">{value}</p></div>;
 }
