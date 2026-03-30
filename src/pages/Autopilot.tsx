@@ -166,6 +166,14 @@ export default function AutopilotPage() {
             ) : (
               <div className="space-y-3">
                 {runs.map((run) => (
+                  (() => {
+                    const savedIds = run.saved_library_item_ids?.length ? run.saved_library_item_ids : run.content_item_ids;
+                    const hasSavedItems = !!savedIds?.length;
+                    const openDisabledReason = hasSavedItems
+                      ? ''
+                      : run.error_message || 'No items were successfully saved to Content Library for this run.';
+
+                    return (
                   <div key={run.id} className="p-4 rounded-lg bg-muted/30 border border-border/50 space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-center gap-3">
@@ -177,29 +185,32 @@ export default function AutopilotPage() {
                           <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}</p>
                         </div>
                       </div>
-                      <Badge variant={run.status === 'failed' ? 'destructive' : 'secondary'} className="capitalize">{run.status.replace('_', ' ')}</Badge>
+                      <Badge variant={run.status === 'failed' ? 'destructive' : 'secondary'} className="capitalize">{(run.run_status || run.status).replace('_', ' ')}</Badge>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 text-xs">
-                      <Stat label="Generated" value={run.items_generated ?? (run.output_summary as any)?.items_generated ?? 0} />
-                      <Stat label="Saved to Library" value={run.items_saved ?? (run.output_summary as any)?.items_saved ?? 0} />
-                      <Stat label="Failed" value={run.items_failed ?? (run.output_summary as any)?.items_failed ?? 0} />
+                      <Stat label="Generated" value={run.generated_count ?? run.items_generated ?? (run.output_summary as any)?.generated_count ?? (run.output_summary as any)?.items_generated ?? 0} />
+                      <Stat label="Saved to Library" value={run.saved_count ?? run.items_saved ?? (run.output_summary as any)?.saved_count ?? (run.output_summary as any)?.items_saved ?? 0} />
+                      <Stat label="Failed" value={run.failed_count ?? run.items_failed ?? (run.output_summary as any)?.failed_count ?? (run.output_summary as any)?.items_failed ?? 0} />
                     </div>
 
                     {run.error_message && <p className="text-xs text-destructive">{run.error_message}</p>}
+                    {!hasSavedItems && <p className="text-xs text-muted-foreground">Open generated items unavailable: {openDisabledReason}</p>}
 
                     <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
                         className="gap-2"
-                        disabled={!run.content_item_ids?.length}
+                        disabled={!hasSavedItems}
                         onClick={() => navigate(`/content/library?source=autopilot&autopilotRunId=${run.id}`)}
                       >
                         Open generated items <ExternalLink className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
+                    );
+                  })()
                 ))}
               </div>
             )}
@@ -213,7 +224,7 @@ export default function AutopilotPage() {
 function RunStatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'completed': return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-    case 'partial_failed': return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+    case 'partial': return <AlertTriangle className="w-5 h-5 text-amber-500" />;
     case 'failed': return <XCircle className="w-5 h-5 text-destructive" />;
     case 'running': return <Loader2 className="w-5 h-5 text-accent animate-spin" />;
     default: return <Clock className="w-5 h-5 text-muted-foreground" />;

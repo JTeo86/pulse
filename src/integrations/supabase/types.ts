@@ -189,6 +189,9 @@ export type Database = {
           content_item_ids: string[] | null
           created_at: string
           error_message: string | null
+          failed_count: number
+          generated_count: number
+          generated_item_payloads: Json | null
           id: string
           items_failed: number
           items_generated: number
@@ -196,7 +199,11 @@ export type Database = {
           output_summary: Json | null
           parse_error: string | null
           raw_ai_output: string | null
+          run_status: string
           run_type: string
+          save_error_details: Json | null
+          saved_count: number
+          saved_library_item_ids: string[] | null
           started_at: string | null
           status: string
           venue_id: string
@@ -206,6 +213,9 @@ export type Database = {
           content_item_ids?: string[] | null
           created_at?: string
           error_message?: string | null
+          failed_count?: number
+          generated_count?: number
+          generated_item_payloads?: Json | null
           id?: string
           items_failed?: number
           items_generated?: number
@@ -213,7 +223,11 @@ export type Database = {
           output_summary?: Json | null
           parse_error?: string | null
           raw_ai_output?: string | null
+          run_status?: string
           run_type: string
+          save_error_details?: Json | null
+          saved_count?: number
+          saved_library_item_ids?: string[] | null
           started_at?: string | null
           status?: string
           venue_id: string
@@ -223,6 +237,9 @@ export type Database = {
           content_item_ids?: string[] | null
           created_at?: string
           error_message?: string | null
+          failed_count?: number
+          generated_count?: number
+          generated_item_payloads?: Json | null
           id?: string
           items_failed?: number
           items_generated?: number
@@ -230,7 +247,11 @@ export type Database = {
           output_summary?: Json | null
           parse_error?: string | null
           raw_ai_output?: string | null
+          run_status?: string
           run_type?: string
+          save_error_details?: Json | null
+          saved_count?: number
+          saved_library_item_ids?: string[] | null
           started_at?: string | null
           status?: string
           venue_id?: string

@@ -21,6 +21,15 @@ type GeneratedItem = {
   badges: string[];
 };
 
+type SaveErrorDetail = {
+  index: number;
+  title: string | null;
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -194,12 +203,12 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
 
     const aiData = await aiResponse.json();
     const rawContent = String(aiData.choices?.[0]?.message?.content || "");
-    const { items, parseError } = parseAndNormalizeItems(rawContent, runType);
+    const { parsedItems, items, parseError, normalizationErrors } = parseAndNormalizeItems(rawContent, runType);
 
     const contentItemIds: string[] = [];
-    const saveErrors: string[] = [];
+    const saveErrorDetails: SaveErrorDetail[] = [];
 
-    for (const item of items) {
+    for (const [index, item] of items.entries()) {
       const { data: ci, error: ciErr } = await supabase
         .from("content_items")
         .insert({
@@ -227,49 +236,72 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         .single();
 
       if (ciErr || !ci) {
-        saveErrors.push(ciErr?.message || "Unknown save error");
+        saveErrorDetails.push({
+          index,
+          title: item.title ?? null,
+          message: ciErr?.message || "Unknown save error",
+          code: ciErr?.code,
+          details: ciErr?.details,
+          hint: ciErr?.hint,
+        });
       } else {
         contentItemIds.push(ci.id);
       }
     }
 
-    const itemsGenerated = items.length;
-    const itemsSaved = contentItemIds.length;
-    const itemsFailed = (parseError ? itemsGenerated || 1 : 0) + Math.max(0, itemsGenerated - itemsSaved);
+    const generatedCount = parsedItems.length;
+    const savedCount = contentItemIds.length;
+    const failedCount = Math.max(0, generatedCount - savedCount);
+    const combinedSaveErrorDetails: SaveErrorDetail[] = [
+      ...normalizationErrors,
+      ...saveErrorDetails,
+    ];
 
     const runStatus = parseError
       ? "failed"
-      : itemsGenerated === 0
+      : generatedCount === 0
         ? "failed"
-        : itemsSaved === 0
+        : savedCount === 0
           ? "failed"
-          : itemsFailed > 0
-            ? "partial_failed"
+          : failedCount > 0
+            ? "partial"
             : "completed";
 
     const errorMessage = parseError
       ? `Autopilot JSON parse failed: ${parseError}`
-      : saveErrors.length > 0
-        ? `Saved ${itemsSaved}/${itemsGenerated} items. ${saveErrors[0]}`
+      : combinedSaveErrorDetails.length > 0
+        ? `Saved ${savedCount}/${generatedCount} items. ${combinedSaveErrorDetails[0]?.message || "One or more save errors occurred."}`
         : null;
 
     await supabase.from("autopilot_runs").update({
       status: runStatus,
       completed_at: new Date().toISOString(),
       content_item_ids: contentItemIds,
+      saved_library_item_ids: contentItemIds,
       raw_ai_output: rawContent,
       parse_error: parseError,
-      items_generated: itemsGenerated,
-      items_saved: itemsSaved,
-      items_failed: itemsFailed,
+      items_generated: generatedCount,
+      items_saved: savedCount,
+      items_failed: failedCount,
+      generated_count: generatedCount,
+      saved_count: savedCount,
+      failed_count: failedCount,
+      run_status: runStatus,
       error_message: errorMessage,
+      save_error_details: combinedSaveErrorDetails,
+      generated_item_payloads: parsedItems,
       output_summary: {
-        items_generated: itemsGenerated,
-        items_saved: itemsSaved,
-        items_failed: itemsFailed,
+        items_generated: generatedCount,
+        items_saved: savedCount,
+        items_failed: failedCount,
+        generated_count: generatedCount,
+        saved_count: savedCount,
+        failed_count: failedCount,
+        run_status: runStatus,
         run_type: runType,
         parse_error: parseError,
-        save_errors: saveErrors,
+        save_error_details: combinedSaveErrorDetails,
+        saved_library_item_ids: contentItemIds,
       },
     }).eq("id", runId);
 
@@ -280,11 +312,16 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     return {
       status: runStatus,
       run_id: runId,
-      items_generated: itemsGenerated,
-      items_saved: itemsSaved,
-      items_failed: itemsFailed,
+      items_generated: generatedCount,
+      items_saved: savedCount,
+      items_failed: failedCount,
+      generated_count: generatedCount,
+      saved_count: savedCount,
+      failed_count: failedCount,
       content_item_ids: contentItemIds,
+      saved_library_item_ids: contentItemIds,
       error_message: errorMessage,
+      save_error_details: combinedSaveErrorDetails,
     };
   } catch (err: any) {
     await supabase.from("autopilot_runs").update({
@@ -292,24 +329,54 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
       completed_at: new Date().toISOString(),
       error_message: err.message,
       items_failed: 1,
+      failed_count: 1,
+      run_status: "failed",
     }).eq("id", runId);
     throw err;
   }
 }
 
-function parseAndNormalizeItems(rawContent: string, runType: RunType): { items: GeneratedItem[]; parseError: string | null } {
+function parseAndNormalizeItems(
+  rawContent: string,
+  runType: RunType,
+): {
+  parsedItems: any[];
+  items: GeneratedItem[];
+  parseError: string | null;
+  normalizationErrors: SaveErrorDetail[];
+} {
   const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
   let parsed: any;
 
   try {
     parsed = JSON.parse(cleaned);
   } catch (err: any) {
-    return { items: [], parseError: err.message || "Invalid JSON output" };
+    return {
+      parsedItems: [],
+      items: [],
+      parseError: err.message || "Invalid JSON output",
+      normalizationErrors: [],
+    };
   }
 
-  const arr = Array.isArray(parsed) ? parsed : [parsed];
-  const normalized = arr.map((item, idx) => normalizeItem(item, idx, runType)).filter(Boolean) as GeneratedItem[];
-  return { items: normalized, parseError: null };
+  const parsedItems = Array.isArray(parsed) ? parsed : [parsed];
+  const items: GeneratedItem[] = [];
+  const normalizationErrors: SaveErrorDetail[] = [];
+
+  parsedItems.forEach((item, idx) => {
+    const normalized = normalizeItem(item, idx, runType);
+    if (normalized) {
+      items.push(normalized);
+      return;
+    }
+    normalizationErrors.push({
+      index: idx,
+      title: item?.title ? String(item.title) : null,
+      message: "Generated item was missing required fields and could not be normalized.",
+    });
+  });
+
+  return { parsedItems, items, parseError: null, normalizationErrors };
 }
 
 function normalizeItem(item: any, index: number, runType: RunType): GeneratedItem | null {

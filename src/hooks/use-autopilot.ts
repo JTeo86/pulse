@@ -18,14 +18,21 @@ export interface AutopilotRun {
   id: string;
   venue_id: string;
   run_type: 'daily_content' | 'weekly_campaign' | 'review_content';
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'partial_failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'partial';
+  run_status?: 'pending' | 'running' | 'completed' | 'failed' | 'partial' | null;
   output_summary: Record<string, any>;
   content_item_ids: string[];
+  saved_library_item_ids?: string[] | null;
   error_message: string | null;
+  save_error_details?: Array<Record<string, any>> | null;
+  generated_item_payloads?: Array<Record<string, any>> | null;
   parse_error: string | null;
   items_generated: number;
   items_saved: number;
   items_failed: number;
+  generated_count?: number;
+  saved_count?: number;
+  failed_count?: number;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -114,7 +121,13 @@ export function useAutopilotTrigger() {
     },
     onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['autopilot-runs', venueId] });
-      toast.success(`Autopilot generated ${result.items_saved ?? 0} item${(result.items_saved ?? 0) === 1 ? '' : 's'} in Library`);
+      const savedCount = result.saved_count ?? result.items_saved ?? 0;
+      const generatedCount = result.generated_count ?? result.items_generated ?? 0;
+      if (result.status === 'partial') {
+        toast.warning(`Autopilot saved ${savedCount}/${generatedCount} items to Library. Check run diagnostics for save errors.`);
+        return;
+      }
+      toast.success(`Autopilot generated ${savedCount} item${savedCount === 1 ? '' : 's'} in Library`);
     },
     onError: (err: any) => toast.error(err.message || 'Autopilot run failed'),
   });
