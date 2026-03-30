@@ -6,6 +6,7 @@ import {
   Camera,
   Film,
   Sparkles,
+  Zap,
   FolderOpen,
   Calendar,
   Megaphone,
