@@ -1,15 +1,24 @@
 import { motion } from 'framer-motion';
-import { Send, Calendar, Download, ExternalLink, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Send, Calendar, Download, ExternalLink, Info } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 
 export default function IntegrationsPage() {
+  const navigate = useNavigate();
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
+      <div className="mb-2">
+        <Button variant="ghost" size="sm" className="gap-2" onClick={() => navigate('/setup')}>
+          <ArrowLeft className="w-4 h-4" /> Back to Setup
+        </Button>
+      </div>
+
       <PageHeader
         title="Publishing"
         description="Export your content and connect to scheduling tools. API keys are managed in Admin → Integrations & API Keys."

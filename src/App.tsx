@@ -21,7 +21,6 @@ import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
 import ReelCreator from "./pages/ReelCreator";
 import ContentScheduler from "./pages/ContentScheduler";
-import Planner from "./pages/Planner";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
 import IndustryInsights from "./pages/growth/IndustryInsights";
@@ -151,13 +150,13 @@ function AppRoutes() {
 
         {/* Content Section */}
         <Route path="/content/library" element={<BrandLibrary />} />
-        <Route path="/content/planner" element={<Planner />} />
+        <Route path="/content/planner" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
         <Route path="/content/calendar" element={<ContentScheduler />} />
         <Route path="/content/scheduler" element={<Navigate to="/content/calendar" replace />} />
-        <Route path="/content/campaigns" element={<Navigate to="/content/planner" replace />} />
-        <Route path="/content/copywriter" element={<Navigate to="/content/planner" replace />} />
-        <Route path="/copywriter" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/content/campaigns" element={<Navigate to="/home?tab=plans" replace />} />
+        <Route path="/content/copywriter" element={<Navigate to="/home?tab=plans" replace />} />
+        <Route path="/copywriter" element={<Navigate to="/home?tab=plans" replace />} />
 
         {/* Reputation Section */}
         <Route path="/reputation/reviews" element={<ReviewsAnalytics />} />
@@ -182,8 +181,8 @@ function AppRoutes() {
         <Route path="/admin/integrations" element={<Navigate to="/admin/platform" replace />} />
 
         {/* Legacy event planner redirects */}
-        <Route path="/studio/events" element={<Navigate to="/content/planner" replace />} />
-        <Route path="/studio/events/:planId" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/studio/events" element={<Navigate to="/home?tab=plans" replace />} />
+        <Route path="/studio/events/:planId" element={<Navigate to="/home?tab=plans" replace />} />
         
         {/* Legacy analytics routes kept for deep links */}
         <Route path="/analytics/competitors" element={<CompetitorIntel />} />
@@ -204,7 +203,7 @@ function AppRoutes() {
         
         {/* Old Studio routes → New routes */}
         <Route path="/studio/editor" element={<Navigate to="/studio/pro-photo" replace />} />
-        <Route path="/studio/content" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/studio/content" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/editor" element={<Navigate to="/studio/pro-photo" replace />} />
         
         {/* Old Analytics routes → New routes */}
@@ -223,8 +222,8 @@ function AppRoutes() {
         <Route path="/upload" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/drafts" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/publishing" element={<Navigate to="/studio/pro-photo" replace />} />
-        <Route path="/studio/planner" element={<Navigate to="/content/planner" replace />} />
-        <Route path="/studio/email" element={<Navigate to="/content/planner" replace />} />
+        <Route path="/studio/planner" element={<Navigate to="/home?tab=plans" replace />} />
+        <Route path="/studio/email" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/studio/competitors" element={<Navigate to="/analytics/competitors" replace />} />
         <Route path="/team" element={<Navigate to="/venue/team" replace />} />
         <Route path="/integrations" element={<Navigate to="/venue/integrations" replace />} />

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +12,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Camera, CheckCircle2, XCircle, Clock, QrCode, Copy, Sparkles, Download } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle2, XCircle, Clock, QrCode, Copy, Sparkles, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 function QRCodeSVG({ url, size = 200 }: { url: string; size?: number }) {
@@ -22,6 +23,7 @@ function QRCodeSVG({ url, size = 200 }: { url: string; size?: number }) {
 
 export default function GuestSubmissions() {
   const { currentVenue } = useVenue();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [qrOpen, setQrOpen] = useState(false);
 
@@ -81,6 +83,10 @@ export default function GuestSubmissions() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/setup')}>
+        <ArrowLeft className="w-4 h-4" /> Back to Setup
+      </Button>
+
       <PageHeader
         title="Guest Photos"
         description="Review and approve guest-submitted photos for your content library."
