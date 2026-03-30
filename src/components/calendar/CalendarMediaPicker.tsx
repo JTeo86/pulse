@@ -75,7 +75,7 @@ export function CalendarMediaPicker({ value, onChange }: CalendarMediaPickerProp
     onChange({
       url: asset._resolvedUrl || asset.public_url || '',
       assetId: asset.id,
-      label: asset.title || asset.source_type || 'Library asset',
+      label: asset.title || asset.source_type || 'Content asset',
       type: asset.asset_type === 'video' ? 'video' : 'image',
     });
   };
@@ -135,7 +135,7 @@ export function CalendarMediaPicker({ value, onChange }: CalendarMediaPickerProp
                 className="h-7 text-xs gap-1"
                 onClick={() => setLibraryOpen(true)}
               >
-                <FolderOpen className="w-3 h-3" /> Library
+                <FolderOpen className="w-3 h-3" /> Content
               </Button>
             </div>
           </div>
@@ -174,7 +174,7 @@ export function CalendarMediaPicker({ value, onChange }: CalendarMediaPickerProp
           disabled={uploading}
         >
           <FolderOpen className="w-4 h-4" />
-          From Library
+          From Content
         </Button>
       </div>
       <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={handleFileChange} />

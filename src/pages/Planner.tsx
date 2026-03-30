@@ -13,7 +13,7 @@ export default function PlannerPage() {
     <>
       <PageHeader
         title="Planner"
-        description="Your hospitality marketing command centre. Spot opportunities, build plans, execute campaigns."
+        description="Plan campaigns and themes before scheduling them on your Calendar."
       />
 
       <motion.div

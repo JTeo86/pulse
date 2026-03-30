@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
-  Archive, CalendarDays, CheckCircle2, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
+  Archive, CalendarDays, CheckCircle2, Clock3, ClipboardList, Edit3, Image as ImageIcon, Layers, List, Loader2,
   Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,9 +48,11 @@ interface LibraryItem {
   campaign_tag?: string | null;
   badges?: string[] | null;
   source_plan_title?: string | null;
+  source_type?: string | null;
 }
 
-type LibraryTab = 'all' | 'autopilot' | 'generated' | 'manual' | 'approved' | 'scheduled' | 'published' | 'archived';
+type LibraryTab = 'all' | 'autopilot' | 'uploads' | 'pro_photo' | 'archived';
+type WorkflowStatusFilter = 'all' | 'draft' | 'approved' | 'scheduled' | 'published';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -63,6 +65,7 @@ export default function BrandLibraryPage() {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'autopilot' : 'all') as LibraryTab);
+  const [statusFilter, setStatusFilter] = useState<WorkflowStatusFilter>('all');
   const [view, setView] = useState<'card' | 'list'>('card');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheduleTarget, setScheduleTarget] = useState<LibraryItem | null>(null);
@@ -272,14 +275,19 @@ export default function BrandLibraryPage() {
     return items.filter((item) => {
       if (autopilotRunIdFilter && item.autopilot_run_id !== autopilotRunIdFilter) return false;
       if (contentItemIdsFilter && !contentItemIdsFilter.has(item.id)) return false;
-      if (tab === 'all') return item.status !== 'archived';
-      if (tab === 'autopilot') return item.source === 'autopilot';
-      if (tab === 'generated') return item.source === 'generated';
-      if (tab === 'manual') return item.source === 'manual';
-      if (tab === 'archived') return item.status === 'archived';
-      return item.status === tab;
+
+      const category = getContentCategory(item);
+      if (tab === 'archived') {
+        if (item.status !== 'archived') return false;
+      } else {
+        if (item.status === 'archived') return false;
+        if (tab !== 'all' && category !== tab) return false;
+      }
+
+      if (statusFilter !== 'all' && item.status !== statusFilter) return false;
+      return true;
     });
-  }, [items, tab, autopilotRunIdFilter, contentItemIdsFilter]);
+  }, [items, tab, statusFilter, autopilotRunIdFilter, contentItemIdsFilter]);
 
   const toggleSelect = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -325,7 +333,7 @@ export default function BrandLibraryPage() {
       status: 'scheduled',
       scheduled_for: schedule,
       caption_final: item.caption_final || item.caption_draft || null,
-      source_plan_title: item.source === 'autopilot' ? 'Library Scheduled (Autopilot)' : 'Library Scheduled',
+      source_plan_title: item.source === 'autopilot' ? 'Content Scheduled (Autopilot)' : 'Content Scheduled',
     };
     const { error } = await supabase.from('content_items').update(patch).eq('id', item.id);
     if (error) {
@@ -386,17 +394,15 @@ export default function BrandLibraryPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Content Library" description="Unified inventory of all content — autopilot drafts, generated images, and manual items." />
+      <PageHeader title="Content" description="Your content inventory. Review assets and drafts here, then send ready posts to Calendar." />
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="autopilot">Autopilot</TabsTrigger>
-            <TabsTrigger value="generated">Pro Photo</TabsTrigger>
-            <TabsTrigger value="manual">Manual</TabsTrigger>
-            <TabsTrigger value="approved">Approved</TabsTrigger>
-            <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+            <TabsTrigger value="uploads">Uploads</TabsTrigger>
+            <TabsTrigger value="pro_photo">Pro Photo</TabsTrigger>
             <TabsTrigger value="archived">Archived</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -404,9 +410,33 @@ export default function BrandLibraryPage() {
         <div className="flex items-center gap-2">
           <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
           <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
-          <Button size="sm" variant="outline" onClick={() => navigate('/content/planner')}><CalendarDays className="w-4 h-4 mr-1" />Calendar</Button>
+          <Button size="sm" variant="outline" onClick={() => navigate('/content/planner')}><ClipboardList className="w-4 h-4 mr-1" />Planner</Button>
+          <Button size="sm" variant="outline" onClick={() => navigate('/content/calendar')}><CalendarDays className="w-4 h-4 mr-1" />Calendar</Button>
         </div>
       </div>
+
+      {tab !== 'archived' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground mr-1">Status:</p>
+          {([
+            { value: 'all', label: 'All statuses' },
+            { value: 'draft', label: 'Draft' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'scheduled', label: 'Scheduled' },
+            { value: 'published', label: 'Published' },
+          ] as const).map((option) => (
+            <Button
+              key={option.value}
+              size="sm"
+              variant={statusFilter === option.value ? 'default' : 'outline'}
+              onClick={() => setStatusFilter(option.value)}
+              className="h-8"
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {selected.size > 0 && (
         <div className="rounded-lg border p-3 flex flex-wrap items-center gap-2">
@@ -420,7 +450,7 @@ export default function BrandLibraryPage() {
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
       ) : visibleItems.length === 0 ? (
-        <EmptyState icon={Sparkles} title="No content items yet" description="Run Autopilot or create content in The Editor to build your Library." />
+        <EmptyState icon={Sparkles} title="No content items yet" description="Run Autopilot, upload photos, or use Pro Photo to build your content inventory." />
       ) : view === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {visibleItems.map((item) => {
@@ -459,7 +489,7 @@ export default function BrandLibraryPage() {
 
                   <div className="flex flex-wrap gap-1">
                     <Badge variant="secondary">{item.status}</Badge>
-                    <Badge variant="outline">{item.source}</Badge>
+                    <Badge variant="outline">{getSourceLabel(item)}</Badge>
                     <Badge variant={hasAsset ? 'default' : 'outline'}>{hasAsset ? 'full content' : 'copy-only'}</Badge>
                     <Badge variant={assetState.variant}>{assetState.label}</Badge>
                     {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
@@ -584,7 +614,7 @@ export default function BrandLibraryPage() {
       <Dialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Edit library item</DialogTitle>
+            <DialogTitle>Edit content item</DialogTitle>
             <DialogDescription>Update caption and creative brief.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -641,6 +671,7 @@ function mapContentItem(row: any): LibraryItem {
     campaign_tag: row.campaign_tag || null,
     badges: row.badges || null,
     source_plan_title: row.source_plan_title || null,
+    source_type: null,
   };
 }
 
@@ -661,6 +692,7 @@ function mapContentAsset(row: any): LibraryItem {
     resolvedFrom: row.public_url || row.thumbnail_url || row.storage_path ? 'content_asset' : null,
     scheduled_for: null,
     created_at: row.created_at,
+    source_type: row.source_type || null,
   };
 }
 
@@ -705,6 +737,49 @@ function getAutopilotSourceLabel(item: LibraryItem): string | null {
   if (brief.trim().length > 0) return 'Source: based on venue context';
 
   return 'Source: based on brand profile';
+}
+
+function getContentCategory(item: LibraryItem): Exclude<LibraryTab, 'all'> {
+  if (item.status === 'archived') return 'archived';
+  if (item.source === 'autopilot') return 'autopilot';
+
+  const sourceType = (item.source_type || '').toLowerCase();
+  const runType = (item.run_type || '').toLowerCase();
+  const hasMedia = !!(item.media_url || item.storage_path || item.resolvedUrl);
+
+  if (
+    sourceType.includes('upload') ||
+    sourceType.includes('manual') ||
+    sourceType.includes('guest') ||
+    sourceType.includes('camera') ||
+    sourceType.includes('phone')
+  ) {
+    return 'uploads';
+  }
+
+  if (
+    item.source === 'generated' ||
+    sourceType.includes('generated') ||
+    sourceType.includes('pro_photo') ||
+    sourceType.includes('editor') ||
+    sourceType.includes('ai') ||
+    runType.includes('photo') ||
+    runType.includes('editor') ||
+    runType.includes('image')
+  ) {
+    return 'pro_photo';
+  }
+
+  if (item.source === 'manual' && hasMedia) return 'uploads';
+  return 'uploads';
+}
+
+function getSourceLabel(item: LibraryItem): string {
+  if (item.source === 'autopilot') return 'Autopilot';
+  const category = getContentCategory(item);
+  if (category === 'pro_photo') return 'Pro Photo';
+  if (category === 'uploads') return 'Upload';
+  return item.source;
 }
 
 function extractFirstUrl(value: unknown): string | null {
