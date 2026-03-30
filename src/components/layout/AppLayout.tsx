@@ -14,7 +14,8 @@ import {
   X,
   Shield,
   Plus,
-  Camera
+  Camera,
+  PenSquare
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -60,12 +61,32 @@ const primaryNavigation: NavItem[] = [
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
 
-// Quick action items for Create dropdown
+// Quick action items for Add Content dropdown
 const quickActions = [
-  { name: 'Generate Photo', href: '/studio/pro-photo', icon: Camera },
-  { name: 'Add to Calendar', href: '/content/calendar', icon: Calendar },
-  { name: 'Respond to Reviews', href: '/reputation/reviews', icon: MessageSquareText },
-  { name: 'Upload Dish', href: '/studio/pro-photo', icon: Plus },
+  {
+    name: 'Upload Photo',
+    description: 'Add a new dish or venue image',
+    href: '/studio/pro-photo',
+    icon: Plus,
+  },
+  {
+    name: 'Open Pro Photo',
+    description: 'Enhance or restyle your photos',
+    href: '/studio/pro-photo',
+    icon: Camera,
+  },
+  {
+    name: 'Create Post',
+    description: 'Write and schedule content manually',
+    href: '/content/calendar',
+    icon: PenSquare,
+  },
+  {
+    name: 'Respond to Reviews',
+    description: 'Reply to customer reviews',
+    href: '/reputation/reviews',
+    icon: MessageSquareText,
+  },
 ];
 
 function usePlatformAdmin() {
@@ -278,18 +299,22 @@ export function AppLayout({ children }: AppLayoutProps) {
               )}
             </Link>
             <div className="flex items-center gap-2">
-              {/* Quick Create Button - Mobile */}
+              {/* Add Content Button - Mobile */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="outline" className="h-9 w-9">
+                  <Button size="sm" className="gap-2">
                     <Plus className="w-4 h-4" />
+                    Add Content
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {quickActions.map((action) => (
-                    <DropdownMenuItem key={action.name} onClick={() => navigate(action.href)}>
-                      <action.icon className="w-4 h-4 mr-2" />
-                      {action.name}
+                    <DropdownMenuItem key={action.name} onClick={() => navigate(action.href)} className="items-start">
+                      <action.icon className="w-4 h-4 mr-2 mt-0.5" />
+                      <div className="flex flex-col">
+                        <span>{action.name}</span>
+                        <span className="text-xs text-muted-foreground">{action.description}</span>
+                      </div>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -356,19 +381,22 @@ export function AppLayout({ children }: AppLayoutProps) {
         <main className="flex-1 pt-14 lg:pt-0 min-h-screen flex flex-col min-w-0">
           <div className="hidden lg:flex items-center justify-end h-12 px-4 border-b border-border">
             
-            {/* Quick Create Button - Desktop */}
+            {/* Add Content Button - Desktop */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="gap-2">
                   <Plus className="w-4 h-4" />
-                  Create
+                  Add Content
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {quickActions.map((action) => (
-                  <DropdownMenuItem key={action.name} onClick={() => navigate(action.href)}>
-                    <action.icon className="w-4 h-4 mr-2" />
-                    {action.name}
+                  <DropdownMenuItem key={action.name} onClick={() => navigate(action.href)} className="items-start">
+                    <action.icon className="w-4 h-4 mr-2 mt-0.5" />
+                    <div className="flex flex-col">
+                      <span>{action.name}</span>
+                      <span className="text-xs text-muted-foreground">{action.description}</span>
+                    </div>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
