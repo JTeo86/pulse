@@ -15,7 +15,8 @@ import {
   Shield,
   Plus,
   Camera,
-  PenSquare
+  PenSquare,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -53,7 +54,7 @@ interface AppLayoutProps {
 const primaryNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Autopilot', href: '/autopilot', icon: Zap },
-  { name: 'Library', href: '/content/library', icon: FolderOpen },
+  { name: 'Content', href: '/content/library', icon: FolderOpen },
   { name: 'Calendar', href: '/content/calendar', icon: Calendar },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
   { name: 'Setup', href: '/setup', icon: Settings },
@@ -65,19 +66,19 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 const quickActions = [
   {
     name: 'Upload Photo',
-    description: 'Add a new dish or venue image',
+    description: 'Add an existing image to your content inventory',
     href: '/studio/pro-photo',
-    icon: Plus,
+    icon: Upload,
   },
   {
-    name: 'Open Pro Photo',
-    description: 'Enhance or restyle your photos',
+    name: 'Enhance Photo',
+    description: 'Improve and restyle a photo with Pro Photo',
     href: '/studio/pro-photo',
     icon: Camera,
   },
   {
     name: 'Create Post',
-    description: 'Write and schedule content manually',
+    description: 'Write a post and add it to your calendar',
     href: '/content/calendar',
     icon: PenSquare,
   },

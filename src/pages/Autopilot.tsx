@@ -39,17 +39,25 @@ export default function AutopilotPage() {
     <>
       <PageHeader
         title="Autopilot"
-        description="Autopilot creates content into your Library first, then you approve and schedule it."
+        description="Autopilot creates content first, then you review it in Content and schedule it in Calendar."
       />
 
       <div className="p-6 space-y-6 max-w-5xl">
         <Alert>
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Autopilot → Library → Calendar</AlertTitle>
+          <AlertTitle>Autopilot → Content → Calendar</AlertTitle>
           <AlertDescription>
-            Generated items now land in Content Library drafts by default. Review them, approve, and send to calendar when ready.
+            Generated items land in Content drafts by default. Review them, approve, and send to Calendar when ready.
           </AlertDescription>
         </Alert>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => navigate('/content/planner')}>
+            <Sparkles className="w-4 h-4" /> Open Planner
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => navigate('/content/library')}>
+            <ExternalLink className="w-4 h-4" /> Open Content
+          </Button>
+        </div>
 
         <Card className="border-accent/20">
           <CardHeader>
@@ -169,7 +177,7 @@ export default function AutopilotPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Manual Run</CardTitle>
-            <CardDescription>Generate into Library immediately</CardDescription>
+            <CardDescription>Generate into Content immediately</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-3">
@@ -204,7 +212,7 @@ export default function AutopilotPage() {
                     const hasSavedItems = !!savedIds?.length;
                     const openDisabledReason = hasSavedItems
                       ? ''
-                      : run.error_message || 'No items were successfully saved to Content Library for this run.';
+                      : run.error_message || 'No items were successfully saved to Content for this run.';
 
                     return (
                   <div key={run.id} className="p-4 rounded-lg bg-muted/30 border border-border/50 space-y-3">
@@ -223,7 +231,7 @@ export default function AutopilotPage() {
 
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <Stat label="Generated" value={run.generated_count ?? run.items_generated ?? (run.output_summary as any)?.generated_count ?? (run.output_summary as any)?.items_generated ?? 0} />
-                      <Stat label="Saved to Library" value={run.saved_count ?? run.items_saved ?? (run.output_summary as any)?.saved_count ?? (run.output_summary as any)?.items_saved ?? 0} />
+                      <Stat label="Saved to Content" value={run.saved_count ?? run.items_saved ?? (run.output_summary as any)?.saved_count ?? (run.output_summary as any)?.items_saved ?? 0} />
                       <Stat label="Failed" value={run.failed_count ?? run.items_failed ?? (run.output_summary as any)?.failed_count ?? (run.output_summary as any)?.items_failed ?? 0} />
                     </div>
 

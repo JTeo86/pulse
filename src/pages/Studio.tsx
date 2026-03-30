@@ -150,7 +150,7 @@ export default function Studio() {
             </div>
             <Button onClick={() => navigate('/studio/pro-photo')} className="shrink-0">
               <Camera className="w-4 h-4 mr-2" />
-              Generate Photo
+              Enhance Photo
             </Button>
           </div>
         </CardContent>
@@ -161,7 +161,7 @@ export default function Studio() {
         <div className="flex items-center justify-between">
           <h2 className="font-serif text-xl font-medium">Recent Creations</h2>
           <Link to="/content/library" className="text-sm text-accent hover:underline flex items-center gap-1">
-            View Library
+            View Content
             <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
