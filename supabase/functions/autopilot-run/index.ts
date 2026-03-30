@@ -211,6 +211,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     for (const [index, item] of items.entries()) {
       const insertPayload: Record<string, unknown> = {
         venue_id: venueId,
+        source: "autopilot",
         run_type: runType,
         autopilot_run_id: runId,
         title: item.title,
@@ -230,7 +231,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         source_plan_title: `Autopilot ${runType === "weekly_campaign" ? "Weekly" : runType === "review_content" ? "Review" : "Daily"} — ${new Date().toISOString().split("T")[0]}`,
       };
 
-      const { data: ci, error: ciErr } = await insertContentItemWithFallback(supabase, insertPayload);
+      const { data: ci, error: ciErr } = await insertContentItem(supabase, insertPayload);
 
       if (ciErr || !ci) {
         saveErrorDetails.push({
