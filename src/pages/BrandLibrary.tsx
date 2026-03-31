@@ -632,14 +632,23 @@ export default function BrandLibraryPage() {
             return (
               <Card key={buildItemKey(item)} className="overflow-hidden">
                 {hasAsset ? (
-                  <button type="button" className="block w-full h-40 bg-muted" onClick={() => openPreview(item)}>
+                  <button
+                    type="button"
+                    className="group/image relative block w-full h-40 bg-muted cursor-pointer overflow-hidden"
+                    onClick={() => openPreview(item)}
+                    aria-label={`Preview ${item.title || 'content image'}`}
+                  >
                     <img
                       src={displayImageUrl!}
                       alt={item.title || 'Content preview'}
-                      className="h-40 w-full object-cover"
+                      className="h-40 w-full object-cover transition-transform duration-200 group-hover/image:scale-[1.02]"
                       loading="lazy"
                       onError={() => markImageBroken(item)}
                     />
+                    <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-200 group-hover/image:bg-black/20" />
+                    <div className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover/image:opacity-100">
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    </div>
                   </button>
                 ) : (
                   <div className="h-40 bg-muted/50 flex flex-col items-center justify-center text-center px-4">
@@ -671,10 +680,6 @@ export default function BrandLibraryPage() {
                   {item.caption_draft && <p className="text-sm line-clamp-3">{item.caption_draft}</p>}
 
                   <p className="text-xs text-muted-foreground">Next action: {nextAction}</p>
-
-                  {item.origin === 'content_item' && hasAsset && (
-                    <Button size="sm" variant="outline" className="w-full" onClick={() => openPreview(item)}><Eye className="w-4 h-4 mr-1" />Preview</Button>
-                  )}
 
                   {item.origin === 'content_item' && !hasAsset && item.asset_type && (
                     <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
