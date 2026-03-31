@@ -510,7 +510,6 @@ export default function BrandLibraryPage() {
 
                   <div className="flex flex-wrap gap-1">
                     <Badge variant={readinessBadge.variant}>{readinessBadge.label}</Badge>
-                    <Badge variant="secondary">{getStatusBadgeLabel(item.status)}</Badge>
                     <Badge variant="outline">{getSourceLabel(item)}</Badge>
                     {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
                     {item.origin === 'content_asset' && <Badge variant="outline">Asset</Badge>}
@@ -547,17 +546,17 @@ export default function BrandLibraryPage() {
                   <div className="grid grid-cols-2 gap-2">
                     {item.origin === 'content_item' && (
                       <>
-                        <Button size="sm" variant="outline" onClick={() => supabase.from('content_items').update({ status: 'approved' }).eq('id', item.id).then(fetchItems)}><CheckCircle2 className="w-4 h-4 mr-1" />Approve</Button>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Edit</Button>
                         {readiness === 'ready_to_post' && (
-                          <Button size="sm" onClick={() => handleSendToCalendar(item)}><CalendarDays className="w-4 h-4 mr-1" />Send to Calendar</Button>
+                          <Button size="sm" className="col-span-2" onClick={() => handleSendToCalendar(item)}><CalendarDays className="w-4 h-4 mr-1" />Send to Calendar</Button>
                         )}
                         {readiness === 'needs_caption' && (
-                          <Button size="sm" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Write Caption</Button>
+                          <Button size="sm" className="col-span-2" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Write Caption</Button>
                         )}
                         {readiness === 'needs_image' && (
-                          <Button size="sm" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}><Wand2 className="w-4 h-4 mr-1" />Generate Image</Button>
+                          <Button size="sm" className="col-span-2" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}><Wand2 className="w-4 h-4 mr-1" />Generate Image</Button>
                         )}
+                        <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Edit</Button>
+                        <Button size="sm" variant="ghost" onClick={() => supabase.from('content_items').update({ status: 'approved' }).eq('id', item.id).then(fetchItems)}><CheckCircle2 className="w-4 h-4 mr-1" />Mark approved</Button>
                         <Button size="sm" variant="ghost" onClick={() => supabase.from('content_items').update({ status: 'archived' }).eq('id', item.id).then(fetchItems)}><Archive className="w-4 h-4 mr-1" />Archive</Button>
                       </>
                     )}
@@ -573,11 +572,11 @@ export default function BrandLibraryPage() {
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
-          <div className="grid grid-cols-[32px_1fr_1fr_150px_120px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
+          <div className="grid grid-cols-[32px_1fr_1fr_140px_140px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
             <div />
             <div>Title</div>
             <div>Readiness</div>
-            <div>Status</div>
+            <div>Source</div>
             <div>Next action</div>
           </div>
           {visibleItems.map((item) => {
@@ -585,7 +584,7 @@ export default function BrandLibraryPage() {
             const readiness = getReadinessState(item);
             const readinessBadge = getReadinessBadge(readiness);
             return (
-              <div key={buildItemKey(item)} className="grid grid-cols-[32px_1fr_1fr_150px_120px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
+              <div key={buildItemKey(item)} className="grid grid-cols-[32px_1fr_1fr_140px_140px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
                 <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
                 <div className="flex items-center gap-2 min-w-0">
                   {displayImageUrl ? (
@@ -598,7 +597,7 @@ export default function BrandLibraryPage() {
                   <span className="line-clamp-1">{item.title || 'Untitled'}</span>
                 </div>
                 <Badge variant={readinessBadge.variant} className="w-fit">{readinessBadge.label}</Badge>
-                <Badge variant="secondary" className="w-fit">{getStatusBadgeLabel(item.status)}</Badge>
+                <Badge variant="outline" className="w-fit">{getSourceLabel(item)}</Badge>
                 <span className="text-xs text-muted-foreground">{getNextActionLabel(readiness)}</span>
               </div>
             );
@@ -733,9 +732,11 @@ function buildItemKey(item: LibraryItem): string {
 
 function getReadinessState(item: LibraryItem): ReadinessState {
   const hasAsset = !!(item.resolvedUrl || item.media_url);
-  const hasCopy = !!(item.caption_draft || item.caption_final || item.title);
+  const hasCaption = !!(item.caption_final?.trim() || item.caption_draft?.trim());
+  const hasFallbackCopy = item.origin === 'content_item' && !!item.title?.trim();
+  const hasCopy = hasCaption || hasFallbackCopy;
 
-  if (hasAsset && hasCopy) return 'ready_to_post';
+  if (item.origin === 'content_item' && hasAsset && hasCopy) return 'ready_to_post';
   if (hasCopy && !hasAsset) return 'needs_image';
   if (hasAsset && !hasCopy) return 'needs_caption';
   return 'unformed';
@@ -817,13 +818,6 @@ function getSourceLabel(item: LibraryItem): string {
   if (category === 'pro_photo') return 'Pro Photo';
   if (category === 'uploads') return 'Upload';
   return item.source;
-}
-
-function getStatusBadgeLabel(status: string): string {
-  if (status === 'approved') return 'Ready';
-  if (status === 'scheduled') return 'Scheduled (Calendar)';
-  if (status === 'published') return 'Published (Calendar)';
-  return status.replace(/_/g, ' ');
 }
 
 function extractFirstUrl(value: unknown): string | null {
