@@ -37,7 +37,6 @@ export interface ScheduledItem {
 interface CalendarContentCardProps {
   item: ScheduledItem;
   onDelete: () => void;
-  selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (checked: boolean) => void;
 }
@@ -45,7 +44,6 @@ interface CalendarContentCardProps {
 export function CalendarContentCard({
   item,
   onDelete,
-  selectable = false,
   selected = false,
   onSelectChange,
 }: CalendarContentCardProps) {
@@ -114,16 +112,14 @@ export function CalendarContentCard({
         aspectClassName="aspect-square"
       >
         {/* Selection checkbox */}
-        {selectable && (
-          <div className="absolute top-2 left-2 z-10">
-            <Checkbox
-              checked={selected}
-              onCheckedChange={(checked) => onSelectChange?.(!!checked)}
-              className="bg-background/80 backdrop-blur-sm"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        )}
+        <div className="absolute top-2 left-2 z-10">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={(checked) => onSelectChange?.(!!checked)}
+            className="bg-background/80 backdrop-blur-sm"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
 
         {/* Hover overlay with quick actions */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
