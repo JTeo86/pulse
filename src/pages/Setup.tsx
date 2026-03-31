@@ -10,9 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { X, Pencil, Save, ImageIcon, Loader2 } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { resolveAssetMediaUrl } from '@/hooks/use-resolved-media';
 
 const visualTypes = ['dish', 'drink', 'dessert', 'interior', 'chef/prep', 'event', 'lifestyle'];
 
@@ -54,6 +56,18 @@ const defaultState: SetupState = {
   frequency: '3x_week',
 };
 
+type SetupAsset = {
+  id: string;
+  title: string | null;
+  asset_type: 'image' | 'video';
+  public_url: string | null;
+  thumbnail_url: string | null;
+  storage_path: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string;
+  resolved_url?: string;
+};
+
 export default function SetupPage() {
   const { currentVenue, refreshVenues } = useVenue();
   const { toast } = useToast();
@@ -61,18 +75,48 @@ export default function SetupPage() {
   const [state, setState] = useState<SetupState>(defaultState);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [assetsCount, setAssetsCount] = useState(0);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [assets, setAssets] = useState<SetupAsset[]>([]);
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const [editingTags, setEditingTags] = useState('');
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
 
   const onboarding = searchParams.get('onboarding') === '1';
+
+  const fetchAssets = async (venueId: string) => {
+    setLoadingAssets(true);
+    try {
+      const { data, error } = await supabase
+        .from('content_assets')
+        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, metadata, created_at')
+        .eq('venue_id', venueId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      const rows = (data || []) as SetupAsset[];
+      const withResolved = await Promise.all(rows.map(async (asset) => ({
+        ...asset,
+        resolved_url: await resolveAssetMediaUrl({
+          public_url: asset.public_url,
+          thumbnail_url: asset.thumbnail_url,
+          storage_path: asset.storage_path,
+        }),
+      })));
+      setAssets(withResolved);
+    } catch (error: any) {
+      toast({ title: 'Failed to load assets', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoadingAssets(false);
+    }
+  };
 
   useEffect(() => {
     if (!currentVenue) return;
     (async () => {
-      const [profileRes, kitRes, settingsRes, assetsRes] = await Promise.all([
+      const [profileRes, kitRes, settingsRes] = await Promise.all([
         supabase.from('venue_style_profiles').select('*').eq('venue_id', currentVenue.id).maybeSingle(),
         supabase.from('brand_kits').select('rules_text').eq('venue_id', currentVenue.id).maybeSingle(),
         supabase.from('autopilot_settings').select('*').eq('venue_id', currentVenue.id).maybeSingle(),
-        supabase.from('content_assets').select('id', { count: 'exact', head: true }).eq('venue_id', currentVenue.id),
       ]);
 
       const rules = parseRules(kitRes.data?.rules_text);
@@ -95,7 +139,7 @@ export default function SetupPage() {
         approvalMode: (settingsRes.data?.approval_mode as SetupState['approvalMode']) || 'require_approval',
         frequency: (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week',
       });
-      setAssetsCount(assetsRes.count || 0);
+      await fetchAssets(currentVenue.id);
     })();
   }, [currentVenue?.id]);
 
@@ -103,10 +147,10 @@ export default function SetupPage() {
     let done = 0;
     if (state.venueName && state.cuisineType && state.location) done++;
     if (state.voiceStyle && state.visualStyle && state.contentGoals) done++;
-    if (assetsCount > 0) done++;
+    if (assets.length > 0) done++;
     if (state.frequency) done++;
     return Math.round((done / 4) * 100);
-  }, [state, assetsCount]);
+  }, [state, assets.length]);
 
   const saveSetup = async () => {
     if (!currentVenue) return;
@@ -191,12 +235,51 @@ export default function SetupPage() {
           },
         });
       }
-      setAssetsCount((c) => c + files.length);
+      await fetchAssets(currentVenue.id);
       toast({ title: 'Assets uploaded', description: `${files.length} starter asset(s) added to your Autopilot pool.` });
     } catch (error: any) {
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const deleteAsset = async (asset: SetupAsset) => {
+    if (!currentVenue) return;
+    setDeletingAssetId(asset.id);
+    try {
+      if (asset.storage_path) {
+        await supabase.storage.from('venue-assets').remove([asset.storage_path]);
+      }
+      const { error } = await supabase.from('content_assets').delete().eq('id', asset.id);
+      if (error) throw error;
+      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+      toast({ title: 'Asset deleted' });
+    } catch (error: any) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setDeletingAssetId(null);
+    }
+  };
+
+  const beginEditTags = (asset: SetupAsset) => {
+    const tags = Array.isArray(asset.metadata?.tags) ? asset.metadata?.tags : [];
+    setEditingAssetId(asset.id);
+    setEditingTags(tags.join(', '));
+  };
+
+  const saveTags = async (asset: SetupAsset) => {
+    const nextTags = editingTags.split(',').map((t) => t.trim()).filter(Boolean);
+    try {
+      const nextMetadata = { ...(asset.metadata || {}), tags: nextTags };
+      const { error } = await supabase.from('content_assets').update({ metadata: nextMetadata }).eq('id', asset.id);
+      if (error) throw error;
+      setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, metadata: nextMetadata } : a)));
+      setEditingAssetId(null);
+      setEditingTags('');
+      toast({ title: 'Tags updated' });
+    } catch (error: any) {
+      toast({ title: 'Tag update failed', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -254,10 +337,72 @@ export default function SetupPage() {
               <p className="text-sm text-muted-foreground">Upload real starter photos so Autopilot can generate asset-backed posts from day one.</p>
               <div className="flex items-center gap-3">
                 <Input type="file" accept="image/*,video/*" multiple onChange={(e) => uploadStarterAssets(e.target.files)} disabled={uploading} />
-                <Badge variant="outline">{assetsCount} assets in pool</Badge>
+                <Badge variant="outline">{assets.length} assets in pool</Badge>
               </div>
               <p className="text-xs text-muted-foreground">Default metadata applied: reusable by Autopilot, evergreen, medium priority, visual type: dish. Edit metadata in Content as needed.</p>
               <div className="flex flex-wrap gap-2">{visualTypes.map((t) => <Badge variant="secondary" key={t}>{t}</Badge>)}</div>
+
+              {loadingAssets ? (
+                <div className="py-10 text-sm text-muted-foreground flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading assets...
+                </div>
+              ) : assets.length === 0 ? (
+                <div className="rounded-md border border-dashed p-6 text-center space-y-1">
+                  <p className="font-medium">No assets uploaded yet</p>
+                  <p className="text-sm text-muted-foreground">Upload starter images to build your Asset Pool for Autopilot and Content Library.</p>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {assets.map((asset) => {
+                    const tags = Array.isArray(asset.metadata?.tags) ? asset.metadata.tags : [];
+                    const label = asset.metadata?.label || asset.metadata?.visual_type || null;
+                    const inEdit = editingAssetId === asset.id;
+                    return (
+                      <div key={asset.id} className="rounded-md border overflow-hidden bg-card">
+                        <div className="aspect-square bg-muted relative">
+                          {asset.asset_type === 'image' && asset.resolved_url ? (
+                            <img src={asset.resolved_url} alt={asset.title || 'Venue asset'} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-muted-foreground text-sm">
+                              <ImageIcon className="h-4 w-4 mr-1" /> {asset.asset_type}
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3 space-y-2">
+                          <p className="text-sm font-medium truncate">{asset.title || 'Untitled asset'}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {tags.length > 0 ? tags.map((tag: string) => (
+                              <Badge key={`${asset.id}-${tag}`} variant="secondary">{tag}</Badge>
+                            )) : <Badge variant="outline">No tags</Badge>}
+                            {label ? <Badge variant="outline">{label}</Badge> : null}
+                          </div>
+                          {inEdit ? (
+                            <div className="space-y-2">
+                              <Input
+                                value={editingTags}
+                                onChange={(e) => setEditingTags(e.target.value)}
+                                placeholder="dish, drink, dessert"
+                              />
+                              <div className="flex gap-2">
+                                <Button size="sm" onClick={() => saveTags(asset)}><Save className="h-3.5 w-3.5 mr-1" />Save tags</Button>
+                                <Button size="sm" variant="outline" onClick={() => setEditingAssetId(null)}>Cancel</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" onClick={() => beginEditTags(asset)}><Pencil className="h-3.5 w-3.5 mr-1" />Edit tags</Button>
+                              <Button size="sm" variant="destructive" onClick={() => deleteAsset(asset)} disabled={deletingAssetId === asset.id}>
+                                <X className="h-3.5 w-3.5 mr-1" />Delete
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent></Card>
           </TabsContent>
 
