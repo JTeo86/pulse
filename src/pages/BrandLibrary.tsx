@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
-  Archive, ArrowLeft, CalendarDays, CheckCircle2, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
-  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle
+  Archive, ArrowLeft, CalendarDays, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
+  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle, MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -18,6 +18,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl, isSignedUrl } from '@/hooks/use-resolved-media';
 
@@ -327,22 +333,43 @@ export default function BrandLibraryPage() {
   };
 
   const handleSendToCalendar = async (item: LibraryItem, forcedDate?: string | null) => {
-    if (item.origin !== 'content_item') {
-      toast({ title: 'Not available', description: 'Only content items can be sent to calendar.' });
-      return;
-    }
     const schedule = forcedDate || item.suggested_scheduled_for || item.scheduled_for;
     if (!schedule) {
       setScheduleTarget(item);
       return;
     }
-    const patch = {
+
+    if (item.origin === 'content_item') {
+      const patch = {
+        status: 'scheduled',
+        scheduled_for: schedule,
+        caption_final: item.caption_final || item.caption_draft || null,
+        source_plan_title: item.source === 'autopilot' ? 'Content Scheduled (Autopilot)' : 'Content Scheduled',
+      };
+      const { error } = await supabase.from('content_items').update(patch).eq('id', item.id);
+      if (error) {
+        toast({ variant: 'destructive', title: 'Failed to send to calendar', description: error.message });
+        return;
+      }
+      toast({ title: 'Sent to calendar' });
+      fetchItems();
+      return;
+    }
+
+    const caption = item.caption_final || item.caption_draft || item.title || null;
+    const { error } = await supabase.from('content_items').insert({
+      venue_id: item.venue_id,
+      title: item.title || null,
+      caption_draft: caption,
+      caption_final: caption,
       status: 'scheduled',
       scheduled_for: schedule,
-      caption_final: item.caption_final || item.caption_draft || null,
-      source_plan_title: item.source === 'autopilot' ? 'Content Scheduled (Autopilot)' : 'Content Scheduled',
-    };
-    const { error } = await supabase.from('content_items').update(patch).eq('id', item.id);
+      media_master_url: item.resolvedUrl || item.media_url,
+      storage_path: item.storage_path,
+      asset_type: item.asset_type,
+      source: 'manual',
+      source_plan_title: 'Content Scheduled',
+    });
     if (error) {
       toast({ variant: 'destructive', title: 'Failed to send to calendar', description: error.message });
       return;
@@ -448,19 +475,9 @@ export default function BrandLibraryPage() {
         </div>
       )}
 
-      {tab !== 'archived' && (
-        <div className="rounded-lg border bg-muted/30 p-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">Scheduled and published posts now live in Calendar.</p>
-          <Button size="sm" variant="outline" onClick={() => navigate('/content/calendar')}>
-            <CalendarDays className="w-4 h-4 mr-1" /> Open Calendar
-          </Button>
-        </div>
-      )}
-
       {selected.size > 0 && (
         <div className="rounded-lg border p-3 flex flex-wrap items-center gap-2">
           <p className="text-sm text-muted-foreground mr-2">{selected.size} selected</p>
-          <Button size="sm" onClick={() => updateMany(Array.from(selected), { status: 'approved' })}><CheckCircle2 className="w-4 h-4 mr-1" />Approve</Button>
           <Button size="sm" variant="outline" onClick={() => updateMany(Array.from(selected), { status: 'archived' })}><Archive className="w-4 h-4 mr-1" />Archive</Button>
           <Button size="sm" variant="destructive" onClick={() => Promise.all(Array.from(selected).map(handleDelete)).then(() => setSelected(new Set()))}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
         </div>
@@ -523,15 +540,6 @@ export default function BrandLibraryPage() {
 
                   <p className="text-xs text-muted-foreground">Next action: {nextAction}</p>
 
-                  {item.origin === 'content_item' && readiness === 'needs_image' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}><Wand2 className="w-4 h-4 mr-1" />Generate Image</Button>
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=attach`)}><Link2 className="w-4 h-4 mr-1" />Attach Image</Button>
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}`)}><Eye className="w-4 h-4 mr-1" />Open in Pro Photo</Button>
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=regenerate`)}><RefreshCw className="w-4 h-4 mr-1" />Regenerate</Button>
-                    </div>
-                  )}
-
                   {item.origin === 'content_item' && hasAsset && (
                     <Button size="sm" variant="outline" className="w-full" onClick={() => openPreview(item)}><Eye className="w-4 h-4 mr-1" />Preview</Button>
                   )}
@@ -543,27 +551,80 @@ export default function BrandLibraryPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2">
-                    {item.origin === 'content_item' && (
+                  <div className="space-y-2">
+                    {readiness === 'ready_to_post' && (
                       <>
-                        {readiness === 'ready_to_post' && (
-                          <Button size="sm" className="col-span-2" onClick={() => handleSendToCalendar(item)}><CalendarDays className="w-4 h-4 mr-1" />Send to Calendar</Button>
-                        )}
-                        {readiness === 'needs_caption' && (
-                          <Button size="sm" className="col-span-2" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Write Caption</Button>
-                        )}
-                        {readiness === 'needs_image' && (
-                          <Button size="sm" className="col-span-2" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}><Wand2 className="w-4 h-4 mr-1" />Generate Image</Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Edit</Button>
-                        <Button size="sm" variant="ghost" onClick={() => supabase.from('content_items').update({ status: 'approved' }).eq('id', item.id).then(fetchItems)}><CheckCircle2 className="w-4 h-4 mr-1" />Mark approved</Button>
-                        <Button size="sm" variant="ghost" onClick={() => supabase.from('content_items').update({ status: 'archived' }).eq('id', item.id).then(fetchItems)}><Archive className="w-4 h-4 mr-1" />Archive</Button>
+                        <Button size="sm" className="w-full" onClick={() => handleSendToCalendar(item)}>
+                          <CalendarDays className="w-4 h-4 mr-1" />Send to Calendar
+                        </Button>
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
+                            <Edit3 className="w-4 h-4 mr-1" />Edit
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="outline" aria-label="More actions">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
+                                <Archive className="w-4 h-4 mr-2" />Archive
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </>
                     )}
-                    {item.origin === 'content_asset' && (
-                      <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Edit title</Button>
+
+                    {readiness === 'needs_image' && (
+                      <>
+                        <Button size="sm" className="w-full" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}>
+                          <Wand2 className="w-4 h-4 mr-1" />Generate Image
+                        </Button>
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=attach`)}>
+                            <Link2 className="w-4 h-4 mr-1" />Attach Image
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="outline" aria-label="More actions">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}`)}>
+                                <Eye className="w-4 h-4 mr-2" />Open in Pro Photo
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=regenerate`)}>
+                                <RefreshCw className="w-4 h-4 mr-2" />Regenerate
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEdit(item)}>
+                                <Edit3 className="w-4 h-4 mr-2" />Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
+                                <Archive className="w-4 h-4 mr-2" />Archive
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </>
                     )}
-                    <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
+
+                    {readiness === 'needs_caption' && (
+                      <>
+                        <Button size="sm" className="w-full" onClick={() => openEdit(item)}>
+                          <Edit3 className="w-4 h-4 mr-1" />Write Caption
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
+                          <Edit3 className="w-4 h-4 mr-1" />Edit
+                        </Button>
+                      </>
+                    )}
+
+                    <div className="border-t pt-2 flex justify-end">
+                      <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -733,10 +794,10 @@ function buildItemKey(item: LibraryItem): string {
 function getReadinessState(item: LibraryItem): ReadinessState {
   const hasAsset = !!(item.resolvedUrl || item.media_url);
   const hasCaption = !!(item.caption_final?.trim() || item.caption_draft?.trim());
-  const hasFallbackCopy = item.origin === 'content_item' && !!item.title?.trim();
+  const hasFallbackCopy = !!item.title?.trim();
   const hasCopy = hasCaption || hasFallbackCopy;
 
-  if (item.origin === 'content_item' && hasAsset && hasCopy) return 'ready_to_post';
+  if (hasAsset && hasCopy) return 'ready_to_post';
   if (hasCopy && !hasAsset) return 'needs_image';
   if (hasAsset && !hasCopy) return 'needs_caption';
   return 'unformed';
