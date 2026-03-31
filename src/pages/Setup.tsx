@@ -89,11 +89,11 @@ export default function SetupPage() {
         voiceStyle: rules.voiceStyle || '',
         visualStyle: rules.visualStyle || profileRes.data?.style_summary || '',
         contentGoals: rules.contentGoals || profileRes.data?.key_selling_points || '',
-        autopilotMode: settingsRes.data?.mode || 'conservative',
-        requireAssetForRuns: settingsRes.data?.require_asset_for_runs ?? true,
-        allowCopyOnlyFallback: settingsRes.data?.allow_copy_only_fallback ?? false,
-        approvalMode: settingsRes.data?.approval_mode || 'require_approval',
-        frequency: settingsRes.data?.frequency || '3x_week',
+        autopilotMode: 'conservative',
+        requireAssetForRuns: true,
+        allowCopyOnlyFallback: false,
+        approvalMode: (settingsRes.data?.approval_mode as SetupState['approvalMode']) || 'require_approval',
+        frequency: (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week',
       });
       setAssetsCount(assetsRes.count || 0);
     })();
