@@ -52,7 +52,8 @@ interface LibraryItem {
 }
 
 type LibraryTab = 'all' | 'autopilot' | 'uploads' | 'pro_photo' | 'archived';
-type InventoryStateFilter = 'all' | 'asset_ready' | 'needs_image' | 'drafts_only';
+type InventoryStateFilter = 'all' | 'ready_to_post' | 'needs_image' | 'needs_caption';
+type ReadinessState = 'ready_to_post' | 'needs_image' | 'needs_caption' | 'unformed';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -285,13 +286,12 @@ export default function BrandLibraryPage() {
         if (tab !== 'all' && category !== tab) return false;
       }
 
-      const hasAsset = !!(item.resolvedUrl || item.media_url);
-      const hasCopy = !!(item.caption_draft || item.caption_final || item.title);
-      const isDraft = isDraftLike(item.status);
+      const readiness = getReadinessState(item);
+      if (tab !== 'archived' && readiness === 'unformed') return false;
 
-      if (inventoryFilter === 'asset_ready' && !hasAsset) return false;
-      if (inventoryFilter === 'needs_image' && !(!hasAsset && hasCopy && item.origin === 'content_item')) return false;
-      if (inventoryFilter === 'drafts_only' && !isDraft) return false;
+      if (inventoryFilter === 'ready_to_post' && readiness !== 'ready_to_post') return false;
+      if (inventoryFilter === 'needs_image' && readiness !== 'needs_image') return false;
+      if (inventoryFilter === 'needs_caption' && readiness !== 'needs_caption') return false;
       return true;
     });
   }, [items, tab, inventoryFilter, autopilotRunIdFilter, contentItemIdsFilter]);
@@ -430,9 +430,9 @@ export default function BrandLibraryPage() {
           <p className="text-xs text-muted-foreground mr-1">Inventory filter:</p>
           {([
             { value: 'all', label: 'All inventory' },
-            { value: 'asset_ready', label: 'Asset ready' },
-            { value: 'needs_image', label: 'Needs image' },
-            { value: 'drafts_only', label: 'Drafts only' },
+            { value: 'ready_to_post', label: 'Ready to Post' },
+            { value: 'needs_image', label: 'Needs Image' },
+            { value: 'needs_caption', label: 'Needs Caption' },
           ] as const).map((option) => (
             <Button
               key={option.value}
@@ -444,6 +444,7 @@ export default function BrandLibraryPage() {
               {option.label}
             </Button>
           ))}
+          <p className="text-xs text-muted-foreground ml-2">Items with no image and no caption are hidden until started.</p>
         </div>
       )}
 
@@ -474,8 +475,10 @@ export default function BrandLibraryPage() {
           {visibleItems.map((item) => {
             const displayImageUrl = getDisplayImageUrl(item);
             const hasAsset = !!displayImageUrl;
-            const assetState = getAssetState(item, hasAsset);
+            const readiness = getReadinessState(item);
+            const readinessBadge = getReadinessBadge(readiness);
             const autopilotSource = getAutopilotSourceLabel(item);
+            const nextAction = getNextActionLabel(readiness);
 
             return (
               <Card key={buildItemKey(item)} className="overflow-hidden">
@@ -493,7 +496,7 @@ export default function BrandLibraryPage() {
                   <div className="h-40 bg-muted/50 flex flex-col items-center justify-center text-center px-4">
                     <ImageIcon className="w-8 h-8 text-muted-foreground/40 mb-2" />
                     <p className="text-sm font-medium">No asset yet</p>
-                    <p className="text-xs text-muted-foreground">This is a copy-only draft.</p>
+                    <p className="text-xs text-muted-foreground">Add an image to make this post-ready.</p>
                   </div>
                 )}
                 <CardContent className="p-4 space-y-3">
@@ -506,10 +509,9 @@ export default function BrandLibraryPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-1">
+                    <Badge variant={readinessBadge.variant}>{readinessBadge.label}</Badge>
                     <Badge variant="secondary">{getStatusBadgeLabel(item.status)}</Badge>
                     <Badge variant="outline">{getSourceLabel(item)}</Badge>
-                    <Badge variant={hasAsset ? 'default' : 'outline'}>{hasAsset ? 'full content' : 'copy-only'}</Badge>
-                    <Badge variant={assetState.variant}>{assetState.label}</Badge>
                     {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
                     {item.origin === 'content_asset' && <Badge variant="outline">Asset</Badge>}
                   </div>
@@ -520,7 +522,9 @@ export default function BrandLibraryPage() {
 
                   {item.caption_draft && <p className="text-sm line-clamp-3">{item.caption_draft}</p>}
 
-                  {item.origin === 'content_item' && !hasAsset && (
+                  <p className="text-xs text-muted-foreground">Next action: {nextAction}</p>
+
+                  {item.origin === 'content_item' && readiness === 'needs_image' && (
                     <div className="grid grid-cols-2 gap-2">
                       <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}><Wand2 className="w-4 h-4 mr-1" />Generate Image</Button>
                       <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=attach`)}><Link2 className="w-4 h-4 mr-1" />Attach Image</Button>
@@ -545,7 +549,15 @@ export default function BrandLibraryPage() {
                       <>
                         <Button size="sm" variant="outline" onClick={() => supabase.from('content_items').update({ status: 'approved' }).eq('id', item.id).then(fetchItems)}><CheckCircle2 className="w-4 h-4 mr-1" />Approve</Button>
                         <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Edit</Button>
-                        <Button size="sm" onClick={() => handleSendToCalendar(item)}><CalendarDays className="w-4 h-4 mr-1" />Calendar</Button>
+                        {readiness === 'ready_to_post' && (
+                          <Button size="sm" onClick={() => handleSendToCalendar(item)}><CalendarDays className="w-4 h-4 mr-1" />Send to Calendar</Button>
+                        )}
+                        {readiness === 'needs_caption' && (
+                          <Button size="sm" onClick={() => openEdit(item)}><Edit3 className="w-4 h-4 mr-1" />Write Caption</Button>
+                        )}
+                        {readiness === 'needs_image' && (
+                          <Button size="sm" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}><Wand2 className="w-4 h-4 mr-1" />Generate Image</Button>
+                        )}
                         <Button size="sm" variant="ghost" onClick={() => supabase.from('content_items').update({ status: 'archived' }).eq('id', item.id).then(fetchItems)}><Archive className="w-4 h-4 mr-1" />Archive</Button>
                       </>
                     )}
@@ -561,18 +573,19 @@ export default function BrandLibraryPage() {
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
-          <div className="grid grid-cols-[32px_1fr_1fr_120px_120px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
+          <div className="grid grid-cols-[32px_1fr_1fr_150px_120px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
             <div />
             <div>Title</div>
-            <div>State</div>
+            <div>Readiness</div>
             <div>Status</div>
-            <div>Source</div>
+            <div>Next action</div>
           </div>
           {visibleItems.map((item) => {
             const displayImageUrl = getDisplayImageUrl(item);
-            const hasAsset = !!displayImageUrl;
+            const readiness = getReadinessState(item);
+            const readinessBadge = getReadinessBadge(readiness);
             return (
-              <div key={buildItemKey(item)} className="grid grid-cols-[32px_1fr_1fr_120px_120px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
+              <div key={buildItemKey(item)} className="grid grid-cols-[32px_1fr_1fr_150px_120px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
                 <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
                 <div className="flex items-center gap-2 min-w-0">
                   {displayImageUrl ? (
@@ -584,9 +597,9 @@ export default function BrandLibraryPage() {
                   )}
                   <span className="line-clamp-1">{item.title || 'Untitled'}</span>
                 </div>
-                <div className="text-xs text-muted-foreground line-clamp-1">{hasAsset ? 'Asset ready' : 'Copy generated · Asset pending'}</div>
+                <Badge variant={readinessBadge.variant} className="w-fit">{readinessBadge.label}</Badge>
                 <Badge variant="secondary" className="w-fit">{getStatusBadgeLabel(item.status)}</Badge>
-                <Badge variant="outline" className="w-fit">{item.source}</Badge>
+                <span className="text-xs text-muted-foreground">{getNextActionLabel(readiness)}</span>
               </div>
             );
           })}
@@ -718,21 +731,27 @@ function buildItemKey(item: LibraryItem): string {
   return `${item.origin}:${item.id}`;
 }
 
-function getAssetState(item: LibraryItem, hasAsset: boolean): { label: string; variant: 'outline' | 'secondary' | 'default' } {
-  if (item.origin === 'content_asset') {
-    return { label: hasAsset ? 'Asset ready' : 'Asset missing', variant: hasAsset ? 'default' : 'secondary' };
-  }
-
+function getReadinessState(item: LibraryItem): ReadinessState {
+  const hasAsset = !!(item.resolvedUrl || item.media_url);
   const hasCopy = !!(item.caption_draft || item.caption_final || item.title);
-  if (hasAsset) {
-    return { label: 'Asset ready', variant: 'default' };
-  }
 
-  if (!hasCopy) {
-    return { label: 'Copy pending', variant: 'secondary' };
-  }
+  if (hasAsset && hasCopy) return 'ready_to_post';
+  if (hasCopy && !hasAsset) return 'needs_image';
+  if (hasAsset && !hasCopy) return 'needs_caption';
+  return 'unformed';
+}
 
-  return { label: 'Asset pending', variant: 'outline' };
+function getReadinessBadge(readiness: ReadinessState): { label: string; variant: 'outline' | 'secondary' | 'default' } {
+  if (readiness === 'ready_to_post') return { label: 'Ready to Post', variant: 'default' };
+  if (readiness === 'needs_image') return { label: 'Needs Image', variant: 'outline' };
+  if (readiness === 'needs_caption') return { label: 'Needs Caption', variant: 'secondary' };
+  return { label: 'Needs Caption', variant: 'secondary' };
+}
+
+function getNextActionLabel(readiness: ReadinessState): string {
+  if (readiness === 'ready_to_post') return 'Send to Calendar';
+  if (readiness === 'needs_image') return 'Generate or attach image';
+  return 'Write or generate caption';
 }
 
 function getAutopilotSourceLabel(item: LibraryItem): string | null {
@@ -798,10 +817,6 @@ function getSourceLabel(item: LibraryItem): string {
   if (category === 'pro_photo') return 'Pro Photo';
   if (category === 'uploads') return 'Upload';
   return item.source;
-}
-
-function isDraftLike(status: string): boolean {
-  return ['draft', 'needs_changes', 'pending_review'].includes(status);
 }
 
 function getStatusBadgeLabel(status: string): string {
