@@ -337,7 +337,7 @@ export default function BrandLibraryPage() {
   const handleSendToCalendar = async (item: LibraryItem, forcedDate?: string | null) => {
     const eligibility = getCalendarSendEligibility(item);
     if (!eligibility.ok) {
-      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: eligibility.reason });
+      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: (eligibility as any).reason });
       return;
     }
 
@@ -366,11 +366,11 @@ export default function BrandLibraryPage() {
 
     const conversion = buildAssetBackedContentItem(item, schedule);
     if (!conversion.ok) {
-      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: conversion.reason });
+      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: (conversion as any).reason });
       return;
     }
 
-    const { error } = await supabase.from('content_items').insert(conversion.payload);
+    const { error } = await supabase.from('content_items').insert(conversion.payload as any);
     if (error) {
       toast({
         variant: 'destructive',
@@ -566,7 +566,7 @@ export default function BrandLibraryPage() {
                         ) : (
                           <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
                             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-800">{getCalendarSendEligibility(item).reason}</p>
+                            <p className="text-xs text-amber-800">{(getCalendarSendEligibility(item) as any).reason}</p>
                           </div>
                         )}
                         <div className="grid grid-cols-[1fr_auto] gap-2">
