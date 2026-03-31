@@ -566,7 +566,7 @@ export default function BrandLibraryPage() {
                         ) : (
                           <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
                             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-800">{getCalendarSendEligibility(item).reason}</p>
+                            <p className="text-xs text-amber-800">{(getCalendarSendEligibility(item) as any).reason}</p>
                           </div>
                         )}
                         <div className="grid grid-cols-[1fr_auto] gap-2">
