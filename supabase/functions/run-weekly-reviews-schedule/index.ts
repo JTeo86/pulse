@@ -6,6 +6,88 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const WEEKDAY_TO_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+function getVenueLocalParts(now: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    weekday: "short",
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+  const weekday = WEEKDAY_TO_INDEX[get("weekday") || "Mon"] ?? 1;
+
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    hour: Number(get("hour")),
+    weekday,
+  };
+}
+
+function getCompletedWeekRange(now: Date, timeZone: string) {
+  const local = getVenueLocalParts(now, timeZone);
+  const localDateUtc = new Date(Date.UTC(local.year, local.month - 1, local.day));
+  const daysSinceLastCompletedSunday = local.weekday === 0 ? 7 : local.weekday;
+
+  const weekEndUtc = new Date(localDateUtc);
+  weekEndUtc.setUTCDate(weekEndUtc.getUTCDate() - daysSinceLastCompletedSunday);
+
+  const weekStartUtc = new Date(weekEndUtc);
+  weekStartUtc.setUTCDate(weekStartUtc.getUTCDate() - 6);
+
+  return {
+    weekStart: weekStartUtc.toISOString().split("T")[0],
+    weekEnd: weekEndUtc.toISOString().split("T")[0],
+    localWeekday: local.weekday,
+    localHour: local.hour,
+  };
+}
+
+async function invokeInternalStep(path: string, payload: Record<string, unknown>) {
+  const response = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let body: any = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = await response.text();
+  }
+
+  if (!response.ok) {
+    return { ok: false, error: typeof body === "string" ? body : body?.error || `HTTP ${response.status}` };
+  }
+
+  if (body?.error) {
+    return { ok: false, error: body.error as string };
+  }
+
+  return { ok: true, body };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -49,21 +131,14 @@ serve(async (req) => {
       // Check if local time is Monday 08:xx
       const tz = venue.timezone || "Europe/London";
       const now = new Date();
-      const localStr = now.toLocaleString("en-US", { timeZone: tz });
-      const localDate = new Date(localStr);
-      const dayOfWeek = localDate.getDay();
-      const hour = localDate.getHours();
+      const cycle = getCompletedWeekRange(now, tz);
+      const dayOfWeek = cycle.localWeekday;
+      const hour = cycle.localHour;
 
       if (dayOfWeek !== 1 || hour !== 8) continue;
 
-      // Compute last week (Mon-Sun)
-      const weekEnd = new Date(localDate);
-      weekEnd.setDate(weekEnd.getDate() - weekEnd.getDay());
-      const weekStart = new Date(weekEnd);
-      weekStart.setDate(weekStart.getDate() - 6);
-
-      const weekStartStr = weekStart.toISOString().split("T")[0];
-      const weekEndStr = weekEnd.toISOString().split("T")[0];
+      const weekStartStr = cycle.weekStart;
+      const weekEndStr = cycle.weekEnd;
 
       // Idempotency guard
       const { data: existing } = await supabaseAdmin
@@ -83,6 +158,7 @@ serve(async (req) => {
         .from("review_automation_runs")
         .insert({
           venue_id: venue.id,
+          scheduled_for: now.toISOString(),
           week_start: weekStartStr,
           week_end: weekEndStr,
           status: "running",
@@ -102,22 +178,14 @@ serve(async (req) => {
 
       // Step 1: Ingest reviews
       try {
-        const ingestResp = await fetch(
-          `${Deno.env.get("SUPABASE_URL")}/functions/v1/ingest-reviews`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({ venue_id: venue.id }),
-          }
-        );
-        const ingestData = await ingestResp.json();
-        if (ingestData.success || ingestData.fetched_count > 0) {
+        const ingest = await invokeInternalStep("ingest-reviews", { venue_id: venue.id });
+        if (ingest.ok && (ingest.body?.success || ingest.body?.fetched_count > 0)) {
           completedSteps.push("ingest");
-        } else {
+        } else if (ingest.ok) {
           completedSteps.push("ingest_partial");
+        } else {
+          hasError = true;
+          errorMsg += `Ingest failed: ${ingest.error}. `;
         }
       } catch (e) {
         hasError = true;
@@ -126,24 +194,16 @@ serve(async (req) => {
 
       // Step 2: Generate weekly report
       try {
-        const reportResp = await fetch(
-          `${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-weekly-review-report`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({
-              venue_id: venue.id,
-              week_start: weekStartStr,
-              week_end: weekEndStr,
-            }),
-          }
-        );
-        const reportData = await reportResp.json();
-        if (!reportData.error) {
+        const report = await invokeInternalStep("generate-weekly-review-report", {
+          venue_id: venue.id,
+          week_start: weekStartStr,
+          week_end: weekEndStr,
+        });
+        if (report.ok) {
           completedSteps.push("report");
+        } else {
+          hasError = true;
+          errorMsg += `Report failed: ${report.error}. `;
         }
       } catch (e) {
         hasError = true;
@@ -152,24 +212,16 @@ serve(async (req) => {
 
       // Step 3: Generate response tasks
       try {
-        const triageResp = await fetch(
-          `${Deno.env.get("SUPABASE_URL")}/functions/v1/generate-review-response-tasks`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({
-              venue_id: venue.id,
-              week_start: weekStartStr,
-              week_end: weekEndStr,
-            }),
-          }
-        );
-        const triageData = await triageResp.json();
-        if (!triageData.error) {
+        const triage = await invokeInternalStep("generate-review-response-tasks", {
+          venue_id: venue.id,
+          week_start: weekStartStr,
+          week_end: weekEndStr,
+        });
+        if (triage.ok) {
           completedSteps.push("triage");
+        } else {
+          hasError = true;
+          errorMsg += `Triage failed: ${triage.error}. `;
         }
       } catch (e) {
         hasError = true;
