@@ -8,6 +8,11 @@ interface Venue {
   plan: string;
   created_at: string;
   owner_user_id?: string | null;
+  city?: string | null;
+  country_code?: string | null;
+  timezone?: string | null;
+  website_url?: string | null;
+  instagram_handle?: string | null;
 }
 
 interface VenueMember {
