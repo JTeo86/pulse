@@ -337,7 +337,7 @@ export default function BrandLibraryPage() {
   const handleSendToCalendar = async (item: LibraryItem, forcedDate?: string | null) => {
     const eligibility = getCalendarSendEligibility(item);
     if (!eligibility.ok) {
-      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: eligibility.reason });
+      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: (eligibility as any).reason });
       return;
     }
 
@@ -366,11 +366,11 @@ export default function BrandLibraryPage() {
 
     const conversion = buildAssetBackedContentItem(item, schedule);
     if (!conversion.ok) {
-      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: conversion.reason });
+      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: (conversion as any).reason });
       return;
     }
 
-    const { error } = await supabase.from('content_items').insert(conversion.payload);
+    const { error } = await supabase.from('content_items').insert(conversion.payload as any);
     if (error) {
       toast({
         variant: 'destructive',
