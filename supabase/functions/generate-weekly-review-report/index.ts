@@ -20,23 +20,26 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const token = authHeader.replace("Bearer ", "");
+    const isServiceRoleRequest = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    let userId: string | null = null;
 
-    const supabaseAuth = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    if (!isServiceRoleRequest) {
+      const supabaseAuth = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
 
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = claimsData.claims.sub as string;
     }
-    const userId = claimsData.claims.sub as string;
 
     const { venue_id, week_start, week_end } = await req.json();
     if (!venue_id || !week_start || !week_end) {
@@ -52,15 +55,17 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: isMember } = await supabaseAdmin.rpc("is_venue_member", {
-      check_venue_id: venue_id,
-      check_user_id: userId,
-    });
-    if (!isMember) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (!isServiceRoleRequest && userId) {
+      const { data: isMember } = await supabaseAdmin.rpc("is_venue_member", {
+        check_venue_id: venue_id,
+        check_user_id: userId,
       });
+      if (!isMember) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");

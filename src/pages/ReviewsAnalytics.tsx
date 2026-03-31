@@ -27,7 +27,8 @@ import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
-import { format, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
+import { format } from 'date-fns';
+import { getCompletedReviewWeekRange } from '@/lib/review-weekly-cycle';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface ReviewSource {
@@ -945,7 +946,7 @@ function ResponseWriterModal({
   );
 }
 
-function NeedsResponseTab({ venueId }: { venueId: string }) {
+function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTimezone: string }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'pending' | 'responded' | 'ignored'>('pending');
   const [writerTask, setWriterTask] = useState<ResponseTask | null>(null);
@@ -990,11 +991,9 @@ function NeedsResponseTab({ venueId }: { venueId: string }) {
 
   const generateTriage = useMutation({
     mutationFn: async () => {
-      const now = new Date();
-      const weekStart = format(startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-      const weekEnd = format(endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const cycle = getCompletedReviewWeekRange(new Date(), venueTimezone);
       const { data, error } = await supabase.functions.invoke('generate-review-response-tasks', {
-        body: { venue_id: venueId, week_start: weekStart, week_end: weekEnd },
+        body: { venue_id: venueId, week_start: cycle.weekStart, week_end: cycle.weekEnd },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -1140,21 +1139,63 @@ function NeedsResponseTab({ venueId }: { venueId: string }) {
 
 // ── Automation Status Card ──────────────────────────────────────────────
 
-function AutomationStatusCard({ venueId }: { venueId: string }) {
+function AutomationStatusCard({ venueId, venueTimezone }: { venueId: string; venueTimezone: string }) {
+  const cycle = getCompletedReviewWeekRange(new Date(), venueTimezone);
+
   const { data: lastRun } = useQuery({
-    queryKey: ['automation-runs', venueId],
+    queryKey: ['automation-runs', venueId, cycle.weekStart],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: latestRun, error: latestError } = await supabase
         .from('review_automation_runs' as any)
         .select('*')
         .eq('venue_id', venueId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
-      return data as any;
+      if (latestError) throw latestError;
+
+      const { data: cycleRun, error: cycleError } = await supabase
+        .from('review_automation_runs' as any)
+        .select('*')
+        .eq('venue_id', venueId)
+        .eq('week_start', cycle.weekStart)
+        .maybeSingle();
+      if (cycleError) throw cycleError;
+
+      const { count: reportCount, error: reportError } = await supabase
+        .from('weekly_review_reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('venue_id', venueId)
+        .eq('week_start', cycle.weekStart)
+        .eq('week_end', cycle.weekEnd);
+      if (reportError) throw reportError;
+
+      const { count: triageCount, error: triageError } = await supabase
+        .from('review_response_tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('venue_id', venueId)
+        .gte('review_date', cycle.weekStart)
+        .lte('review_date', `${cycle.weekEnd}T23:59:59Z`);
+      if (triageError) throw triageError;
+
+      return {
+        latestRun: latestRun as any,
+        cycleRun: cycleRun as any,
+        hasReport: (reportCount || 0) > 0,
+        hasTriage: (triageCount || 0) > 0,
+      };
     },
   });
+
+  const cycleRun = lastRun?.cycleRun;
+  const latestRun = lastRun?.latestRun;
+  const runStatus = cycleRun?.status === 'success'
+    ? 'Completed for current cycle'
+    : cycleRun?.status === 'running'
+      ? 'Run in progress'
+      : cycleRun?.status
+        ? 'Failed on last attempt'
+        : 'Missed this week';
 
   return (
     <Card className="bg-muted/30 border-dashed">
@@ -1166,15 +1207,19 @@ function AutomationStatusCard({ venueId }: { venueId: string }) {
         <div className="space-y-1 text-xs text-muted-foreground">
           <p>⏰ Runs every Monday at 08:00 (venue local time)</p>
           <p>📋 Auto-fetches reviews → generates report → triages responses</p>
-          {lastRun ? (
+          <p>🎯 Expected target week: {cycle.weekStart} → {cycle.weekEnd}</p>
+          <p>📌 Current cycle status: {runStatus}</p>
+          <p>🗂️ Report for target week: {lastRun?.hasReport ? 'Present' : 'Missing'}</p>
+          <p>🧠 Triage for target week: {lastRun?.hasTriage ? 'Present' : 'Missing'}</p>
+          {latestRun ? (
             <p className="flex items-center gap-1">
-              {lastRun.status === 'success' ? (
+              {latestRun.status === 'success' ? (
                 <CheckCircle2 className="w-3 h-3 text-accent" />
               ) : (
                 <AlertCircle className="w-3 h-3 text-yellow-500" />
               )}
-              Last automated run: {format(new Date(lastRun.created_at), 'MMM d, yyyy HH:mm')}
-              {lastRun.steps_completed && ` (${(lastRun.steps_completed as string[]).join(', ')})`}
+              Last automated run: {format(new Date(latestRun.created_at), 'MMM d, yyyy HH:mm')}
+              {latestRun.steps_completed && ` (${(latestRun.steps_completed as string[]).join(', ')})`}
             </p>
           ) : (
             <p>No automated runs yet. First run will happen next Monday.</p>
@@ -1187,21 +1232,19 @@ function AutomationStatusCard({ venueId }: { venueId: string }) {
 
 // ── Weekly Report ───────────────────────────────────────────────────────
 
-function WeeklyReport({ venueId }: { venueId: string }) {
+function WeeklyReport({ venueId, venueTimezone }: { venueId: string; venueTimezone: string }) {
   const queryClient = useQueryClient();
-  const now = new Date();
-  const lastWeekStart = format(startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-  const lastWeekEnd = format(endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const cycle = getCompletedReviewWeekRange(new Date(), venueTimezone);
 
   const { data: report, isLoading } = useQuery({
-    queryKey: ['weekly-report', venueId, lastWeekStart],
+    queryKey: ['weekly-report', venueId, cycle.weekStart, cycle.weekEnd],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('weekly_review_reports')
         .select('*')
         .eq('venue_id', venueId)
-        .order('week_end', { ascending: false })
-        .limit(1)
+        .eq('week_start', cycle.weekStart)
+        .eq('week_end', cycle.weekEnd)
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -1211,7 +1254,7 @@ function WeeklyReport({ venueId }: { venueId: string }) {
   const generate = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('generate-weekly-review-report', {
-        body: { venue_id: venueId, week_start: lastWeekStart, week_end: lastWeekEnd },
+        body: { venue_id: venueId, week_start: cycle.weekStart, week_end: cycle.weekEnd },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -1230,23 +1273,23 @@ function WeeklyReport({ venueId }: { venueId: string }) {
 
   return (
     <div className="space-y-6">
-      <AutomationStatusCard venueId={venueId} />
+      <AutomationStatusCard venueId={venueId} venueTimezone={venueTimezone} />
 
       <div className="flex gap-2 flex-wrap">
         <IngestionPanel venueId={venueId} />
         <Separator />
         <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending}>
           <FileText className={`w-4 h-4 mr-2 ${generate.isPending ? 'animate-spin' : ''}`} />
-          Generate Report ({lastWeekStart} → {lastWeekEnd})
+          Generate Report ({cycle.weekStart} → {cycle.weekEnd})
         </Button>
       </div>
 
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Loading report...</div>
       ) : !report ? (
-        <Card>
+          <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No report yet. Fetch reviews first, then generate a report.
+            No report generated yet for the week of {cycle.weekStart} to {cycle.weekEnd}.
           </CardContent>
         </Card>
       ) : (
@@ -1353,9 +1396,9 @@ export default function ReviewsAnalytics() {
           <TabsTrigger value="setup" className="gap-2"><Settings2 className="w-4 h-4" />Sources Setup</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="report"><WeeklyReport venueId={currentVenue.id} /></TabsContent>
+        <TabsContent value="report"><WeeklyReport venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
         <TabsContent value="feed"><ReviewFeed venueId={currentVenue.id} /></TabsContent>
-        <TabsContent value="respond"><NeedsResponseTab venueId={currentVenue.id} /></TabsContent>
+        <TabsContent value="respond"><NeedsResponseTab venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
         <TabsContent value="setup"><ReviewSourcesSetup venueId={currentVenue.id} /></TabsContent>
       </Tabs>
     </motion.div>

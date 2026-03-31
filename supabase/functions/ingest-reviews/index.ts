@@ -290,33 +290,37 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+    const token = (authHeader || "").replace("Bearer ", "");
+    const isServiceRoleRequest = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    const supabaseUser = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    if (!isServiceRoleRequest) {
+      const supabaseUser = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
 
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ success: false, errors: ["Unauthorized"], source_results: [] }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+      const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+      if (userError || !user) {
+        return new Response(JSON.stringify({ success: false, errors: ["Unauthorized"], source_results: [] }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    const { data: membership } = await supabaseAdmin
-      .from("venue_members")
-      .select("role")
-      .eq("venue_id", venue_id)
-      .eq("user_id", user.id)
-      .single();
+      const { data: membership } = await supabaseAdmin
+        .from("venue_members")
+        .select("role")
+        .eq("venue_id", venue_id)
+        .eq("user_id", user.id)
+        .single();
 
-    if (!membership) {
-      return new Response(JSON.stringify({ success: false, errors: ["Access denied"], source_results: [] }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (!membership) {
+        return new Response(JSON.stringify({ success: false, errors: ["Access denied"], source_results: [] }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Get SerpAPI key
