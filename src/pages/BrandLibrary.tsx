@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   Archive, ArrowLeft, CalendarDays, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
-  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle, MoreHorizontal, Check
+  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle, MoreHorizontal, Check, Maximize2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -99,7 +99,8 @@ export default function BrandLibraryPage() {
   const [venueImageAssets, setVenueImageAssets] = useState<SelectableVenueAsset[]>([]);
   const [assetPickerLoading, setAssetPickerLoading] = useState(false);
   const [assetSearch, setAssetSearch] = useState('');
-  const [selectedAttachAssetId, setSelectedAttachAssetId] = useState<string | null>(null);
+  const [attachingAssetId, setAttachingAssetId] = useState<string | null>(null);
+  const [assetLightbox, setAssetLightbox] = useState<SelectableVenueAsset | null>(null);
 
   const autopilotRunIdFilter = searchParams.get('autopilotRunId');
   const contentItemIdsFilter = useMemo(() => {
@@ -491,14 +492,13 @@ export default function BrandLibraryPage() {
   const openAttachImagePicker = async (item: LibraryItem) => {
     setAttachTarget(item);
     setAssetSearch('');
-    setSelectedAttachAssetId(null);
+    setAttachingAssetId(null);
     await loadVenueImageAssets();
   };
 
-  const handleAttachAsset = async () => {
-    if (!attachTarget || !selectedAttachAssetId) return;
-    const selectedAsset = venueImageAssets.find((asset) => asset.id === selectedAttachAssetId);
-    if (!selectedAsset) return;
+  const handleAttachAsset = async (selectedAsset: SelectableVenueAsset) => {
+    if (!attachTarget) return;
+    setAttachingAssetId(selectedAsset.id);
 
     const currentVariants = (attachTarget.media_variants && typeof attachTarget.media_variants === 'object')
       ? attachTarget.media_variants as Record<string, unknown>
@@ -525,12 +525,14 @@ export default function BrandLibraryPage() {
 
     if (error) {
       toast({ variant: 'destructive', title: 'Attach failed', description: error.message });
+      setAttachingAssetId(null);
       return;
     }
 
     toast({ title: 'Image attached', description: 'The selected venue asset is now attached to this content item.' });
     setAttachTarget(null);
-    setSelectedAttachAssetId(null);
+    setAttachingAssetId(null);
+    setAssetLightbox(null);
     fetchItems();
   };
 
@@ -549,10 +551,6 @@ export default function BrandLibraryPage() {
       return haystack.includes(query);
     });
   }, [assetSearch, venueImageAssets]);
-
-  const selectedAttachAsset = selectedAttachAssetId
-    ? filteredAttachAssets.find((asset) => asset.id === selectedAttachAssetId) || null
-    : null;
 
   return (
     <div className="space-y-6">
@@ -818,7 +816,7 @@ export default function BrandLibraryPage() {
           <DialogHeader>
             <DialogTitle>Attach Existing Image</DialogTitle>
             <DialogDescription>
-              Select an existing venue image to attach to “{attachTarget?.title || 'Untitled'}”.
+              Choose an image to instantly attach to “{attachTarget?.title || 'Untitled'}”.
             </DialogDescription>
           </DialogHeader>
 
@@ -834,42 +832,44 @@ export default function BrandLibraryPage() {
             ) : filteredAttachAssets.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">No venue images found to attach.</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-4">
-                <div className="max-h-[420px] overflow-y-auto border rounded-md p-2 space-y-2">
+              <div className="max-h-[460px] overflow-y-auto rounded-md border p-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {filteredAttachAssets.map((asset) => (
-                    <button
-                      key={asset.id}
-                      type="button"
-                      onClick={() => setSelectedAttachAssetId(asset.id)}
-                      className={`w-full border rounded-md p-2 text-left transition-colors ${selectedAttachAssetId === asset.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}
-                    >
-                      <div className="flex gap-3">
-                        <img src={asset.resolvedUrl || ''} alt={asset.title || 'Asset preview'} className="w-20 h-20 rounded object-cover bg-muted" />
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm line-clamp-1">{asset.title || 'Untitled image'}</p>
-                          <p className="text-xs text-muted-foreground">Source: {asset.source_type || 'unknown'}</p>
-                          <p className="text-xs text-muted-foreground">Created: {format(new Date(asset.created_at), 'MMM d, yyyy')}</p>
+                    <div key={asset.id} className="group relative rounded-md border overflow-hidden bg-muted/20">
+                      <button
+                        type="button"
+                        onClick={() => handleAttachAsset(asset)}
+                        disabled={!!attachingAssetId}
+                        className="w-full text-left"
+                      >
+                        <img src={asset.resolvedUrl || ''} alt={asset.title || 'Asset preview'} className="w-full aspect-square object-cover bg-muted" />
+                        <div className="p-2 space-y-1">
+                          <p className="font-medium text-xs line-clamp-1">{asset.title || 'Untitled image'}</p>
+                          <p className="text-[11px] text-muted-foreground">{format(new Date(asset.created_at), 'MMM d, yyyy')} · {asset.asset_type || 'image'}</p>
                         </div>
-                        {selectedAttachAssetId === asset.id && <Check className="w-4 h-4 text-primary ml-auto mt-1" />}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="border rounded-md p-3 space-y-2">
-                  <p className="text-sm font-medium">Preview</p>
-                  {selectedAttachAsset ? (
-                    <>
-                      <img src={selectedAttachAsset.resolvedUrl || ''} alt={selectedAttachAsset.title || 'Selected asset'} className="w-full h-56 rounded-md object-cover bg-muted" />
-                      <p className="text-sm font-medium line-clamp-1">{selectedAttachAsset.title || 'Untitled image'}</p>
-                      <p className="text-xs text-muted-foreground">Source: {selectedAttachAsset.source_type || 'unknown'}</p>
-                      <p className="text-xs text-muted-foreground">Type: {selectedAttachAsset.asset_type || 'image'}</p>
-                    </>
-                  ) : (
-                    <div className="h-56 rounded-md border border-dashed flex items-center justify-center text-sm text-muted-foreground">
-                      Select an image to preview.
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
+                          <span className="text-[11px] font-medium px-2 py-1 rounded bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity">Attach</span>
+                        </div>
+                      </button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setAssetLightbox(asset);
+                        }}
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                      </Button>
+                      {attachingAssetId === asset.id && (
+                        <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                          <Loader2 className="w-5 h-5 text-white animate-spin" />
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
@@ -877,8 +877,30 @@ export default function BrandLibraryPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setAttachTarget(null)}>Cancel</Button>
-            <Button onClick={handleAttachAsset} disabled={!selectedAttachAssetId || assetPickerLoading}>Attach to Content Item</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assetLightbox} onOpenChange={(open) => !open && setAssetLightbox(null)}>
+        <DialogContent className="max-w-3xl">
+          {assetLightbox && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{assetLightbox.title || 'Image preview'}</DialogTitle>
+                <DialogDescription>
+                  {format(new Date(assetLightbox.created_at), 'MMM d, yyyy')} · {assetLightbox.asset_type || 'image'}
+                </DialogDescription>
+              </DialogHeader>
+              <img src={assetLightbox.resolvedUrl || ''} alt={assetLightbox.title || 'Image preview'} className="w-full max-h-[70vh] rounded-md object-contain bg-muted" />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAssetLightbox(null)}>Close</Button>
+                <Button onClick={() => handleAttachAsset(assetLightbox)} disabled={!!attachingAssetId}>
+                  {attachingAssetId === assetLightbox.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}
+                  Attach to Post
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
