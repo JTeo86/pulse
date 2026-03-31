@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
   Archive, ArrowLeft, CalendarDays, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
-  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle, MoreHorizontal
+  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle, MoreHorizontal, Check
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -58,6 +58,17 @@ interface LibraryItem {
   source_type?: string | null;
 }
 
+interface SelectableVenueAsset {
+  id: string;
+  title: string | null;
+  source_type: string | null;
+  asset_type: string | null;
+  created_at: string;
+  storage_path: string | null;
+  media_url: string | null;
+  resolvedUrl: string | null;
+}
+
 type LibraryTab = 'all' | 'autopilot' | 'uploads' | 'pro_photo' | 'archived';
 type InventoryStateFilter = 'all' | 'ready_to_post' | 'needs_image' | 'needs_caption';
 type ReadinessState = 'ready_to_post' | 'needs_image' | 'needs_caption' | 'unformed';
@@ -84,6 +95,11 @@ export default function BrandLibraryPage() {
   const [editedBrief, setEditedBrief] = useState('');
   const [previewItem, setPreviewItem] = useState<LibraryItem | null>(null);
   const [brokenImageKeys, setBrokenImageKeys] = useState<Set<string>>(new Set());
+  const [attachTarget, setAttachTarget] = useState<LibraryItem | null>(null);
+  const [venueImageAssets, setVenueImageAssets] = useState<SelectableVenueAsset[]>([]);
+  const [assetPickerLoading, setAssetPickerLoading] = useState(false);
+  const [assetSearch, setAssetSearch] = useState('');
+  const [selectedAttachAssetId, setSelectedAttachAssetId] = useState<string | null>(null);
 
   const autopilotRunIdFilter = searchParams.get('autopilotRunId');
   const contentItemIdsFilter = useMemo(() => {
@@ -431,6 +447,113 @@ export default function BrandLibraryPage() {
     setPreviewItem(item);
   };
 
+  const loadVenueImageAssets = useCallback(async () => {
+    if (!currentVenue) return;
+
+    setAssetPickerLoading(true);
+    const { data, error } = await supabase
+      .from('content_assets')
+      .select('id, title, source_type, asset_type, created_at, public_url, thumbnail_url, storage_path')
+      .eq('venue_id', currentVenue.id)
+      .eq('asset_type', 'image')
+      .order('created_at', { ascending: false })
+      .limit(300);
+
+    if (error) {
+      toast({ variant: 'destructive', title: 'Unable to load assets', description: error.message });
+      setAssetPickerLoading(false);
+      return;
+    }
+
+    const mapped = await Promise.all((data || []).map(async (asset: any) => {
+      const resolvedUrl = await resolveAssetMediaUrl({
+        public_url: asset.public_url,
+        thumbnail_url: asset.thumbnail_url,
+        storage_path: asset.storage_path,
+      });
+
+      return {
+        id: asset.id,
+        title: asset.title || null,
+        source_type: asset.source_type || null,
+        asset_type: asset.asset_type || null,
+        created_at: asset.created_at,
+        storage_path: asset.storage_path || null,
+        media_url: asset.public_url || asset.thumbnail_url || null,
+        resolvedUrl: resolvedUrl || asset.public_url || asset.thumbnail_url || null,
+      } as SelectableVenueAsset;
+    }));
+
+    setVenueImageAssets(mapped.filter((asset) => !!asset.resolvedUrl));
+    setAssetPickerLoading(false);
+  }, [currentVenue, toast]);
+
+  const openAttachImagePicker = async (item: LibraryItem) => {
+    setAttachTarget(item);
+    setAssetSearch('');
+    setSelectedAttachAssetId(null);
+    await loadVenueImageAssets();
+  };
+
+  const handleAttachAsset = async () => {
+    if (!attachTarget || !selectedAttachAssetId) return;
+    const selectedAsset = venueImageAssets.find((asset) => asset.id === selectedAttachAssetId);
+    if (!selectedAsset) return;
+
+    const currentVariants = (attachTarget.media_variants && typeof attachTarget.media_variants === 'object')
+      ? attachTarget.media_variants as Record<string, unknown>
+      : {};
+
+    const nextVariants: Record<string, unknown> = {
+      ...currentVariants,
+      content_asset_id: selectedAsset.id,
+      asset_id: selectedAsset.id,
+      source_type: selectedAsset.source_type,
+      attached_via: 'brand_library',
+      attached_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('content_items')
+      .update({
+        media_master_url: selectedAsset.media_url || selectedAsset.resolvedUrl,
+        storage_path: selectedAsset.storage_path,
+        asset_type: selectedAsset.asset_type || 'image',
+        media_variants: nextVariants,
+      })
+      .eq('id', attachTarget.id);
+
+    if (error) {
+      toast({ variant: 'destructive', title: 'Attach failed', description: error.message });
+      return;
+    }
+
+    toast({ title: 'Image attached', description: 'The selected venue asset is now attached to this content item.' });
+    setAttachTarget(null);
+    setSelectedAttachAssetId(null);
+    fetchItems();
+  };
+
+  const filteredAttachAssets = useMemo(() => {
+    const query = assetSearch.trim().toLowerCase();
+    const sorted = [...venueImageAssets].sort((a, b) => {
+      const reusableA = a.source_type === 'reusable' ? 1 : 0;
+      const reusableB = b.source_type === 'reusable' ? 1 : 0;
+      if (reusableA !== reusableB) return reusableB - reusableA;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    if (!query) return sorted;
+
+    return sorted.filter((asset) => {
+      const haystack = `${asset.title || ''} ${asset.source_type || ''} ${asset.asset_type || ''}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [assetSearch, venueImageAssets]);
+
+  const selectedAttachAsset = selectedAttachAssetId
+    ? filteredAttachAssets.find((asset) => asset.id === selectedAttachAssetId) || null
+    : null;
+
   return (
     <div className="space-y-6">
       {autopilotRunIdFilter && (
@@ -595,7 +718,7 @@ export default function BrandLibraryPage() {
                           <Wand2 className="w-4 h-4 mr-1" />Generate Image
                         </Button>
                         <div className="grid grid-cols-[1fr_auto] gap-2">
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=attach`)}>
+                          <Button size="sm" variant="outline" onClick={() => openAttachImagePicker(item)}>
                             <Link2 className="w-4 h-4 mr-1" />Attach Image
                           </Button>
                           <DropdownMenu>
@@ -687,6 +810,75 @@ export default function BrandLibraryPage() {
               <div className="h-[360px] flex items-center justify-center text-muted-foreground">No preview available</div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!attachTarget} onOpenChange={(open) => !open && setAttachTarget(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Attach Existing Image</DialogTitle>
+            <DialogDescription>
+              Select an existing venue image to attach to “{attachTarget?.title || 'Untitled'}”.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Input
+              placeholder="Search by title or source (uploaded, pro_photo, reusable...)"
+              value={assetSearch}
+              onChange={(event) => setAssetSearch(event.target.value)}
+            />
+
+            {assetPickerLoading ? (
+              <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+            ) : filteredAttachAssets.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No venue images found to attach.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-4">
+                <div className="max-h-[420px] overflow-y-auto border rounded-md p-2 space-y-2">
+                  {filteredAttachAssets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => setSelectedAttachAssetId(asset.id)}
+                      className={`w-full border rounded-md p-2 text-left transition-colors ${selectedAttachAssetId === asset.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'}`}
+                    >
+                      <div className="flex gap-3">
+                        <img src={asset.resolvedUrl || ''} alt={asset.title || 'Asset preview'} className="w-20 h-20 rounded object-cover bg-muted" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm line-clamp-1">{asset.title || 'Untitled image'}</p>
+                          <p className="text-xs text-muted-foreground">Source: {asset.source_type || 'unknown'}</p>
+                          <p className="text-xs text-muted-foreground">Created: {format(new Date(asset.created_at), 'MMM d, yyyy')}</p>
+                        </div>
+                        {selectedAttachAssetId === asset.id && <Check className="w-4 h-4 text-primary ml-auto mt-1" />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="border rounded-md p-3 space-y-2">
+                  <p className="text-sm font-medium">Preview</p>
+                  {selectedAttachAsset ? (
+                    <>
+                      <img src={selectedAttachAsset.resolvedUrl || ''} alt={selectedAttachAsset.title || 'Selected asset'} className="w-full h-56 rounded-md object-cover bg-muted" />
+                      <p className="text-sm font-medium line-clamp-1">{selectedAttachAsset.title || 'Untitled image'}</p>
+                      <p className="text-xs text-muted-foreground">Source: {selectedAttachAsset.source_type || 'unknown'}</p>
+                      <p className="text-xs text-muted-foreground">Type: {selectedAttachAsset.asset_type || 'image'}</p>
+                    </>
+                  ) : (
+                    <div className="h-56 rounded-md border border-dashed flex items-center justify-center text-sm text-muted-foreground">
+                      Select an image to preview.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttachTarget(null)}>Cancel</Button>
+            <Button onClick={handleAttachAsset} disabled={!selectedAttachAssetId || assetPickerLoading}>Attach to Content Item</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
