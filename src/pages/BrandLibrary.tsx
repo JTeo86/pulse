@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
+import { normalizeContentAssetType } from '@/lib/content-item-utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +61,7 @@ interface LibraryItem {
 type LibraryTab = 'all' | 'autopilot' | 'uploads' | 'pro_photo' | 'archived';
 type InventoryStateFilter = 'all' | 'ready_to_post' | 'needs_image' | 'needs_caption';
 type ReadinessState = 'ready_to_post' | 'needs_image' | 'needs_caption' | 'unformed';
+type ConversionResult = { ok: true; payload: Record<string, unknown> } | { ok: false; reason: string };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -333,6 +335,12 @@ export default function BrandLibraryPage() {
   };
 
   const handleSendToCalendar = async (item: LibraryItem, forcedDate?: string | null) => {
+    const eligibility = getCalendarSendEligibility(item);
+    if (!eligibility.ok) {
+      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: eligibility.reason });
+      return;
+    }
+
     const schedule = forcedDate || item.suggested_scheduled_for || item.scheduled_for;
     if (!schedule) {
       setScheduleTarget(item);
@@ -356,22 +364,19 @@ export default function BrandLibraryPage() {
       return;
     }
 
-    const caption = item.caption_final || item.caption_draft || item.title || null;
-    const { error } = await supabase.from('content_items').insert({
-      venue_id: item.venue_id,
-      title: item.title || null,
-      caption_draft: caption,
-      caption_final: caption,
-      status: 'scheduled',
-      scheduled_for: schedule,
-      media_master_url: item.resolvedUrl || item.media_url,
-      storage_path: item.storage_path,
-      asset_type: item.asset_type,
-      source: 'manual',
-      source_plan_title: 'Content Scheduled',
-    });
+    const conversion = buildAssetBackedContentItem(item, schedule);
+    if (!conversion.ok) {
+      toast({ variant: 'destructive', title: 'Cannot send to calendar', description: conversion.reason });
+      return;
+    }
+
+    const { error } = await supabase.from('content_items').insert(conversion.payload);
     if (error) {
-      toast({ variant: 'destructive', title: 'Failed to send to calendar', description: error.message });
+      toast({
+        variant: 'destructive',
+        title: 'Failed to send to calendar',
+        description: 'This item could not be converted into a schedulable post. Please edit it and try again.',
+      });
       return;
     }
     toast({ title: 'Sent to calendar' });
@@ -554,9 +559,16 @@ export default function BrandLibraryPage() {
                   <div className="space-y-2">
                     {readiness === 'ready_to_post' && (
                       <>
-                        <Button size="sm" className="w-full" onClick={() => handleSendToCalendar(item)}>
-                          <CalendarDays className="w-4 h-4 mr-1" />Send to Calendar
-                        </Button>
+                        {getCalendarSendEligibility(item).ok ? (
+                          <Button size="sm" className="w-full" onClick={() => handleSendToCalendar(item)}>
+                            <CalendarDays className="w-4 h-4 mr-1" />Send to Calendar
+                          </Button>
+                        ) : (
+                          <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-800">{getCalendarSendEligibility(item).reason}</p>
+                          </div>
+                        )}
                         <div className="grid grid-cols-[1fr_auto] gap-2">
                           <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
                             <Edit3 className="w-4 h-4 mr-1" />Edit
@@ -793,8 +805,8 @@ function buildItemKey(item: LibraryItem): string {
 
 function getReadinessState(item: LibraryItem): ReadinessState {
   const hasAsset = !!(item.resolvedUrl || item.media_url);
-  const hasCaption = !!(item.caption_final?.trim() || item.caption_draft?.trim());
-  const hasFallbackCopy = !!item.title?.trim();
+  const hasCaption = hasUsableCaption(item.caption_final) || hasUsableCaption(item.caption_draft);
+  const hasFallbackCopy = hasUsableTitle(item.title);
   const hasCopy = hasCaption || hasFallbackCopy;
 
   if (hasAsset && hasCopy) return 'ready_to_post';
@@ -814,6 +826,79 @@ function getNextActionLabel(readiness: ReadinessState): string {
   if (readiness === 'ready_to_post') return 'Send to Calendar';
   if (readiness === 'needs_image') return 'Generate or attach image';
   return 'Write or generate caption';
+}
+
+function hasUsableCaption(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return value.trim().length >= 8;
+}
+
+function hasUsableTitle(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (trimmed.length < 10) return false;
+  return trimmed.split(/\s+/).length >= 2;
+}
+
+function getCalendarSendEligibility(item: LibraryItem): { ok: true } | { ok: false; reason: string } {
+  const hasAsset = !!(item.resolvedUrl || item.media_url);
+  if (!hasAsset) return { ok: false, reason: 'Add or attach media before scheduling this item.' };
+
+  const hasCopy = hasUsableCaption(item.caption_final) || hasUsableCaption(item.caption_draft) || hasUsableTitle(item.title);
+  if (!hasCopy) return { ok: false, reason: 'Add a title or caption before scheduling this item.' };
+
+  if (item.origin === 'content_asset') {
+    const normalizedType = normalizeContentAssetType(
+      item.asset_type || item.source_type,
+      null,
+      item.storage_path || item.media_url || undefined,
+    );
+    if (!normalizedType) return { ok: false, reason: 'This asset type is unsupported for calendar posts.' };
+  }
+
+  return { ok: true };
+}
+
+function buildAssetBackedContentItem(item: LibraryItem, schedule: string): ConversionResult {
+  const mediaMasterUrl = item.resolvedUrl || item.media_url;
+  if (!mediaMasterUrl) {
+    return { ok: false, reason: 'No media was found for this asset.' };
+  }
+
+  const caption = item.caption_final?.trim()
+    || item.caption_draft?.trim()
+    || item.title?.trim()
+    || null;
+  if (!caption) {
+    return { ok: false, reason: 'Add a caption or title before scheduling this asset.' };
+  }
+
+  const normalizedAssetType = normalizeContentAssetType(
+    item.asset_type || item.source_type,
+    null,
+    item.storage_path || mediaMasterUrl,
+  );
+
+  const sourceLabel = item.source_type ? `Asset Scheduled (${item.source_type})` : 'Asset Scheduled';
+
+  return {
+    ok: true,
+    payload: {
+      venue_id: item.venue_id,
+      title: item.title || null,
+      caption_draft: caption,
+      caption_final: caption,
+      status: 'scheduled',
+      scheduled_for: schedule,
+      media_master_url: mediaMasterUrl,
+      storage_path: item.storage_path,
+      asset_type: normalizedAssetType,
+      source: 'manual',
+      source_plan_title: sourceLabel,
+      content_brief: item.content_brief || null,
+      creative_brief: item.creative_brief || null,
+    },
+  };
 }
 
 function getAutopilotSourceLabel(item: LibraryItem): string | null {
