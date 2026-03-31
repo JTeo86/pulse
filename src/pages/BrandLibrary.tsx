@@ -513,13 +513,19 @@ export default function BrandLibraryPage() {
       attached_at: new Date().toISOString(),
     };
 
+    const normalizedType = normalizeContentAssetType(
+      selectedAsset.asset_type || selectedAsset.source_type,
+      null,
+      selectedAsset.storage_path || selectedAsset.media_url || undefined,
+    );
+
     const { error } = await supabase
       .from('content_items')
       .update({
         media_master_url: selectedAsset.media_url || selectedAsset.resolvedUrl,
         storage_path: selectedAsset.storage_path,
-        asset_type: selectedAsset.asset_type || 'image',
-        media_variants: nextVariants,
+        asset_type: normalizedType,
+        media_variants: nextVariants as unknown as Record<string, never>,
       })
       .eq('id', attachTarget.id);
 
