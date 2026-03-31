@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useNavigate } from 'react-router-dom';
 import {
   Zap, Play, Clock, FileText, MessageSquareText,
@@ -22,6 +23,30 @@ export default function AutopilotPage() {
   const navigate = useNavigate();
 
   const isEnabled = settings?.is_enabled ?? false;
+  const latestRun = runs?.[0];
+  const latestRunSavedIds = latestRun?.saved_library_item_ids?.length ? latestRun.saved_library_item_ids : latestRun?.content_item_ids;
+  const latestRunHasSavedItems = !!latestRunSavedIds?.length;
+  const latestRunSummary = latestRun
+    ? `${latestRun.saved_count ?? latestRun.items_saved ?? 0} saved of ${latestRun.generated_count ?? latestRun.items_generated ?? 0} generated`
+    : 'No runs yet.';
+  const lastRunAttention = !latestRun
+    ? 'Run Pulse Now to generate your first batch of content.'
+    : latestRun.status === 'failed'
+      ? (latestRun.error_message || 'Last run failed. Open run details to troubleshoot.')
+      : latestRun.status === 'partial'
+        ? (latestRun.error_message || 'Last run was partial. Review diagnostics and retry.')
+        : 'No immediate issues detected.';
+  const nextScheduledRun = settings ? getNextScheduledRunLabel(settings.frequency, settings.run_time) : 'Set cadence in Settings';
+
+  const runPulseNow = () => trigger.mutate('daily_content');
+  const viewLastRunDetails = () => {
+    if (latestRunHasSavedItems && latestRun?.id) {
+      navigate(`/content/library?source=autopilot&autopilotRunId=${latestRun.id}&contentItemIds=${(latestRunSavedIds || []).join(',')}`);
+      return;
+    }
+    const section = document.getElementById('autopilot-run-history');
+    section?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   if (loading) {
     return (
@@ -75,6 +100,61 @@ export default function AutopilotPage() {
               </div>
             </div>
           </CardHeader>
+        </Card>
+
+        <Card className="border-accent/20">
+          <CardHeader>
+            <CardTitle className="text-base">Command Center</CardTitle>
+            <CardDescription>One-click Pulse operation with manual tools for advanced control.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Last run</p>
+                <p className="font-medium mt-1">
+                  {latestRun ? formatDistanceToNow(new Date(latestRun.created_at), { addSuffix: true }) : 'Never'}
+                </p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Next scheduled run</p>
+                <p className="font-medium mt-1">{nextScheduledRun}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">What happened in last run</p>
+                <p className="font-medium mt-1">{latestRunSummary}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">What needs attention</p>
+                <p className="font-medium mt-1">{lastRunAttention}</p>
+              </div>
+            </div>
+
+            <Button onClick={runPulseNow} disabled={trigger.isPending} className="gap-2 w-full sm:w-auto">
+              {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}Run Pulse Now
+            </Button>
+
+            <Accordion type="single" collapsible className="w-full border rounded-md px-4">
+              <AccordionItem value="manual-tools" className="border-0">
+                <AccordionTrigger className="text-sm">Advanced Manual Tools</AccordionTrigger>
+                <AccordionContent>
+                  <div className="flex flex-wrap gap-3 pt-1">
+                    <Button variant="outline" onClick={() => trigger.mutate('daily_content')} disabled={trigger.isPending} className="gap-2">
+                      {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}Generate Daily Posts
+                    </Button>
+                    <Button variant="outline" onClick={() => trigger.mutate('weekly_campaign')} disabled={trigger.isPending} className="gap-2">
+                      {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}Generate Weekly Plan
+                    </Button>
+                    <Button variant="outline" onClick={() => trigger.mutate('review_content')} disabled={trigger.isPending} className="gap-2">
+                      {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareText className="w-4 h-4" />}Generate Review Posts
+                    </Button>
+                    <Button variant="ghost" onClick={viewLastRunDetails} className="gap-2">
+                      View Last Run Details <ExternalLink className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
         </Card>
 
         <Card>
@@ -165,27 +245,7 @@ export default function AutopilotPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Manual Run</CardTitle>
-            <CardDescription>Generate into Content immediately</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => trigger.mutate('daily_content')} disabled={trigger.isPending} className="gap-2">
-                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}Generate Daily Content
-              </Button>
-              <Button variant="outline" onClick={() => trigger.mutate('weekly_campaign')} disabled={trigger.isPending} className="gap-2">
-                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}Generate Weekly Campaign
-              </Button>
-              <Button variant="outline" onClick={() => trigger.mutate('review_content')} disabled={trigger.isPending} className="gap-2">
-                {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareText className="w-4 h-4" />}Generate Review Content
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
+        <Card id="autopilot-run-history">
           <CardHeader>
             <CardTitle className="text-base">Run History</CardTitle>
             <CardDescription>Diagnostics and direct links to generated library items</CardDescription>
@@ -194,7 +254,7 @@ export default function AutopilotPage() {
             {runsLoading ? (
               <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
             ) : !runs?.length ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No runs yet. Enable Autopilot or trigger a manual run above.</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">No runs yet. Enable Autopilot or use Run Pulse Now.</p>
             ) : (
               <div className="space-y-3">
                 {runs.map((run) => (
@@ -212,7 +272,7 @@ export default function AutopilotPage() {
                         <RunStatusIcon status={run.status} />
                         <div>
                           <p className="text-sm font-medium">
-                            {run.run_type === 'daily_content' ? 'Daily Content' : run.run_type === 'weekly_campaign' ? 'Weekly Campaign' : 'Review Content'}
+                            {run.run_type === 'daily_content' ? 'Daily Posts' : run.run_type === 'weekly_campaign' ? 'Weekly Plan' : 'Review Posts'}
                           </p>
                           <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}</p>
                         </div>
@@ -251,6 +311,40 @@ export default function AutopilotPage() {
       </div>
     </>
   );
+}
+
+function getNextScheduledRunLabel(frequency: 'daily' | '3x_week' | 'weekly', runTime?: string | null): string {
+  const safeRunTime = runTime?.substring(0, 5) || '09:00';
+  const [hour, minute] = safeRunTime.split(':').map((piece) => Number(piece));
+  const now = new Date();
+  const candidate = new Date(now);
+  candidate.setHours(hour || 9, minute || 0, 0, 0);
+
+  const schedule3xWeek = [1, 3, 5];
+  if (frequency === 'daily') {
+    if (candidate <= now) candidate.setDate(candidate.getDate() + 1);
+  } else if (frequency === 'weekly') {
+    const daysUntilMonday = (8 - candidate.getDay()) % 7 || 7;
+    if (candidate.getDay() !== 1 || candidate <= now) candidate.setDate(candidate.getDate() + daysUntilMonday);
+  } else {
+    const weekday = candidate.getDay();
+    const todayOnSchedule = schedule3xWeek.includes(weekday);
+    if (todayOnSchedule && candidate > now) {
+      // keep current candidate
+    } else {
+      let daysToAdd = 1;
+      while (!schedule3xWeek.includes((weekday + daysToAdd) % 7)) daysToAdd += 1;
+      candidate.setDate(candidate.getDate() + daysToAdd);
+    }
+  }
+
+  return candidate.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function RunStatusIcon({ status }: { status: string }) {
