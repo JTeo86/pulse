@@ -403,6 +403,8 @@ export default function BrandLibraryPage() {
   const handleDelete = async (id: string) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
+    const confirmed = window.confirm(`Delete "${item.title || 'Untitled'}"? This cannot be undone.`);
+    if (!confirmed) return;
     const table = item.origin === 'content_asset' ? 'content_assets' : 'content_items';
     const { error } = await supabase.from(table).delete().eq('id', id);
     if (error) {
@@ -627,7 +629,6 @@ export default function BrandLibraryPage() {
             const readiness = getReadinessState(item);
             const readinessBadge = getReadinessBadge(readiness);
             const autopilotSource = getAutopilotSourceLabel(item);
-            const nextAction = getNextActionLabel(readiness);
 
             return (
               <Card key={buildItemKey(item)} className="overflow-hidden">
@@ -679,8 +680,6 @@ export default function BrandLibraryPage() {
 
                   {item.caption_draft && <p className="text-sm line-clamp-3">{item.caption_draft}</p>}
 
-                  <p className="text-xs text-muted-foreground">Next action: {nextAction}</p>
-
                   {item.origin === 'content_item' && !hasAsset && item.asset_type && (
                     <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
                       <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -688,7 +687,7 @@ export default function BrandLibraryPage() {
                     </div>
                   )}
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {readiness === 'ready_to_post' && (
                       <>
                         {getCalendarSendEligibility(item).ok ? (
@@ -701,19 +700,25 @@ export default function BrandLibraryPage() {
                             <p className="text-xs text-amber-800">{(getCalendarSendEligibility(item) as any).reason}</p>
                           </div>
                         )}
-                        <div className="grid grid-cols-[1fr_auto] gap-2">
-                          <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
+                        <div className="grid grid-cols-[1fr_auto] gap-1.5">
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
                             <Edit3 className="w-4 h-4 mr-1" />Edit
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="outline" aria-label="More actions">
+                              <Button size="icon" variant="ghost" aria-label="More actions">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
                                 <Archive className="w-4 h-4 mr-2" />Archive
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDelete(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -726,17 +731,20 @@ export default function BrandLibraryPage() {
                         <Button size="sm" className="w-full" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}>
                           <Wand2 className="w-4 h-4 mr-1" />Generate Image
                         </Button>
-                        <div className="grid grid-cols-[1fr_auto] gap-2">
-                          <Button size="sm" variant="outline" onClick={() => openAttachImagePicker(item)}>
-                            <Link2 className="w-4 h-4 mr-1" />Attach Image
+                        <div className="grid grid-cols-[1fr_auto] gap-1.5">
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                            <Edit3 className="w-4 h-4 mr-1" />Edit
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="outline" aria-label="More actions">
+                              <Button size="icon" variant="ghost" aria-label="More actions">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openAttachImagePicker(item)}>
+                                <Link2 className="w-4 h-4 mr-2" />Attach Image
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}`)}>
                                 <Eye className="w-4 h-4 mr-2" />Open in Pro Photo
                               </DropdownMenuItem>
@@ -749,6 +757,12 @@ export default function BrandLibraryPage() {
                               <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
                                 <Archive className="w-4 h-4 mr-2" />Archive
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDelete(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />Delete
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -760,15 +774,31 @@ export default function BrandLibraryPage() {
                         <Button size="sm" className="w-full" onClick={() => openEdit(item)}>
                           <Edit3 className="w-4 h-4 mr-1" />Write Caption
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(item)}>
-                          <Edit3 className="w-4 h-4 mr-1" />Edit
-                        </Button>
+                        <div className="grid grid-cols-[1fr_auto] gap-1.5">
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                            <Edit3 className="w-4 h-4 mr-1" />Edit
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" aria-label="More actions">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
+                                <Archive className="w-4 h-4 mr-2" />Archive
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDelete(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </>
                     )}
-
-                    <div className="border-t pt-2 flex justify-end">
-                      <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
