@@ -30,7 +30,7 @@ async function uploadResultBuffer(
 ): Promise<{ publicUrl: string; storagePath: string }> {
   const { ext, contentType } = sniffImage(buffer);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
-  const { error: uploadError } = await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
+  const { error: uploadError } = await supabase.storage.from('content-library').upload(path, buffer, { contentType });
   if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
   const { data: signedData, error: signError } = await supabase.storage
     .from('venue-assets')
