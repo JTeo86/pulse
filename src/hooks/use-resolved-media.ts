@@ -50,7 +50,8 @@ export function resolveAssetUrl(asset: {
  * Uses cache and only generates fresh URLs for missing/expired entries.
  */
 export async function batchResolveSignedUrls(
-  storagePaths: string[]
+  storagePaths: string[],
+  bucket: string = DEFAULT_BUCKET,
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   const toResolve: string[] = [];
