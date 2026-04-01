@@ -330,10 +330,10 @@ Deno.serve(async (req) => {
     const { ext, contentType } = sniffImage(resultBytes);
     const storagePath = `venues/${venue_id}/edited/${crypto.randomUUID()}_variation.${ext}`;
 
-    await supabase.storage.from('venue-assets').upload(storagePath, resultBytes, { contentType });
+    await supabase.storage.from('content-library').upload(storagePath, resultBytes, { contentType });
 
     const { data: signedData } = await supabase.storage
-      .from('venue-assets')
+      .from('content-library')
       .createSignedUrl(storagePath, 86400);
     const publicUrl = signedData?.signedUrl || '';
 
