@@ -69,7 +69,7 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
           }
           if (!resolvedUrl && a.storage_path) {
             const { data: signed } = await supabase.storage
-              .from('venue-assets')
+              .from(a.storage_bucket || 'venue-assets')
               .createSignedUrl(a.storage_path, 3600);
             resolvedUrl = signed?.signedUrl || '';
           }
