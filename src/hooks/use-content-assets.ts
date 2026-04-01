@@ -19,6 +19,8 @@ export interface ContentAsset {
   prompt_snapshot: Record<string, unknown> | null;
   generation_settings: Record<string, unknown> | null;
   storage_path: string | null;
+  storage_bucket: string | null;
+  pool: 'asset_pool' | 'content_library';
   public_url: string | null;
   thumbnail_url: string | null;
   mime_type: string | null;
