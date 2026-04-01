@@ -55,8 +55,8 @@ async function resolveSourceImage(
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const path = `venues/${venueId}/uploads/${crypto.randomUUID()}.${ext}`;
-    await supabase.storage.from('venue-assets').upload(path, bytes, { contentType: mime });
-    const { data: signedData } = await supabase.storage.from('venue-assets').createSignedUrl(path, 86400);
+    await supabase.storage.from('asset-pool').upload(path, bytes, { contentType: mime });
+    const { data: signedData } = await supabase.storage.from('asset-pool').createSignedUrl(path, 86400);
     const signedUrl = signedData?.signedUrl || '';
     return { base64: sourceFileBase64, mime, publicUrl: signedUrl };
   }
