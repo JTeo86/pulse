@@ -552,12 +552,14 @@ export type Database = {
           metadata: Json
           mime_type: string | null
           parent_asset_id: string | null
+          pool: string
           prompt_snapshot: Json | null
           public_url: string | null
           root_asset_id: string | null
           source_job_id: string | null
           source_type: string
           status: string
+          storage_bucket: string
           storage_path: string | null
           thumbnail_url: string | null
           title: string | null
@@ -580,12 +582,14 @@ export type Database = {
           metadata?: Json
           mime_type?: string | null
           parent_asset_id?: string | null
+          pool?: string
           prompt_snapshot?: Json | null
           public_url?: string | null
           root_asset_id?: string | null
           source_job_id?: string | null
           source_type: string
           status?: string
+          storage_bucket?: string
           storage_path?: string | null
           thumbnail_url?: string | null
           title?: string | null
@@ -608,12 +612,14 @@ export type Database = {
           metadata?: Json
           mime_type?: string | null
           parent_asset_id?: string | null
+          pool?: string
           prompt_snapshot?: Json | null
           public_url?: string | null
           root_asset_id?: string | null
           source_job_id?: string | null
           source_type?: string
           status?: string
+          storage_bucket?: string
           storage_path?: string | null
           thumbnail_url?: string | null
           title?: string | null
