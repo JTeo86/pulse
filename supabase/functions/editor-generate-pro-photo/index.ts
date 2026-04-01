@@ -33,7 +33,7 @@ async function uploadResultBuffer(
   const { error: uploadError } = await supabase.storage.from('content-library').upload(path, buffer, { contentType });
   if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
   const { data: signedData, error: signError } = await supabase.storage
-    .from('venue-assets')
+    .from('content-library')
     .createSignedUrl(path, 60 * 60 * 24 * 365);
   if (signError || !signedData?.signedUrl) {
     throw new Error(`Failed to create signed URL: ${signError?.message || 'no URL returned'}`);
