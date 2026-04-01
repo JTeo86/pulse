@@ -91,7 +91,7 @@ export default function UploadTab() {
         const storagePath = `venues/${currentVenue.id}/uploads/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-          .from('venue-assets')
+          .from('asset-pool')
           .upload(storagePath, file);
 
         if (uploadError) throw uploadError;
