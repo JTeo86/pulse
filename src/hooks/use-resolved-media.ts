@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-const BUCKET = 'venue-assets';
+const DEFAULT_BUCKET = 'venue-assets';
 const SIGNED_TTL = 3600; // 1 hour
 
 // In-memory cache: storagePath → { url, expiresAt }
