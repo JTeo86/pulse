@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
       sourceImageBlob = new Blob([bytes], { type: mime });
 
       const uploadPath = `venues/${venueId}/uploads/${crypto.randomUUID()}.${ext}`;
-      await supabase.storage.from('venue-assets').upload(uploadPath, bytes, { contentType: mime, upsert: false });
-      const { data: signedUpload } = await supabase.storage.from('venue-assets').createSignedUrl(uploadPath, 86400);
+      await supabase.storage.from('asset-pool').upload(uploadPath, bytes, { contentType: mime, upsert: false });
+      const { data: signedUpload } = await supabase.storage.from('asset-pool').createSignedUrl(uploadPath, 86400);
       resolvedSourceUrl = signedUpload?.signedUrl || '';
     } else if (sourceUrl) {
       const resp = await fetch(sourceUrl);
