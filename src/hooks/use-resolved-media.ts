@@ -130,7 +130,7 @@ export async function resolveAssetMediaUrl(asset: {
 
   // Generate fresh signed URL from storage_path
   if (asset.storage_path) {
-    return resolveSignedUrl(asset.storage_path);
+    return resolveSignedUrl(asset.storage_path, asset.storage_bucket || DEFAULT_BUCKET);
   }
 
   return stable || '';
