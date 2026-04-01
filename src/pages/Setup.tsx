@@ -88,8 +88,9 @@ export default function SetupPage() {
     try {
       const { data, error } = await supabase
         .from('content_assets')
-        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, metadata, created_at')
+        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, storage_bucket, metadata, created_at')
         .eq('venue_id', venueId)
+        .eq('pool', 'asset_pool')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
