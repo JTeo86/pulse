@@ -130,7 +130,7 @@ export function usePlanPublish(planId: string | undefined) {
     if (!contentAssetId) return null;
     const { data } = await supabase
       .from('content_assets')
-      .select('public_url, thumbnail_url, storage_path')
+      .select('public_url, thumbnail_url, storage_path, storage_bucket')
       .eq('id', contentAssetId)
       .single();
     if (!data) return null;
