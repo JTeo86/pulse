@@ -457,8 +457,9 @@ export default function BrandLibraryPage() {
     setAssetPickerLoading(true);
     const { data, error } = await supabase
       .from('content_assets')
-      .select('id, title, source_type, asset_type, created_at, public_url, thumbnail_url, storage_path')
+      .select('id, title, source_type, asset_type, created_at, public_url, thumbnail_url, storage_path, storage_bucket')
       .eq('venue_id', currentVenue.id)
+      .eq('pool', 'asset_pool')
       .eq('asset_type', 'image')
       .order('created_at', { ascending: false })
       .limit(300);
