@@ -47,7 +47,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
     (async () => {
       const { data } = await supabase
         .from('content_assets')
-        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, created_at')
+        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, storage_bucket, created_at')
         .in('id', ids);
       if (data) {
         const map: Record<string, any> = {};
@@ -58,7 +58,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
           if (a.public_url && !isSignedUrl(a.public_url)) url = a.public_url;
           else if (a.thumbnail_url && !isSignedUrl(a.thumbnail_url)) url = a.thumbnail_url;
           if (!url && a.storage_path) {
-            const { data: signed } = await supabase.storage.from('venue-assets').createSignedUrl(a.storage_path, 3600);
+            const { data: signed } = await supabase.storage.from(a.storage_bucket || 'venue-assets').createSignedUrl(a.storage_path, 3600);
             url = signed?.signedUrl || '';
           }
           map[a.id] = { ...a, _resolvedUrl: url };

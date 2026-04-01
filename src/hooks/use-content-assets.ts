@@ -19,6 +19,8 @@ export interface ContentAsset {
   prompt_snapshot: Record<string, unknown> | null;
   generation_settings: Record<string, unknown> | null;
   storage_path: string | null;
+  storage_bucket: string | null;
+  pool: 'asset_pool' | 'content_library';
   public_url: string | null;
   thumbnail_url: string | null;
   mime_type: string | null;
@@ -196,7 +198,7 @@ export function useDeleteAsset() {
       await supabase.from('plan_publish_items').delete().eq('content_asset_id', asset.id);
       // Remove storage object
       if (asset.storage_path) {
-        await supabase.storage.from('venue-assets').remove([asset.storage_path]);
+        await supabase.storage.from(asset.storage_bucket || 'venue-assets').remove([asset.storage_path]);
       }
       // Remove the asset record
       const { error } = await supabase.from('content_assets').delete().eq('id', asset.id);
@@ -223,12 +225,16 @@ export function useBulkDeleteAssets() {
       // Cascade: remove plan_assets and plan_publish_items links
       await supabase.from('plan_assets').delete().in('content_asset_id', ids);
       await supabase.from('plan_publish_items').delete().in('content_asset_id', ids);
-      // Remove storage objects
-      const storagePaths = assets
-        .map((a) => a.storage_path)
-        .filter((p): p is string => !!p);
-      if (storagePaths.length > 0) {
-        await supabase.storage.from('venue-assets').remove(storagePaths);
+      // Remove storage objects — group by bucket
+      const bucketGroups = new Map<string, string[]>();
+      for (const a of assets) {
+        if (!a.storage_path) continue;
+        const bucket = a.storage_bucket || 'venue-assets';
+        if (!bucketGroups.has(bucket)) bucketGroups.set(bucket, []);
+        bucketGroups.get(bucket)!.push(a.storage_path);
+      }
+      for (const [bucket, paths] of bucketGroups) {
+        await supabase.storage.from(bucket).remove(paths);
       }
       const { error } = await supabase.from('content_assets').delete().in('id', ids);
       if (error) throw error;

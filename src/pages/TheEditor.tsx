@@ -415,7 +415,7 @@ export default function TheEditorPage() {
       return;
     }
     try {
-      await supabase.storage.from('venue-assets').remove([jobResult.storage_path]);
+      await supabase.storage.from('content-library').remove([jobResult.storage_path]);
     } catch { /* best effort */ }
     handleReset();
     toast({ title: 'Image discarded' });

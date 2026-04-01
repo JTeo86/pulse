@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
       sourceImageBlob = new Blob([bytes], { type: mime });
 
       const uploadPath = `venues/${venueId}/uploads/${crypto.randomUUID()}.${ext}`;
-      await supabase.storage.from('venue-assets').upload(uploadPath, bytes, { contentType: mime, upsert: false });
-      const { data: signedUpload } = await supabase.storage.from('venue-assets').createSignedUrl(uploadPath, 86400);
+      await supabase.storage.from('asset-pool').upload(uploadPath, bytes, { contentType: mime, upsert: false });
+      const { data: signedUpload } = await supabase.storage.from('asset-pool').createSignedUrl(uploadPath, 86400);
       resolvedSourceUrl = signedUpload?.signedUrl || '';
     } else if (sourceUrl) {
       const resp = await fetch(sourceUrl);
@@ -129,12 +129,12 @@ Deno.serve(async (req) => {
     const storagePath = `venues/${venueId}/edited/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
-      .from('venue-assets')
+      .from('content-library')
       .upload(storagePath, processedBuffer, { contentType: outputContentType, upsert: false });
 
     if (uploadError) throw new Error('Failed to save processed image');
 
-    const { data: signedResult } = await supabase.storage.from('venue-assets').createSignedUrl(storagePath, 86400);
+    const { data: signedResult } = await supabase.storage.from('content-library').createSignedUrl(storagePath, 86400);
     const resultUrl = signedResult?.signedUrl || '';
 
     // Log the edit

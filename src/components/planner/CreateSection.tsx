@@ -352,7 +352,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
     (async () => {
       const { data } = await supabase
         .from('content_assets')
-        .select('id, title, asset_type, status, thumbnail_url, public_url, storage_path, created_at')
+        .select('id, title, asset_type, status, thumbnail_url, public_url, storage_path, storage_bucket, created_at')
         .in('id', assetIds);
       if (data) {
         const map: Record<string, any> = {};
@@ -363,7 +363,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
           if (a.public_url && !isSignedUrl(a.public_url)) resolvedUrl = a.public_url;
           else if (a.thumbnail_url && !isSignedUrl(a.thumbnail_url)) resolvedUrl = a.thumbnail_url;
           if (!resolvedUrl && a.storage_path) {
-            const { data: signed } = await supabase.storage.from('venue-assets').createSignedUrl(a.storage_path, 3600);
+            const { data: signed } = await supabase.storage.from(a.storage_bucket || 'venue-assets').createSignedUrl(a.storage_path, 3600);
             resolvedUrl = signed?.signedUrl || '';
           }
           map[a.id] = { ...a, _resolvedUrl: resolvedUrl };

@@ -100,7 +100,7 @@ export function CreateCalendarItemDialog({
       if (media.storagePath) {
         // For freshly uploaded files, generate a long-lived signed URL
         const { data: signed } = await supabase.storage
-          .from('venue-assets')
+          .from(media.storageBucket || 'venue-assets')
           .createSignedUrl(media.storagePath, 60 * 60 * 24 * 365);
         mediaUrl = signed?.signedUrl || media.url;
       } else {

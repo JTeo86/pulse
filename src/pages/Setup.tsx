@@ -63,6 +63,7 @@ type SetupAsset = {
   public_url: string | null;
   thumbnail_url: string | null;
   storage_path: string | null;
+  storage_bucket: string | null;
   metadata: Record<string, any> | null;
   created_at: string;
   resolved_url?: string;
@@ -88,8 +89,9 @@ export default function SetupPage() {
     try {
       const { data, error } = await supabase
         .from('content_assets')
-        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, metadata, created_at')
+        .select('id, title, asset_type, public_url, thumbnail_url, storage_path, storage_bucket, metadata, created_at')
         .eq('venue_id', venueId)
+        .eq('pool', 'asset_pool')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -209,10 +211,10 @@ export default function SetupPage() {
     try {
       for (const file of Array.from(files)) {
         const path = `${currentVenue.id}/starter/${Date.now()}-${file.name}`;
-        const { error: uploadErr } = await supabase.storage.from('venue-assets').upload(path, file);
+        const { error: uploadErr } = await supabase.storage.from('asset-pool').upload(path, file);
         if (uploadErr) throw uploadErr;
 
-        const { data: pub } = supabase.storage.from('venue-assets').getPublicUrl(path);
+        const { data: signed } = await supabase.storage.from('asset-pool').createSignedUrl(path, 86400);
         await supabase.from('content_assets').insert({
           venue_id: currentVenue.id,
           asset_type: file.type.startsWith('video') ? 'video' : 'image',
@@ -220,7 +222,9 @@ export default function SetupPage() {
           status: 'approved',
           title: file.name,
           storage_path: path,
-          public_url: pub.publicUrl,
+          storage_bucket: 'asset-pool',
+          pool: 'asset_pool',
+          public_url: signed?.signedUrl || null,
           metadata: {
             starter_upload: true,
             title: file.name,
@@ -249,7 +253,7 @@ export default function SetupPage() {
     setDeletingAssetId(asset.id);
     try {
       if (asset.storage_path) {
-        await supabase.storage.from('venue-assets').remove([asset.storage_path]);
+        await supabase.storage.from(asset.storage_bucket || 'asset-pool').remove([asset.storage_path]);
       }
       const { error } = await supabase.from('content_assets').delete().eq('id', asset.id);
       if (error) throw error;

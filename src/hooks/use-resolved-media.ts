@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
-const BUCKET = 'venue-assets';
+const DEFAULT_BUCKET = 'venue-assets';
 const SIGNED_TTL = 3600; // 1 hour
 
 // In-memory cache: storagePath → { url, expiresAt }
@@ -50,7 +50,8 @@ export function resolveAssetUrl(asset: {
  * Uses cache and only generates fresh URLs for missing/expired entries.
  */
 export async function batchResolveSignedUrls(
-  storagePaths: string[]
+  storagePaths: string[],
+  bucket: string = DEFAULT_BUCKET,
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   const toResolve: string[] = [];
@@ -73,7 +74,7 @@ export async function batchResolveSignedUrls(
       const results = await Promise.all(
         batch.map(async (path) => {
           const { data } = await supabase.storage
-            .from(BUCKET)
+            .from(bucket)
             .createSignedUrl(path, SIGNED_TTL);
           return { path, url: data?.signedUrl || '' };
         })
@@ -95,12 +96,12 @@ export async function batchResolveSignedUrls(
 /**
  * Resolve a single signed URL with caching.
  */
-export async function resolveSignedUrl(storagePath: string): Promise<string> {
+export async function resolveSignedUrl(storagePath: string, bucket: string = DEFAULT_BUCKET): Promise<string> {
   const cached = signedUrlCache.get(storagePath);
   if (cached && isCacheValid(cached)) return cached.url;
 
   const { data } = await supabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .createSignedUrl(storagePath, SIGNED_TTL);
 
   const url = data?.signedUrl || '';
@@ -121,6 +122,7 @@ export async function resolveAssetMediaUrl(asset: {
   public_url?: string | null;
   thumbnail_url?: string | null;
   storage_path?: string | null;
+  storage_bucket?: string | null;
 }): Promise<string> {
   // Try stable URL first
   const stable = resolveAssetUrl(asset);
@@ -128,7 +130,7 @@ export async function resolveAssetMediaUrl(asset: {
 
   // Generate fresh signed URL from storage_path
   if (asset.storage_path) {
-    return resolveSignedUrl(asset.storage_path);
+    return resolveSignedUrl(asset.storage_path, asset.storage_bucket || DEFAULT_BUCKET);
   }
 
   return stable || '';

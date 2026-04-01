@@ -130,7 +130,7 @@ export function usePlanPublish(planId: string | undefined) {
     if (!contentAssetId) return null;
     const { data } = await supabase
       .from('content_assets')
-      .select('public_url, thumbnail_url, storage_path')
+      .select('public_url, thumbnail_url, storage_path, storage_bucket')
       .eq('id', contentAssetId)
       .single();
     if (!data) return null;
@@ -139,7 +139,7 @@ export function usePlanPublish(planId: string | undefined) {
     if (data.public_url && !isSignedUrl(data.public_url)) return data.public_url;
     if (data.thumbnail_url && !isSignedUrl(data.thumbnail_url)) return data.thumbnail_url;
     if (data.storage_path) {
-      const { data: signed } = await supabase.storage.from('venue-assets').createSignedUrl(data.storage_path, 3600);
+      const { data: signed } = await supabase.storage.from(data.storage_bucket || 'venue-assets').createSignedUrl(data.storage_path, 3600);
       return signed?.signedUrl || null;
     }
     return null;

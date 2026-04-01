@@ -30,10 +30,10 @@ async function uploadResultBuffer(
 ): Promise<{ publicUrl: string; storagePath: string }> {
   const { ext, contentType } = sniffImage(buffer);
   const path = `venues/${venueId}/edited/${crypto.randomUUID()}_${suffix}.${ext}`;
-  const { error: uploadError } = await supabase.storage.from('venue-assets').upload(path, buffer, { contentType });
+  const { error: uploadError } = await supabase.storage.from('content-library').upload(path, buffer, { contentType });
   if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
   const { data: signedData, error: signError } = await supabase.storage
-    .from('venue-assets')
+    .from('content-library')
     .createSignedUrl(path, 60 * 60 * 24 * 365);
   if (signError || !signedData?.signedUrl) {
     throw new Error(`Failed to create signed URL: ${signError?.message || 'no URL returned'}`);
@@ -55,8 +55,8 @@ async function resolveSourceImage(
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const path = `venues/${venueId}/uploads/${crypto.randomUUID()}.${ext}`;
-    await supabase.storage.from('venue-assets').upload(path, bytes, { contentType: mime });
-    const { data: signedData } = await supabase.storage.from('venue-assets').createSignedUrl(path, 86400);
+    await supabase.storage.from('asset-pool').upload(path, bytes, { contentType: mime });
+    const { data: signedData } = await supabase.storage.from('asset-pool').createSignedUrl(path, 86400);
     const signedUrl = signedData?.signedUrl || '';
     return { base64: sourceFileBase64, mime, publicUrl: signedUrl };
   }
@@ -938,6 +938,8 @@ Deno.serve(async (req) => {
           status: 'draft',
           title: `Pro Photo · ${shotLabel}`,
           storage_path: finalStoragePath,
+          storage_bucket: 'content-library',
+          pool: 'content_library',
           public_url: finalUrl,
           mime_type: 'image/jpeg',
           source_job_id: editedAssetData?.id || null,

@@ -54,7 +54,7 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
     (async () => {
       const { data } = await supabase
         .from('content_assets')
-        .select('id, title, asset_type, status, thumbnail_url, public_url, storage_path, created_at')
+        .select('id, title, asset_type, status, thumbnail_url, public_url, storage_path, storage_bucket, created_at')
         .in('id', assetIds);
       if (data) {
         const map: Record<string, any> = {};
@@ -69,7 +69,7 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
           }
           if (!resolvedUrl && a.storage_path) {
             const { data: signed } = await supabase.storage
-              .from('venue-assets')
+              .from(a.storage_bucket || 'venue-assets')
               .createSignedUrl(a.storage_path, 3600);
             resolvedUrl = signed?.signedUrl || '';
           }

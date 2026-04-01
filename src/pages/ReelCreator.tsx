@@ -74,7 +74,7 @@ export default function ReelCreator() {
             setSourceUrl(asset.public_url);
           } else if (asset.storage_path) {
             const { data: signed } = await supabase.storage
-              .from('venue-assets')
+              .from(asset.storage_bucket || 'venue-assets')
               .createSignedUrl(asset.storage_path, 3600);
             setSourceUrl(signed?.signedUrl || '');
           }

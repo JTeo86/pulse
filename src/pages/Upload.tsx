@@ -94,7 +94,7 @@ export default function UploadPage() {
 
         // Upload to storage
         const { error: uploadError } = await supabase.storage
-          .from('venue-assets')
+          .from('asset-pool')
           .upload(storagePath, file);
 
         if (uploadError) throw uploadError;

@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
     let sourceImageUrl = parent.public_url;
     if (!sourceImageUrl && parent.storage_path) {
       const { data: signedData } = await supabase.storage
-        .from('venue-assets')
+        .from(parent.storage_bucket || 'venue-assets')
         .createSignedUrl(parent.storage_path, 600);
       sourceImageUrl = signedData?.signedUrl;
     }
@@ -330,10 +330,10 @@ Deno.serve(async (req) => {
     const { ext, contentType } = sniffImage(resultBytes);
     const storagePath = `venues/${venue_id}/edited/${crypto.randomUUID()}_variation.${ext}`;
 
-    await supabase.storage.from('venue-assets').upload(storagePath, resultBytes, { contentType });
+    await supabase.storage.from('content-library').upload(storagePath, resultBytes, { contentType });
 
     const { data: signedData } = await supabase.storage
-      .from('venue-assets')
+      .from('content-library')
       .createSignedUrl(storagePath, 86400);
     const publicUrl = signedData?.signedUrl || '';
 
@@ -356,6 +356,8 @@ Deno.serve(async (req) => {
       root_asset_id: rootAssetId,
       lineage_depth: lineageDepth,
       storage_path: storagePath,
+      storage_bucket: 'content-library',
+      pool: 'content_library',
       public_url: publicUrl,
       mime_type: contentType,
       prompt_snapshot: {
