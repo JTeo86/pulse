@@ -63,6 +63,7 @@ type SetupAsset = {
   public_url: string | null;
   thumbnail_url: string | null;
   storage_path: string | null;
+  storage_bucket: string | null;
   metadata: Record<string, any> | null;
   created_at: string;
   resolved_url?: string;
