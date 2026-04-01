@@ -252,7 +252,7 @@ export default function SetupPage() {
     setDeletingAssetId(asset.id);
     try {
       if (asset.storage_path) {
-        await supabase.storage.from('venue-assets').remove([asset.storage_path]);
+        await supabase.storage.from(asset.storage_bucket || 'asset-pool').remove([asset.storage_path]);
       }
       const { error } = await supabase.from('content_assets').delete().eq('id', asset.id);
       if (error) throw error;
