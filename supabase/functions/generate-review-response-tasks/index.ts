@@ -1,3 +1,4 @@
+import { AiClientError, aiClient } from "../../../src/lib/ai/client.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -66,14 +67,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-    }
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "AI service not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     // Fetch reviews for the period
@@ -159,33 +152,26 @@ Priority guide:
 - P2: Service failures, specific complaints. Respond within 2 weeks.
 - P3: Minor issues, constructive feedback worth acknowledging. Respond when convenient.`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    let content = "";
+    try {
+      const aiResult = await aiClient.generateContent({
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Triage these ${allReviews.length} reviews:\n\n${JSON.stringify(reviewSummaries, null, 2)}` },
         ],
         response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error("AI triage error:", aiResponse.status, errText);
+      });
+      content = aiResult.content;
+    } catch (error) {
+      if (error instanceof AiClientError) {
+        console.error("AI triage error:", error.status, error.body);
+      }
       return new Response(JSON.stringify({ error: "AI triage failed" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content;
     if (!content) {
       return new Response(JSON.stringify({ error: "Empty AI response" }), {
         status: 500,
