@@ -62,6 +62,7 @@ export function CalendarMediaPicker({ value, onChange }: CalendarMediaPickerProp
       onChange({
         url: signed?.signedUrl || '',
         storagePath,
+        storageBucket: 'asset-pool',
         label: file.name,
         type: isVideo ? 'video' : 'image',
       });
