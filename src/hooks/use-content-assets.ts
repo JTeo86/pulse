@@ -198,7 +198,7 @@ export function useDeleteAsset() {
       await supabase.from('plan_publish_items').delete().eq('content_asset_id', asset.id);
       // Remove storage object
       if (asset.storage_path) {
-        await supabase.storage.from('venue-assets').remove([asset.storage_path]);
+        await supabase.storage.from(asset.storage_bucket || 'venue-assets').remove([asset.storage_path]);
       }
       // Remove the asset record
       const { error } = await supabase.from('content_assets').delete().eq('id', asset.id);
