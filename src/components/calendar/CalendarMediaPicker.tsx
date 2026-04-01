@@ -48,13 +48,13 @@ export function CalendarMediaPicker({ value, onChange }: CalendarMediaPickerProp
       const storagePath = `venues/${currentVenue.id}/calendar/${crypto.randomUUID()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('venue-assets')
+        .from('asset-pool')
         .upload(storagePath, file, { contentType: file.type, upsert: false });
 
       if (uploadError) throw uploadError;
 
       const { data: signed } = await supabase.storage
-        .from('venue-assets')
+        .from('asset-pool')
         .createSignedUrl(storagePath, 3600);
 
       const isVideo = file.type.startsWith('video/');
