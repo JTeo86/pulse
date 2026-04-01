@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
     let sourceImageUrl = parent.public_url;
     if (!sourceImageUrl && parent.storage_path) {
       const { data: signedData } = await supabase.storage
-        .from('venue-assets')
+        .from(parent.storage_bucket || 'venue-assets')
         .createSignedUrl(parent.storage_path, 600);
       sourceImageUrl = signedData?.signedUrl;
     }
