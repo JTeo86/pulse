@@ -74,7 +74,7 @@ export async function batchResolveSignedUrls(
       const results = await Promise.all(
         batch.map(async (path) => {
           const { data } = await supabase.storage
-            .from(BUCKET)
+            .from(bucket)
             .createSignedUrl(path, SIGNED_TTL);
           return { path, url: data?.signedUrl || '' };
         })
