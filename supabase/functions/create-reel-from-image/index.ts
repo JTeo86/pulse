@@ -181,6 +181,8 @@ Deno.serve(async (req) => {
         root_asset_id: rootAssetId,
         derived_from_editor_job_id: job.id,
         lineage_depth: lineageDepth,
+        storage_bucket: 'content-library',
+        pool: 'content_library',
         generation_settings: generationSettings,
         metadata: {
           source_image_url: source.public_url,

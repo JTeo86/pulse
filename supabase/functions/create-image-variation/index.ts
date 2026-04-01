@@ -356,6 +356,8 @@ Deno.serve(async (req) => {
       root_asset_id: rootAssetId,
       lineage_depth: lineageDepth,
       storage_path: storagePath,
+      storage_bucket: 'content-library',
+      pool: 'content_library',
       public_url: publicUrl,
       mime_type: contentType,
       prompt_snapshot: {

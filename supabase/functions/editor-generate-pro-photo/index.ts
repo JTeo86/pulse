@@ -938,6 +938,8 @@ Deno.serve(async (req) => {
           status: 'draft',
           title: `Pro Photo · ${shotLabel}`,
           storage_path: finalStoragePath,
+          storage_bucket: 'content-library',
+          pool: 'content_library',
           public_url: finalUrl,
           mime_type: 'image/jpeg',
           source_job_id: editedAssetData?.id || null,
