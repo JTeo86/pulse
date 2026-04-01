@@ -15,6 +15,8 @@ export interface SelectedMedia {
   assetId?: string;
   /** storage path if freshly uploaded */
   storagePath?: string;
+  /** storage bucket for the path */
+  storageBucket?: string;
   /** file name or title */
   label: string;
   /** 'image' | 'video' */
