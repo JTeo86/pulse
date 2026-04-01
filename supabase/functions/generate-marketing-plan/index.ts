@@ -1,3 +1,4 @@
+import { aiClient } from "../../../src/lib/ai/client.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -177,26 +178,12 @@ Rules:
 
 Return ONLY the JSON array, no other text.`;
 
-  // Call AI via Lovable gateway
-  const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-    }),
+  const aiResult = await aiClient.generateContent({
+    model: "google/gemini-2.5-flash",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.7,
   });
-
-  if (!aiResponse.ok) {
-    throw new Error(`AI request failed: ${aiResponse.status}`);
-  }
-
-  const aiData = await aiResponse.json();
-  const rawContent = aiData.choices?.[0]?.message?.content || "[]";
+  const rawContent = aiResult.content || "[]";
 
   // Parse the AI response
   let planTasks: any[];
