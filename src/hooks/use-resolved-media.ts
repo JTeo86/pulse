@@ -101,7 +101,7 @@ export async function resolveSignedUrl(storagePath: string, bucket: string = DEF
   if (cached && isCacheValid(cached)) return cached.url;
 
   const { data } = await supabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .createSignedUrl(storagePath, SIGNED_TTL);
 
   const url = data?.signedUrl || '';
