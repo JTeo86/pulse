@@ -210,10 +210,10 @@ export default function SetupPage() {
     try {
       for (const file of Array.from(files)) {
         const path = `${currentVenue.id}/starter/${Date.now()}-${file.name}`;
-        const { error: uploadErr } = await supabase.storage.from('venue-assets').upload(path, file);
+        const { error: uploadErr } = await supabase.storage.from('asset-pool').upload(path, file);
         if (uploadErr) throw uploadErr;
 
-        const { data: pub } = supabase.storage.from('venue-assets').getPublicUrl(path);
+        const { data: signed } = await supabase.storage.from('asset-pool').createSignedUrl(path, 86400);
         await supabase.from('content_assets').insert({
           venue_id: currentVenue.id,
           asset_type: file.type.startsWith('video') ? 'video' : 'image',
@@ -221,7 +221,9 @@ export default function SetupPage() {
           status: 'approved',
           title: file.name,
           storage_path: path,
-          public_url: pub.publicUrl,
+          storage_bucket: 'asset-pool',
+          pool: 'asset_pool',
+          public_url: signed?.signedUrl || null,
           metadata: {
             starter_upload: true,
             title: file.name,
