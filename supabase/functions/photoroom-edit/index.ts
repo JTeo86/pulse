@@ -129,12 +129,12 @@ Deno.serve(async (req) => {
     const storagePath = `venues/${venueId}/edited/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
-      .from('venue-assets')
+      .from('content-library')
       .upload(storagePath, processedBuffer, { contentType: outputContentType, upsert: false });
 
     if (uploadError) throw new Error('Failed to save processed image');
 
-    const { data: signedResult } = await supabase.storage.from('venue-assets').createSignedUrl(storagePath, 86400);
+    const { data: signedResult } = await supabase.storage.from('content-library').createSignedUrl(storagePath, 86400);
     const resultUrl = signedResult?.signedUrl || '';
 
     // Log the edit
