@@ -96,7 +96,7 @@ export async function batchResolveSignedUrls(
 /**
  * Resolve a single signed URL with caching.
  */
-export async function resolveSignedUrl(storagePath: string): Promise<string> {
+export async function resolveSignedUrl(storagePath: string, bucket: string = DEFAULT_BUCKET): Promise<string> {
   const cached = signedUrlCache.get(storagePath);
   if (cached && isCacheValid(cached)) return cached.url;
 
