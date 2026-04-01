@@ -141,8 +141,9 @@ export default function BrandLibraryPage() {
 
     const { data: caData } = await supabase
       .from('content_assets')
-      .select('id, venue_id, source_type, status, title, public_url, thumbnail_url, storage_path, asset_type, created_at')
+      .select('id, venue_id, source_type, status, title, public_url, thumbnail_url, storage_path, storage_bucket, asset_type, created_at')
       .eq('venue_id', currentVenue.id)
+      .eq('pool', 'content_library')
       .order('created_at', { ascending: false })
       .limit(250);
 
