@@ -122,6 +122,7 @@ export async function resolveAssetMediaUrl(asset: {
   public_url?: string | null;
   thumbnail_url?: string | null;
   storage_path?: string | null;
+  storage_bucket?: string | null;
 }): Promise<string> {
   // Try stable URL first
   const stable = resolveAssetUrl(asset);
