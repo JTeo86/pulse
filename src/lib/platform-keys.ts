@@ -23,6 +23,7 @@ export interface PlatformApiKey {
  * Legacy keys remain in DB for audit but are hidden from the main admin panel.
  */
 const ADMIN_VISIBLE_KEYS = new Set([
+  'GOOGLE_AI_API_KEY',
   'SERPAPI_API_KEY',
   'GEMINI_IMAGE_API_KEY',
   'BUFFER_API_KEY',
