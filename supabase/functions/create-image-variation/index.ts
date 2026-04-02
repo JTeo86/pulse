@@ -254,8 +254,7 @@ Deno.serve(async (req) => {
     const variationPlan: VariationPlan = { strategy, ...strategyConfig };
 
     // Check AI config
-    const aiConfig = await (await import('../_shared/ai-key-resolver.ts')).resolveAiConfig();
-    const { resolveModel: rm, chatCompletionsUrl: ccUrl } = await import('../_shared/ai-key-resolver.ts');
+    const aiConfig = await resolveAiConfig();
 
     // Fetch source image bytes
     const imgResp = await fetch(sourceImageUrl);
