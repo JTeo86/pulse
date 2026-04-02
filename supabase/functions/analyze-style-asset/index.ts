@@ -119,14 +119,14 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
   "confidence_score": 0.85
 }`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(chatCompletionsUrl(aiConfig), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: resolveModel("google/gemini-2.5-flash", aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           {
