@@ -126,7 +126,7 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-2.5-flash", aiConfig),
+        model: resolveModelForTask('style_analysis', aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -190,7 +190,7 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-2.5-flash-lite", aiConfig),
+        model: resolveModelForTask('tagging', aiConfig),
         messages: [
           {
             role: "user",

@@ -240,7 +240,7 @@ Generate a complete, professional, compliant campaign pack.`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: resolveModel("google/gemini-2.5-flash", aiConfig),
+            model: resolveModelForTask('copy_generate', aiConfig),
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
@@ -453,7 +453,7 @@ Generate a complete, professional, compliant campaign pack.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: resolveModel("google/gemini-2.5-flash", aiConfig2),
+          model: resolveModelForTask('copy_generate', aiConfig2),
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },

@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: resolveModel('google/gemini-2.5-flash-image', aiConfig),
+        model: resolveModelForTask('image_variation', aiConfig),
         messages: [{ role: 'user', content: messageContent }],
         modalities: ['image', 'text'],
       }),

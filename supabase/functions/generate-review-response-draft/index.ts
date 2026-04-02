@@ -129,7 +129,7 @@ ${investigation_notes ? `Internal investigation notes (DO NOT share publicly, us
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-2.5-flash", aiConfig),
+        model: resolveModelForTask('review_response', aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMsg },

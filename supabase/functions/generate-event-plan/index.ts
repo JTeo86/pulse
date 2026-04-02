@@ -159,7 +159,7 @@ Respond with ONLY this JSON:
         Authorization: `Bearer ${aiConfig.apiKey}`,
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-2.5-flash", aiConfig),
+        model: resolveModelForTask('event_plan', aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

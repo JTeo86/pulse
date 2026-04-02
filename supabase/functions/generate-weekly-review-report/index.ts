@@ -166,7 +166,7 @@ Return a JSON object with this EXACT structure:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-3-flash-preview", aiConfig),
+        model: resolveModelForTask('weekly_report', aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Here are ${reviews.length} reviews from ${week_start} to ${week_end}:\n\n${JSON.stringify(reviewSummaries, null, 2)}` },

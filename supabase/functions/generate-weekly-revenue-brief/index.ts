@@ -128,7 +128,7 @@ Be specific, actionable, venue-specific, and revenue-oriented. Keep it short.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-2.5-flash", aiConfig),
+        model: resolveModelForTask('revenue_brief', aiConfig),
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       }),
