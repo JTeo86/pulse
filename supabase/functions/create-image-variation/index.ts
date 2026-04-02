@@ -253,10 +253,8 @@ Deno.serve(async (req) => {
     const variationPlan: VariationPlan = { strategy, ...strategyConfig };
 
     // Check AI config
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableApiKey) {
-      return jsonResp({ error: 'AI service not configured.' }, 500);
-    }
+    const aiConfig = await (await import('../_shared/ai-key-resolver.ts')).resolveAiConfig();
+    const { resolveModel: rm, chatCompletionsUrl: ccUrl } = await import('../_shared/ai-key-resolver.ts');
 
     // Fetch source image bytes
     const imgResp = await fetch(sourceImageUrl);
