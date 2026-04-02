@@ -1,5 +1,5 @@
 /**
- * Shared AI key resolver for all Pulse edge functions.
+ * Shared AI key resolver + model router for all Pulse edge functions.
  *
  * Resolution order:
  * 1. GOOGLE_AI_API_KEY from platform_api_keys table (user-configured)
@@ -19,6 +19,78 @@ export interface AiConfig {
   /** If using stored Google key, strip "google/" prefix from model names */
   stripModelPrefix: boolean;
   source: 'platform_api_keys' | 'lovable_gateway';
+}
+
+/** AI task types for model routing */
+export type AiTask =
+  // Image tasks
+  | 'image_generate'
+  | 'image_edit'
+  | 'pro_photo'
+  | 'image_variation'
+  // High-quality text (important content)
+  | 'campaign'
+  | 'long_form'
+  // Standard text (default)
+  | 'caption'
+  | 'autopilot'
+  | 'review_response'
+  | 'analysis'
+  | 'copy_generate'
+  | 'copy_refine'
+  | 'event_plan'
+  | 'marketing_plan'
+  | 'style_analysis'
+  | 'guest_enhance'
+  | 'revenue_brief'
+  | 'weekly_report'
+  // Cheap bulk tasks
+  | 'bulk_autopilot'
+  | 'tagging'
+  | 'action_feed';
+
+/**
+ * Returns the optimal Gemini model ID for a given task.
+ * Uses google/ prefix for gateway compatibility; stripped when using direct API.
+ */
+export function getModelForTask(task: AiTask): string {
+  switch (task) {
+    // Image tasks — require image-capable model
+    case 'image_generate':
+    case 'image_edit':
+    case 'pro_photo':
+    case 'image_variation':
+      return 'google/gemini-2.5-flash-image';
+
+    // High-quality text — important content
+    case 'campaign':
+    case 'long_form':
+    case 'marketing_plan':
+    case 'event_plan':
+      return 'google/gemini-2.5-flash';
+
+    // Standard text — good balance
+    case 'caption':
+    case 'autopilot':
+    case 'review_response':
+    case 'analysis':
+    case 'copy_generate':
+    case 'copy_refine':
+    case 'style_analysis':
+    case 'guest_enhance':
+    case 'revenue_brief':
+    case 'weekly_report':
+      return 'google/gemini-2.5-flash';
+
+    // Cheap bulk tasks
+    case 'bulk_autopilot':
+    case 'tagging':
+    case 'action_feed':
+      return 'google/gemini-2.5-flash-lite';
+
+    default:
+      return 'google/gemini-2.5-flash';
+  }
 }
 
 /**
@@ -79,6 +151,13 @@ export function resolveModel(model: string, config: AiConfig): string {
     return model.replace(/^google\//, '');
   }
   return model;
+}
+
+/**
+ * Resolves model for a task, applying config-based prefix stripping.
+ */
+export function resolveModelForTask(task: AiTask, config: AiConfig): string {
+  return resolveModel(getModelForTask(task), config);
 }
 
 /**

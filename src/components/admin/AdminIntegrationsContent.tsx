@@ -259,7 +259,7 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
         </Button>
       </div>
       {isSerpApi && <SerpApiTestButton />}
-      {isGemini && <GeminiTestButton />}
+      {isGoogleAi && <GoogleAiTestButton />}
     </div>
   );
 }
