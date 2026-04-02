@@ -227,26 +227,20 @@ ${brainContext ? `\nVENUE CONTEXT:\n${brainContext}` : ""}
 
 Generate a complete, professional, compliant campaign pack.`;
 
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (!LOVABLE_API_KEY) {
-        return new Response(
-          JSON.stringify({ error: "AI service not configured" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      const aiConfig = await resolveAiConfig();
 
       console.log(`Generating campaign pack for venue ${venue_id}, goal: ${goal}`);
 
       const aiResponse = await fetch(
-        "https://ai.gateway.lovable.dev/v1/chat/completions",
+        chatCompletionsUrl(aiConfig),
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            Authorization: `Bearer ${aiConfig.apiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: resolveModel("google/gemini-2.5-flash", aiConfig),
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
