@@ -209,8 +209,8 @@ function KeyRow({ apiKey, onSaved }: { apiKey: PlatformApiKey; onSaved: () => vo
 
   const isDirty   = value.trim().length > 0;
   const inputType = 'password';
-  const isSerpApi = apiKey.key_name === 'SERPAPI_API_KEY';
-  const isGemini  = apiKey.key_name === 'GEMINI_IMAGE_API_KEY';
+  const isSerpApi   = apiKey.key_name === 'SERPAPI_API_KEY';
+  const isGoogleAi  = apiKey.key_name === 'GOOGLE_AI_API_KEY';
 
   return (
     <div className="flex flex-col gap-2 py-4 border-b border-border last:border-0">
