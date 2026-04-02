@@ -118,33 +118,15 @@ Deno.serve(async (req) => {
           await r.text();
         }
     } else if (key_name === 'GOOGLE_AI_API_KEY') {
-        // Validate Google AI API key by listing models
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models?key=${value}`
-        );
-        if (r.status === 400 || r.status === 401 || r.status === 403) {
-          const j = await r.json().catch(() => ({}));
-          status = 'invalid';
-          message = j?.error?.message ?? `HTTP ${r.status} — check Google AI API key`;
-        } else if (r.ok) {
-          message = 'Google AI API key validated — models endpoint OK';
-        } else {
-          status = 'invalid';
-          message = `HTTP ${r.status}`;
-        }
-        await r.text().catch(() => {});
-    } else if (key_name === 'GEMINI_IMAGE_API_KEY') {
         if (test_gemini_replate) {
           // Full image-capable test using direct Gemini Developer API
-          // Strip google/ prefix — direct API uses bare model names
           let model = (gemini_model || 'gemini-2.5-flash-image').replace(/^google\//, '');
           const isImageCapable = model.includes('-image') || model.includes('image-generation');
 
           if (!isImageCapable) {
             status = 'invalid';
-            message = `Model "${model}" is text-only. Pro Replate requires an image model (e.g. gemini-2.5-flash-image).`;
+            message = `Model "${model}" is text-only. Pro Photo requires an image model (e.g. gemini-2.5-flash-image).`;
           } else {
-            // Test with direct Gemini Developer API using the actual key
             const testEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${value}`;
             console.log(`[CHECK-KEY] Testing Gemini image model: ${model}`);
 
@@ -164,10 +146,9 @@ Deno.serve(async (req) => {
             const testStatus = testResp.status;
             if (testStatus === 404) {
               status = 'invalid';
-              message = `Gemini 404: model "${model}" not found. Check model name in Platform Admin → Integrations.`;
+              message = `Gemini 404: model "${model}" not found.`;
             } else if (testStatus === 400) {
               const errBody = await testResp.text().catch(() => '');
-              // 400 may indicate model doesn't support image output
               if (errBody.includes('not supported') || errBody.includes('responseModalities')) {
                 status = 'invalid';
                 message = `Model "${model}" does not support image generation. Try gemini-2.5-flash-image.`;
@@ -184,15 +165,14 @@ Deno.serve(async (req) => {
               const parts = respData.candidates?.[0]?.content?.parts || [];
               const hasImage = parts.some((p: any) => p.inlineData?.data);
               if (hasImage) {
-                message = `Gemini image test passed ✓ (model=${model}, direct API)`;
+                message = `Google AI key validated ✓ — text + image OK (model=${model})`;
               } else {
-                message = `Gemini responded but returned no image data (model=${model}). Model may not support image output.`;
+                message = `Key valid but model "${model}" returned no image data.`;
                 status = 'invalid';
               }
             }
           }
 
-          // Update result
           await supabase.from('platform_api_keys').update({
             health_status: status,
             last_checked_at: new Date().toISOString(),
@@ -211,10 +191,14 @@ Deno.serve(async (req) => {
           if (r.status === 400 || r.status === 401 || r.status === 403) {
             const j = await r.json().catch(() => ({}));
             status = 'invalid';
-            message = j?.error?.message ?? `HTTP ${r.status} — check Gemini API key`;
+            message = j?.error?.message ?? `HTTP ${r.status} — check Google AI API key`;
+          } else if (r.ok) {
+            message = 'Google AI API key validated — models endpoint OK';
           } else {
-            await r.text();
+            status = 'invalid';
+            message = `HTTP ${r.status}`;
           }
+          await r.text().catch(() => {});
         }
       } else if (key_name === 'KLING_API_KEY') {
         // Kling: validate key length as minimal check (no public ping endpoint)
