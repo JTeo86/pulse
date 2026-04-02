@@ -99,13 +99,7 @@ serve(async (req) => {
     const signals = revenueSignals || [];
     const totalRevenue = signals.reduce((s: number, r: any) => s + (Number(r.revenue_estimate) || 0), 0);
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const aiConfig = await resolveAiConfig();
 
     const prompt = `Generate a short, actionable weekly revenue brief for ${venueName}.
 
