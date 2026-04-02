@@ -788,14 +788,14 @@ Deno.serve(async (req) => {
 
     // ═══ STEP 4 — Call Gemini ═══
     console.log('[PRO-PHOTO] Gemini request started');
-    const geminiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const geminiResp = await fetch(chatCompletionsUrl(aiConfig), {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image',
+        model: resolveModel('google/gemini-2.5-flash-image', aiConfig),
         messages: [{ role: 'user', content: messageContent }],
         modalities: ['image', 'text'],
       }),
