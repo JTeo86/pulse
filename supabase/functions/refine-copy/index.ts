@@ -1,6 +1,5 @@
-import { AiClientError, aiClient } from "../../../src/lib/ai/client.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveAiConfig, resolveModelForTask, chatCompletionsUrl } from '../_shared/ai-key-resolver.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +23,6 @@ const refinementPrompts: Record<string, string> = {
   add_emojis: "Add 1-2 relevant emojis to make the message more engaging. Don't overdo it.",
 };
 
-// Compliance rules - must be followed even during refinement
 const complianceRules = `
 COMPLIANCE (STRICTLY FOLLOW):
 - NEVER invent prices, discounts, or specific values
@@ -34,13 +32,12 @@ COMPLIANCE (STRICTLY FOLLOW):
 - Keep copy genuine and credible
 `;
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Authentication check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -74,8 +71,6 @@ serve(async (req) => {
 
     const refinementInstruction = refinementPrompts[refinement] || refinement;
 
-
-    // Module-specific constraints
     let moduleConstraint = "";
     if (module === "sms_push") {
       moduleConstraint = "IMPORTANT: Keep SMS messages under 160 characters. Push titles under 50 chars, bodies under 100 chars.";
@@ -104,38 +99,49 @@ Apply the refinement while maintaining brand voice and compliance.`;
 
     console.log(`Refining copy with: ${refinement}`);
 
-    let responseContent = "";
+    let aiConfig;
     try {
-      const aiResult = await aiClient.generateContent({
-        model: "google/gemini-3-flash-preview",
+      aiConfig = await resolveAiConfig();
+    } catch {
+      return new Response(JSON.stringify({ error: "AI not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const aiResp = await fetch(chatCompletionsUrl(aiConfig), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: resolveModelForTask('copy_refine', aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-      });
-      responseContent = aiResult.content;
-    } catch (error) {
-      if (error instanceof AiClientError) {
-        if (error.status === 429) {
-          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        if (error.status === 402) {
-          return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
-            status: 402,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        console.error("AI gateway error:", error.status, error.body);
+      }),
+    });
+
+    if (!aiResp.ok) {
+      const status = aiResp.status;
+      if (status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+      console.error("AI error:", status, await aiResp.text().catch(() => ''));
       return new Response(JSON.stringify({ error: "Failed to refine copy" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const aiData = await aiResp.json();
+    const responseContent = aiData.choices?.[0]?.message?.content || '';
 
     if (!responseContent) {
       return new Response(JSON.stringify({ error: "Failed to refine copy" }), {
@@ -147,7 +153,7 @@ Apply the refinement while maintaining brand voice and compliance.`;
     let result;
     try {
       result = JSON.parse(responseContent);
-    } catch (e) {
+    } catch {
       console.error("Failed to parse AI response:", responseContent);
       return new Response(JSON.stringify({ error: "Failed to parse refined copy" }), {
         status: 500,

@@ -5,8 +5,39 @@ export type AiMessage = {
   content: string | Array<Record<string, unknown>>;
 };
 
+/** AI task types for centralized model routing */
+export type AiTask =
+  // Image tasks
+  | 'image_generate'
+  | 'image_edit'
+  | 'pro_photo'
+  | 'image_variation'
+  // High-quality text
+  | 'campaign'
+  | 'long_form'
+  // Standard text
+  | 'caption'
+  | 'autopilot'
+  | 'review_response'
+  | 'analysis'
+  | 'copy_generate'
+  | 'copy_refine'
+  | 'event_plan'
+  | 'marketing_plan'
+  | 'style_analysis'
+  | 'guest_enhance'
+  | 'revenue_brief'
+  | 'weekly_report'
+  // Cheap bulk tasks
+  | 'bulk_autopilot'
+  | 'tagging'
+  | 'action_feed';
+
 export type AiRequest = {
-  model: string;
+  /** Task type — determines which model to use via centralized routing */
+  task?: AiTask;
+  /** Override model (bypasses task routing if provided) */
+  model?: string;
   messages: AiMessage[];
   temperature?: number;
   max_tokens?: number;
@@ -33,13 +64,53 @@ export class AiClientError extends Error {
 const GOOGLE_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_RETRIES = 1;
 
+/**
+ * Returns the optimal model for a given task.
+ * All tasks route through a single GOOGLE_AI_API_KEY.
+ */
+export function getModelForTask(task: AiTask): string {
+  switch (task) {
+    case 'image_generate':
+    case 'image_edit':
+    case 'pro_photo':
+    case 'image_variation':
+      return 'gemini-2.5-flash-image';
+
+    case 'campaign':
+    case 'long_form':
+    case 'marketing_plan':
+    case 'event_plan':
+      return 'gemini-2.5-flash';
+
+    case 'caption':
+    case 'autopilot':
+    case 'review_response':
+    case 'analysis':
+    case 'copy_generate':
+    case 'copy_refine':
+    case 'style_analysis':
+    case 'guest_enhance':
+    case 'revenue_brief':
+    case 'weekly_report':
+      return 'gemini-2.5-flash';
+
+    case 'bulk_autopilot':
+    case 'tagging':
+    case 'action_feed':
+      return 'gemini-2.5-flash-lite';
+
+    default:
+      return 'gemini-2.5-flash';
+  }
+}
+
 function getGoogleApiKey(): string {
   const key =
     (globalThis as any)?.Deno?.env?.get?.("GOOGLE_AI_API_KEY") ??
     (globalThis as any)?.process?.env?.GOOGLE_AI_API_KEY;
 
   if (!key) {
-    throw new Error("GOOGLE_AI_API_KEY not configured");
+    throw new Error("AI not configured. Set GOOGLE_AI_API_KEY in Admin → Integrations.");
   }
 
   return key;
@@ -176,9 +247,19 @@ function normalizeGeminiContent(raw: any): string {
   return "";
 }
 
+function resolveModelFromRequest(request: AiRequest): string {
+  // Explicit model takes priority
+  if (request.model) return request.model;
+  // Task-based routing
+  if (request.task) return getModelForTask(request.task);
+  // Fallback
+  return 'gemini-2.5-flash';
+}
+
 async function callGoogle(request: AiRequest): Promise<AiNormalizedResponse> {
   const apiKey = getGoogleApiKey();
-  const endpoint = `${GOOGLE_API_BASE}/models/${encodeURIComponent(request.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const model = resolveModelFromRequest(request);
+  const endpoint = `${GOOGLE_API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = buildGeminiRequest(request);
 
   let lastError: unknown;
@@ -232,16 +313,34 @@ async function callGoogle(request: AiRequest): Promise<AiNormalizedResponse> {
   throw new Error(`Google AI request failed: ${message}`);
 }
 
+/**
+ * Unified AI client. Use `task` for automatic model routing,
+ * or `model` for explicit model selection.
+ *
+ * @example
+ * // Task-based (recommended)
+ * aiClient.run({ task: 'caption', messages: [...] })
+ *
+ * // Explicit model (override)
+ * aiClient.run({ model: 'gemini-2.5-flash', messages: [...] })
+ */
 export const aiClient = {
+  run(input: AiRequest) {
+    return callGoogle(input);
+  },
+  /** @deprecated Use run() with task parameter */
   generateContent(input: AiRequest) {
     return callGoogle(input);
   },
+  /** @deprecated Use run() with task: 'style_analysis' */
   analyzeImage(input: AiRequest) {
     return callGoogle(input);
   },
+  /** @deprecated Use run() with task: 'caption' */
   generateCaption(input: AiRequest) {
     return callGoogle(input);
   },
+  /** @deprecated Use run() with task: 'tagging' */
   extractKeywords(input: AiRequest) {
     return callGoogle(input);
   },

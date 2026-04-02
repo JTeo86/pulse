@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveAiConfig, resolveModel, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
+import { resolveAiConfig, resolveModelForTask, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -240,7 +240,7 @@ Generate a complete, professional, compliant campaign pack.`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: resolveModel("google/gemini-2.5-flash", aiConfig),
+            model: resolveModelForTask('copy_generate', aiConfig),
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
@@ -453,7 +453,7 @@ Generate a complete, professional, compliant campaign pack.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: resolveModel("google/gemini-2.5-flash", aiConfig2),
+          model: resolveModelForTask('copy_generate', aiConfig2),
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },

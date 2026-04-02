@@ -25,7 +25,6 @@ export interface PlatformApiKey {
 const ADMIN_VISIBLE_KEYS = new Set([
   'GOOGLE_AI_API_KEY',
   'SERPAPI_API_KEY',
-  'GEMINI_IMAGE_API_KEY',
   'BUFFER_API_KEY',
 ]);
 

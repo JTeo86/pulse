@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveAiConfig, resolveModel, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
+import { resolveAiConfig, resolveModelForTask, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,7 +126,7 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-2.5-flash", aiConfig),
+        model: resolveModelForTask('style_analysis', aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -190,7 +190,7 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: resolveModel("google/gemini-2.5-flash-lite", aiConfig),
+        model: resolveModelForTask('tagging', aiConfig),
         messages: [
           {
             role: "user",
