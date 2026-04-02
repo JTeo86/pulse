@@ -121,14 +121,14 @@ Return JSON:
 
 Be specific, actionable, venue-specific, and revenue-oriented. Keep it short.`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch(chatCompletionsUrl(aiConfig), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: resolveModel("google/gemini-2.5-flash", aiConfig),
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       }),

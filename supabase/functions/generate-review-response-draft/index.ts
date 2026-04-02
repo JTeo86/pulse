@@ -122,14 +122,14 @@ AI triage reason: ${task.ai_reason || "N/A"}
 
 ${investigation_notes ? `Internal investigation notes (DO NOT share publicly, use to inform the tone):\n${investigation_notes}` : "No investigation notes provided."}`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: resolveModel("google/gemini-2.5-flash", aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMsg },

@@ -159,14 +159,14 @@ Return a JSON object with this EXACT structure:
   ]
 }`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: resolveModel("google/gemini-3-flash-preview", aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Here are ${reviews.length} reviews from ${week_start} to ${week_end}:\n\n${JSON.stringify(reviewSummaries, null, 2)}` },

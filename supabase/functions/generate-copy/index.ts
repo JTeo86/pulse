@@ -442,24 +442,18 @@ Generate a complete, professional, compliant campaign pack.`;
     const systemPrompt = `You are a senior hospitality copywriter.\n\nBRAND CONTEXT:\n${brandContext.join("\n")}\n\n${complianceRules}\n\nGenerate exactly 3 variations. Format: ${config.format}\nTarget length: ${config.lengthGuide[length]}`;
     const userPrompt = `Create ${config.name} for:\nGOAL: ${goal}\nKEY MESSAGE: ${inputs.key_message}\nCTA: ${inputs.call_to_action}`;
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const aiConfig2 = await resolveAiConfig();
 
     const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      chatCompletionsUrl(aiConfig2),
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${aiConfig2.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: resolveModel("google/gemini-2.5-flash", aiConfig2),
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },

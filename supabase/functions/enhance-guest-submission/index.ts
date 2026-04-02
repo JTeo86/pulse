@@ -96,7 +96,7 @@ Respond in JSON format:
             Authorization: `Bearer ${aiConfig.apiKey}`,
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: resolveModel("google/gemini-2.5-flash", aiConfig),
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
           }),
