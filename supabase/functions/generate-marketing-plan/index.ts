@@ -1,5 +1,5 @@
-import { aiClient } from "../../../src/lib/ai/client.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveAiConfig, resolveModel, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -178,12 +178,22 @@ Rules:
 
 Return ONLY the JSON array, no other text.`;
 
-  const aiResult = await aiClient.generateContent({
-    model: "google/gemini-2.5-flash",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.7,
+  const aiConfig = await resolveAiConfig();
+  const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${aiConfig.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: resolveModel("google/gemini-2.5-flash", aiConfig),
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+    }),
   });
-  const rawContent = aiResult.content || "[]";
+  if (!aiResponse.ok) throw new Error(`AI request failed: ${aiResponse.status}`);
+  const aiData = await aiResponse.json();
+  const rawContent = aiData.choices?.[0]?.message?.content || "[]";
 
   // Parse the AI response
   let planTasks: any[];
