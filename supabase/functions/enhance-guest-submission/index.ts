@@ -87,13 +87,13 @@ Respond in JSON format:
     let hashtags = ["#foodie", "#restaurant", "#delicious", "#instafood", "#foodphotography"];
     let suggestedPostTime = "Weekday evening 18:00-19:00";
 
-    if (lovableKey) {
+    if (aiConfig) {
       try {
-        const aiResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
+        const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${lovableKey}`,
+            Authorization: `Bearer ${aiConfig.apiKey}`,
           },
           body: JSON.stringify({
             model: "google/gemini-2.5-flash",
