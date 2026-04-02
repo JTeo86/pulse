@@ -276,14 +276,14 @@ Deno.serve(async (req) => {
     console.log(`[VARIATION] parent=${parent_asset_id} strategy=${strategy} label="${strategyConfig.label}" siblings=${siblingCount || 0}`);
 
     const startTime = Date.now();
-    const geminiResp = await fetch(ccUrl(aiConfig), {
+    const geminiResp = await fetch(chatCompletionsUrl(aiConfig), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: rm('google/gemini-2.5-flash-image', aiConfig),
+        model: resolveModel('google/gemini-2.5-flash-image', aiConfig),
         messages: [{ role: 'user', content: messageContent }],
         modalities: ['image', 'text'],
       }),
