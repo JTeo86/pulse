@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveAiConfig, resolveModel, chatCompletionsUrl } from '../_shared/ai-key-resolver.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -734,12 +735,14 @@ Deno.serve(async (req) => {
       .from('venue_members').select('id').eq('venue_id', venue_id).eq('user_id', user.id).single();
     if (!membership) return jsonResp({ error: 'Access denied' }, 403);
 
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableApiKey) {
-      console.error('[PRO-PHOTO] Missing LOVABLE_API_KEY');
+    let aiConfig: Awaited<ReturnType<typeof resolveAiConfig>>;
+    try {
+      aiConfig = await resolveAiConfig();
+    } catch (e) {
+      console.error('[PRO-PHOTO] AI not configured:', (e as Error).message);
       if (job_id) {
         await supabase.from('editor_jobs').update({
-          status: 'error', error_message: 'Missing AI configuration. Contact support.',
+          status: 'error', error_message: 'AI not configured. Set GOOGLE_AI_API_KEY in Admin → Integrations.',
         }).eq('id', job_id);
       }
       return jsonResp({ error: 'AI service not configured.' }, 500);
@@ -785,14 +788,14 @@ Deno.serve(async (req) => {
 
     // ═══ STEP 4 — Call Gemini ═══
     console.log('[PRO-PHOTO] Gemini request started');
-    const geminiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const geminiResp = await fetch(chatCompletionsUrl(aiConfig), {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image',
+        model: resolveModel('google/gemini-2.5-flash-image', aiConfig),
         messages: [{ role: 'user', content: messageContent }],
         modalities: ['image', 'text'],
       }),

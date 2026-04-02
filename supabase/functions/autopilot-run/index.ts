@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveAiConfig, resolveModel, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -229,14 +230,15 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         ? buildReviewContentPrompt(ctx, sourceSelection.assets, settings?.mode || "conservative")
         : buildDailyContentPrompt(ctx, contentCount, sourceSelection.assets, settings?.mode || "conservative");
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiConfig = await resolveAiConfig();
+    const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: resolveModel("google/gemini-2.5-flash", aiConfig),
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
       }),

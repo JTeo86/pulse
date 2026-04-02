@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveAiConfig, resolveModel, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +25,8 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    let aiConfig: Awaited<ReturnType<typeof resolveAiConfig>> | null = null;
+    try { aiConfig = await resolveAiConfig(); } catch { /* optional AI */ }
 
     const supabaseAuth = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -85,16 +87,16 @@ Respond in JSON format:
     let hashtags = ["#foodie", "#restaurant", "#delicious", "#instafood", "#foodphotography"];
     let suggestedPostTime = "Weekday evening 18:00-19:00";
 
-    if (lovableKey) {
+    if (aiConfig) {
       try {
-        const aiResponse = await fetch("https://api.lovable.dev/v1/chat/completions", {
+        const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${lovableKey}`,
+            Authorization: `Bearer ${aiConfig.apiKey}`,
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: resolveModel("google/gemini-2.5-flash", aiConfig),
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
           }),

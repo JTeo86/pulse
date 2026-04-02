@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveAiConfig, resolveModel, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,11 +32,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const aiConfig = await resolveAiConfig();
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -120,14 +119,14 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
   "confidence_score": 0.85
 }`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(chatCompletionsUrl(aiConfig), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: resolveModel("google/gemini-2.5-flash", aiConfig),
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -184,14 +183,14 @@ Analyze the provided image and return ONLY valid JSON matching this exact schema
       `${analysisJson.scene_context || ""}`;
 
     // Generate embedding of summary text
-    const embedResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const embedResponse = await fetch(chatCompletionsUrl(aiConfig), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${aiConfig.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: resolveModel("google/gemini-2.5-flash-lite", aiConfig),
         messages: [
           {
             role: "user",

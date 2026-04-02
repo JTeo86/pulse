@@ -117,6 +117,22 @@ Deno.serve(async (req) => {
           }
           await r.text();
         }
+    } else if (key_name === 'GOOGLE_AI_API_KEY') {
+        // Validate Google AI API key by listing models
+        const r = await fetch(
+          `https://generativelanguage.googleapis.com/v1/models?key=${value}`
+        );
+        if (r.status === 400 || r.status === 401 || r.status === 403) {
+          const j = await r.json().catch(() => ({}));
+          status = 'invalid';
+          message = j?.error?.message ?? `HTTP ${r.status} — check Google AI API key`;
+        } else if (r.ok) {
+          message = 'Google AI API key validated — models endpoint OK';
+        } else {
+          status = 'invalid';
+          message = `HTTP ${r.status}`;
+        }
+        await r.text().catch(() => {});
     } else if (key_name === 'GEMINI_IMAGE_API_KEY') {
         if (test_gemini_replate) {
           // Full image-capable test using direct Gemini Developer API

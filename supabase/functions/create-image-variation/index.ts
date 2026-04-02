@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveAiConfig, resolveModel, chatCompletionsUrl } from '../_shared/ai-key-resolver.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -253,10 +254,7 @@ Deno.serve(async (req) => {
     const variationPlan: VariationPlan = { strategy, ...strategyConfig };
 
     // Check AI config
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableApiKey) {
-      return jsonResp({ error: 'AI service not configured.' }, 500);
-    }
+    const aiConfig = await resolveAiConfig();
 
     // Fetch source image bytes
     const imgResp = await fetch(sourceImageUrl);
@@ -278,14 +276,14 @@ Deno.serve(async (req) => {
     console.log(`[VARIATION] parent=${parent_asset_id} strategy=${strategy} label="${strategyConfig.label}" siblings=${siblingCount || 0}`);
 
     const startTime = Date.now();
-    const geminiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const geminiResp = await fetch(chatCompletionsUrl(aiConfig), {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image',
+        model: resolveModel('google/gemini-2.5-flash-image', aiConfig),
         messages: [{ role: 'user', content: messageContent }],
         modalities: ['image', 'text'],
       }),
