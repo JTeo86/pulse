@@ -1,6 +1,6 @@
-import { AiClientError, aiClient } from "../../../src/lib/ai/client.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveAiConfig, resolveModel, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,7 +13,6 @@ serve(async (req) => {
   }
 
   try {
-    // --- Auth check ---
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -50,7 +49,6 @@ serve(async (req) => {
       });
     }
 
-    // --- Venue membership check ---
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -69,7 +67,6 @@ serve(async (req) => {
       }
     }
 
-    // Fetch reviews for the period
     let query = supabaseAdmin
       .from("reviews")
       .select("*")
@@ -86,7 +83,6 @@ serve(async (req) => {
     const { data: reviews, error: revErr } = await query;
     if (revErr) throw revErr;
 
-    // Also get reviews with null review_date but recent created_at
     const { data: reviewsByCreated } = await supabaseAdmin
       .from("reviews")
       .select("*")
@@ -95,7 +91,6 @@ serve(async (req) => {
       .gte("created_at", week_start || new Date(Date.now() - 7 * 86400000).toISOString())
       .order("created_at", { ascending: false });
 
-    // Merge and deduplicate
     const seenIds = new Set<string>();
     const allReviews: typeof reviews = [];
     for (const r of [...(reviews || []), ...(reviewsByCreated || [])]) {
@@ -112,7 +107,6 @@ serve(async (req) => {
       });
     }
 
-    // Prepare review summaries for AI
     const reviewSummaries = allReviews.map(r => ({
       id: r.id,
       source: r.source,
@@ -154,24 +148,42 @@ Priority guide:
 
     let content = "";
     try {
-      const aiResult = await aiClient.generateContent({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Triage these ${allReviews.length} reviews:\n\n${JSON.stringify(reviewSummaries, null, 2)}` },
-        ],
-        response_format: { type: "json_object" },
+      const aiConfig = await resolveAiConfig();
+      const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${aiConfig.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: resolveModel("google/gemini-2.5-flash", aiConfig),
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Triage these ${allReviews.length} reviews:\n\n${JSON.stringify(reviewSummaries, null, 2)}` },
+          ],
+          response_format: { type: "json_object" },
+        }),
       });
-      content = aiResult.content;
-    } catch (error) {
-      if (error instanceof AiClientError) {
-        console.error("AI triage error:", error.status, error.body);
+
+      if (!aiResponse.ok) {
+        const errBody = await aiResponse.text().catch(() => "");
+        console.error("AI triage error:", aiResponse.status, errBody);
+        return new Response(JSON.stringify({ error: "AI triage failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+
+      const aiData = await aiResponse.json();
+      content = String(aiData.choices?.[0]?.message?.content || "");
+    } catch (error) {
+      console.error("AI triage error:", error);
       return new Response(JSON.stringify({ error: "AI triage failed" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
     if (!content) {
       return new Response(JSON.stringify({ error: "Empty AI response" }), {
         status: 500,
