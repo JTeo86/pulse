@@ -24,16 +24,11 @@ export function usePhaseFlags(): PhaseFlags {
   const { data, isLoading } = useQuery({
     queryKey: ['phase-flags'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('feature_flags')
-        .select('flag_key, is_enabled, config_json')
-        .is('venue_id', null)
-        .in('flag_key', [
-          'product_phase',
-          'feature.video_enabled',
-        ]);
+      const { data, error } = await supabase.rpc('get_safe_feature_flags');
       if (error) throw error;
-      return (data ?? []) as FlagRow[];
+      return ((data ?? []) as FlagRow[]).filter(f =>
+        ['product_phase', 'feature.video_enabled'].includes(f.flag_key)
+      );
     },
     staleTime: 1000 * 60 * 5,
   });

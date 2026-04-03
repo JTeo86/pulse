@@ -15,20 +15,9 @@ export function useGalleryFlags(): GalleryFlags {
   const { data, isLoading } = useQuery({
     queryKey: ['gallery-flags'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('feature_flags')
-        .select('flag_key, is_enabled')
-        .is('venue_id', null)
-        .in('flag_key', [
-          'feature.gallery_variations_enabled',
-          'feature.gallery_reel_enabled',
-          'feature.gallery_lineage_enabled',
-          'feature.video_enabled',
-          'feature.reel_creator_enabled',
-          'feature.kling_provider_enabled',
-        ]);
+      const { data, error } = await supabase.rpc('get_safe_feature_flags');
       if (error) throw error;
-      return data || [];
+      return (data ?? []) as { flag_key: string; is_enabled: boolean }[];
     },
     staleTime: 1000 * 60 * 5,
   });
