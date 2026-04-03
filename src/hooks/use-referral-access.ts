@@ -19,27 +19,16 @@ interface ReferralAccess {
 export function useReferralAccess(): ReferralAccess {
   const { currentVenue } = useVenue();
 
-  // Fetch referral feature flags
   const { data: flagRows, isLoading: flagsLoading } = useQuery({
     queryKey: ['referral-flags'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('feature_flags')
-        .select('flag_key, is_enabled')
-        .is('venue_id', null)
-        .in('flag_key', [
-          'feature.referral_network_enabled',
-          'feature.referral_network_private_beta',
-          'feature.referral_network_public_launch',
-          'feature.referral_network_stripe_enabled',
-        ]);
+      const { data, error } = await supabase.rpc('get_safe_feature_flags');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as { flag_key: string; is_enabled: boolean }[];
     },
     staleTime: 1000 * 60 * 5,
   });
 
-  // Fetch beta access for current venue
   const { data: betaAccess, isLoading: betaLoading } = useQuery({
     queryKey: ['referral-beta-access', currentVenue?.id],
     queryFn: async () => {
@@ -70,7 +59,6 @@ export function useReferralAccess(): ReferralAccess {
 
   const isBetaVenue = !!betaAccess;
 
-  // Determine if this venue can access the module
   let venueHasAccess = false;
   if (flags.moduleEnabled) {
     if (flags.publicLaunch) {

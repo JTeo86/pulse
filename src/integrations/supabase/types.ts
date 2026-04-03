@@ -3616,6 +3616,14 @@ export type Database = {
       freq_dist: { Args: { freq: Json }; Returns: Json }
       freq_primary: { Args: { freq: Json }; Returns: string }
       get_my_venue_role: { Args: { p_venue_id: string }; Returns: string }
+      get_safe_feature_flags: {
+        Args: { p_venue_id?: string }
+        Returns: {
+          config_json: Json
+          flag_key: string
+          is_enabled: boolean
+        }[]
+      }
       is_platform_admin: { Args: { check_user_id: string }; Returns: boolean }
       is_venue_admin: {
         Args: { check_user_id: string; check_venue_id: string }
