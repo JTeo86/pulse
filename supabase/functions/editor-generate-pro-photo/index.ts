@@ -788,51 +788,135 @@ Deno.serve(async (req) => {
 
     // ═══ STEP 4 — Call Gemini ═══
     console.log('[PRO-PHOTO] Gemini request started');
-    const geminiResp = await fetch(chatCompletionsUrl(aiConfig), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${aiConfig.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: resolveModelForTask('pro_photo', aiConfig),
-        messages: [{ role: 'user', content: messageContent }],
-        modalities: ['image', 'text'],
-      }),
-    });
 
-    const geminiStatus = geminiResp.status;
-    console.log(`[PRO-PHOTO] Gemini response: status=${geminiStatus}`);
+    let geminiResp: Response;
+    let generatedImage: string | undefined;
 
-    if (!geminiResp.ok) {
-      const errBody = await geminiResp.text().catch(() => '');
-      console.error(`[PRO-PHOTO] Gemini failed: ${geminiStatus} — ${errBody.substring(0, 500)}`);
+    if (aiConfig.source === 'platform_api_keys') {
+      // Direct Google API — must use native Gemini generateContent endpoint for image generation
+      const nativeModel = resolveModelForTask('pro_photo', aiConfig);
+      const nativeEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${nativeModel}:generateContent?key=${aiConfig.apiKey}`;
 
-      try {
-        await supabase.from('venue_style_generation_logs').insert({
-          venue_id,
-          model_name: 'google/gemini-2.5-flash-image',
-          prompt_text: prompt.substring(0, 2000),
-          style_summary_used: ctx.styleSummary || null,
-          reference_asset_ids: selectedReferences.map(r => r.assetId),
-          style_sources_used: ctx.styleSourcesUsed,
-          dish_lock_applied: true,
-          status: 'failed',
-          error_json: { status: geminiStatus, body: errBody.substring(0, 1000) },
-          duration_ms: Date.now() - startTime,
-        });
-      } catch { /* fire and forget */ }
-
-      if (job_id) {
-        await supabase.from('editor_jobs').update({
-          status: 'error', error_message: 'AI photo generation failed. Please try again.',
-        }).eq('id', job_id);
+      // Convert message content to native Gemini parts
+      const geminiParts: any[] = [{ text: prompt }];
+      // Add source image as inline data
+      geminiParts.push({
+        inlineData: {
+          mimeType: sourceMime,
+          data: sourceBase64,
+        },
+      });
+      // Add reference images as file URIs (external URLs)
+      for (const ref of selectedReferences) {
+        if (ref.url.startsWith('data:')) {
+          const dataMatch = ref.url.match(/^data:([^;]+);base64,(.+)$/);
+          if (dataMatch) {
+            geminiParts.push({ inlineData: { mimeType: dataMatch[1], data: dataMatch[2] } });
+          }
+        } else {
+          geminiParts.push({ fileData: { fileUri: ref.url, mimeType: 'image/jpeg' } });
+        }
       }
-      return jsonResp({ error: 'AI photo generation failed. Please try again.', gemini_status: geminiStatus }, 502);
-    }
 
-    const geminiData = await geminiResp.json();
-    const generatedImage = geminiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      geminiResp = await fetch(nativeEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: geminiParts }],
+          generationConfig: {
+            responseModalities: ['IMAGE', 'TEXT'],
+            maxOutputTokens: 8192,
+          },
+        }),
+      });
+
+      const geminiStatus = geminiResp.status;
+      console.log(`[PRO-PHOTO] Gemini response: status=${geminiStatus}`);
+
+      if (!geminiResp.ok) {
+        const errBody = await geminiResp.text().catch(() => '');
+        console.error(`[PRO-PHOTO] Gemini failed: ${geminiStatus} — ${errBody.substring(0, 500)}`);
+
+        try {
+          await supabase.from('venue_style_generation_logs').insert({
+            venue_id,
+            model_name: `google/${nativeModel}`,
+            prompt_text: prompt.substring(0, 2000),
+            style_summary_used: ctx.styleSummary || null,
+            reference_asset_ids: selectedReferences.map(r => r.assetId),
+            style_sources_used: ctx.styleSourcesUsed,
+            dish_lock_applied: true,
+            status: 'failed',
+            error_json: { status: geminiStatus, body: errBody.substring(0, 1000) },
+            duration_ms: Date.now() - startTime,
+          });
+        } catch { /* fire and forget */ }
+
+        if (job_id) {
+          await supabase.from('editor_jobs').update({
+            status: 'error', error_message: 'AI photo generation failed. Please try again.',
+          }).eq('id', job_id);
+        }
+        return jsonResp({ error: 'AI photo generation failed. Please try again.', gemini_status: geminiStatus }, 502);
+      }
+
+      const geminiData = await geminiResp.json();
+      // Native Gemini API returns images in candidates[].content.parts[] as inlineData
+      const parts = geminiData?.candidates?.[0]?.content?.parts || [];
+      for (const part of parts) {
+        if (part.inlineData?.mimeType?.startsWith('image/')) {
+          generatedImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+    } else {
+      // Lovable Gateway — supports image generation via chat completions
+      geminiResp = await fetch(chatCompletionsUrl(aiConfig), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${aiConfig.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: resolveModelForTask('pro_photo', aiConfig),
+          messages: [{ role: 'user', content: messageContent }],
+          modalities: ['image', 'text'],
+        }),
+      });
+
+      const geminiStatus = geminiResp.status;
+      console.log(`[PRO-PHOTO] Gemini response: status=${geminiStatus}`);
+
+      if (!geminiResp.ok) {
+        const errBody = await geminiResp.text().catch(() => '');
+        console.error(`[PRO-PHOTO] Gemini failed: ${geminiStatus} — ${errBody.substring(0, 500)}`);
+
+        try {
+          await supabase.from('venue_style_generation_logs').insert({
+            venue_id,
+            model_name: 'google/gemini-2.5-flash-image',
+            prompt_text: prompt.substring(0, 2000),
+            style_summary_used: ctx.styleSummary || null,
+            reference_asset_ids: selectedReferences.map(r => r.assetId),
+            style_sources_used: ctx.styleSourcesUsed,
+            dish_lock_applied: true,
+            status: 'failed',
+            error_json: { status: geminiStatus, body: errBody.substring(0, 1000) },
+            duration_ms: Date.now() - startTime,
+          });
+        } catch { /* fire and forget */ }
+
+        if (job_id) {
+          await supabase.from('editor_jobs').update({
+            status: 'error', error_message: 'AI photo generation failed. Please try again.',
+          }).eq('id', job_id);
+        }
+        return jsonResp({ error: 'AI photo generation failed. Please try again.', gemini_status: geminiStatus }, 502);
+      }
+
+      const geminiData = await geminiResp.json();
+      generatedImage = geminiData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    }
 
     if (!generatedImage || !generatedImage.startsWith('data:image')) {
       console.error('[PRO-PHOTO] Gemini returned no image data');
