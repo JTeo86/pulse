@@ -279,33 +279,38 @@ function buildGenerationPlan(
     case 'tabletop':
       return {
         mode: 'tabletop',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
+        background_adherence: 'exact',
         composition_fidelity: 'locked',
         preservation_level: 0.98,
-        composition_flexibility: 0.01,
-        background_flexibility: 0.01,
-        plating_refinement: 0.02,
-        lighting_drama: 0.03,
-        styling_intensity: 0.02,
-        prop_invention: false,
-        realism_guardrails: 'strict',
-        reference_strength: 'medium',
-      };
-    case 'angle':
-      return {
-        mode: 'angle',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
-        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
-        preservation_level: 0.95,
-        composition_flexibility: 0.04,
-        background_flexibility: hasAuthenticityBias ? 0.05 : 0.07,
-        plating_refinement: 0.04,
-        lighting_drama: 0.1,
-        styling_intensity: hasAuthenticityBias ? 0.05 : 0.07,
+        composition_flexibility: 0,
+        background_flexibility: 0,
+        plating_refinement: 0.01,
+        lighting_drama: 0.01,
+        styling_intensity: 0.01,
         prop_invention: false,
         realism_guardrails: 'strict',
         reference_strength: 'strong',
       };
+    case 'angle':
+      {
+      const angleBg: BackgroundAdherence = (backgroundAdherence === 'exact' || backgroundAdherence === 'close')
+        ? backgroundAdherence
+        : 'close';
+      return {
+        mode: 'angle',
+        background_adherence: angleBg,
+        composition_fidelity: 'locked',
+        preservation_level: 0.95,
+        composition_flexibility: 0.02,
+        background_flexibility: hasAuthenticityBias ? 0.02 : 0.03,
+        plating_refinement: 0.03,
+        lighting_drama: 0.06,
+        styling_intensity: hasAuthenticityBias ? 0.03 : 0.04,
+        prop_invention: false,
+        realism_guardrails: 'strict',
+        reference_strength: 'strong',
+      };
+      }
     case 'venue_match':
       return {
         mode: 'venue_match',
@@ -470,15 +475,11 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 
   if (plan.mode === 'tabletop') {
     shotDirective = `SHOT TYPE — TABLETOP (STRICT):
-- MUST be a top-down overhead flat-lay food photo.
-- Camera angle must be near-top-down (85–90° overhead).
-- Frame the dish centrally or slightly offset with clean negative space.
-- The perspective should feel like someone standing directly over the table looking straight down.
-- Keep a close crop around the dish with minimal dead space.
-- Keep the composition clean, minimal, and uncluttered.
-- Background is ONLY a single continuous textured surface plane — NO room, NO furniture, NO depth, NO scene.
-- No angle perspective, no side view, no horizon line, no wall backdrop, no room scene.
-- This is a TEXTURE MODE, not a scene mode.`;
+- REQUIRED CAMERA: true overhead flat-lay food photo, near 90-degree top-down view.
+- REQUIRED COMPOSITION: close crop, editorial food flat-lay framing.
+- The dish should fill most of the frame with minimal dead space.
+- Keep framing simple and social-media suitable.
+- No side-angle perspective. No oblique tabletop perspective.`;
 
     lightingDirective = `LIGHTING — FLAT, NATURAL, MINIMAL CORRECTION:
 - Correct white balance if obviously wrong. Fix minor exposure issues gently.
@@ -496,21 +497,18 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Absolutely no "professional photography" look — this must feel casual and real.`;
 
     environmentDirective = `ENVIRONMENT — FLAT TEXTURED SURFACE ONLY (STRICT):
-- The ONLY background allowed is a single continuous flat textured surface: stone, plaster, matte concrete, worn wood, subtle ceramic, or a simple venue-toned matte material.
-- The surface must remain one plane from foreground to background with no seam, horizon, edge, wall split, or backdrop transition.
-- ABSOLUTELY NO: chairs, tables with legs, room walls, dining room interiors, window light sources, other tables, place settings, tablescapes, restaurant interiors, or any depth beyond the surface itself.
-- ABSOLUTELY NO: glasses, cutlery, napkins, flowers, candles, menus, decorative props, or any object not already present in the source photograph.
-- No additional props unless they are already present in the source image.
-- ABSOLUTELY NO: marble (unless venue references explicitly show marble), luxury surfaces, fine-dining staging, or editorial setups.
-- Preserve minor real-world imperfections (slight texture variation, small scratches, natural wear).
-- The surface should feel like a real table or counter — not a studio set.
-- Think "phone photo on a restaurant table" not "food photography studio."`;
+- REQUIRED BACKGROUND: single continuous textured surface only.
+- ABSOLUTE NEGATIVES: no wall, no backdrop split, no wall/background split, no horizon line, no room scene, no dining table setup, no furniture.
+- No studio sweep split, no seams, no corners, no room depth, no interior architecture.
+- No extra props unless already present in the source image.
+- No invented staging elements or decorative objects.
+- Keep only one continuous plane behind the dish from edge to edge.`;
 
     modeGoal = `GOAL: The output must look like the exact same photograph, minimally improved — as if the person had slightly better phone skills and the light was 10% better. A real person scrolling social media must NOT be able to detect any AI involvement. This is EVERYDAY social content, not a photoshoot. If the result looks "professional" or "styled," it has failed.`;
 
   } else if (plan.mode === 'angle') {
     shotDirective = `SHOT TYPE — ANGLE SHOT (STRICT):
-- Present the dish as a close 3/4 food photo or close side shot (approximately 30-60° from horizontal).
+- REQUIRED CAMERA: close 3/4 food photograph (or close side shot in the same family).
 - The dish must be the clear hero in the foreground with natural depth behind it.
 - Keep a close crop so the dish fills most of the frame.
 - Use subtle shallow depth-of-field — dish sharp, background gently soft.
@@ -533,11 +531,11 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Avoid stock-photo-level polish, HDR effects, or visible retouching.`;
 
     environmentDirective = `ENVIRONMENT — CONTINUOUS TEXTURED BACKGROUND (STRICT):
-- Use a single continuous textured background plane, no separation between surface and background.
-- No visible horizon line, seam, corner, edge, wall/background split, or wall+table split.
+- REQUIRED BACKGROUND: single continuous textured background plane.
+- No visible wall/background split, no horizon line, no studio sweep split, no wall+table split.
 - Keep depth subtle through lighting/focus only — not through environmental scene layers.
-- ABSOLUTELY NO: furniture clusters, luxury dining-room templates, staged place settings, visible restaurant interiors, other tables, chairs, or room architecture.
-- No dining table setup or furniture-heavy staging.
+- ABSOLUTELY NO: room scene, dining-room environment, furniture-heavy staging, staged place settings, or visible restaurant interior architecture.
+- No dining table setup or furniture.
 - ABSOLUTELY NO: props not already present in the source (no glasses, cutlery, napkins, flowers, candles, menus).
 - ABSOLUTELY NO: marble (unless venue references explicitly show marble), generic luxury surfaces, or fine-dining staging.
 - Keep the background secondary — the dish is the entire story.
@@ -722,6 +720,107 @@ ${ctx.brandSummary ? `Brand notes: ${ctx.brandSummary.substring(0, 400)}` : ''}
 ${modeGoal}
 
 Output as JPEG. Do NOT output PNG with transparency.`.trim();
+}
+
+async function validateTabletopCompliance(
+  aiConfig: Awaited<ReturnType<typeof resolveAiConfig>>,
+  sourceMime: string,
+  sourceBase64: string,
+  generatedImageDataUrl: string,
+): Promise<{ valid: boolean; warning?: string }> {
+  const validationPrompt = `You are validating a generated TABLETOP food image.
+Return JSON only with this exact schema:
+{"valid": boolean, "confidence": "high"|"medium"|"low", "reason": "string"}
+
+Validation criteria (ALL must pass):
+- true overhead flat-lay food photo, near 90-degree top-down view
+- close crop, editorial food flat-lay framing
+- single continuous textured surface only
+- no wall
+- no backdrop split
+- no horizon line
+- no room scene
+- no dining table setup
+- no furniture
+
+If criteria are not met, set valid=false and explain briefly.`;
+
+  const generatedBase64 = generatedImageDataUrl.split(',')[1] || '';
+  if (!generatedBase64) return { valid: true };
+
+  try {
+    if (aiConfig.source === 'platform_api_keys') {
+      const nativeModel = resolveModelForTask('pro_photo', aiConfig);
+      const nativeEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${nativeModel}:generateContent?key=${aiConfig.apiKey}`;
+      const validationResp = await fetch(nativeEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { text: validationPrompt },
+              { inlineData: { mimeType: sourceMime, data: sourceBase64 } },
+              { inlineData: { mimeType: 'image/jpeg', data: generatedBase64 } },
+            ],
+          }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            maxOutputTokens: 400,
+          },
+        }),
+      });
+      if (!validationResp.ok) return { valid: true };
+      const validationData = await validationResp.json();
+      const text = validationData?.candidates?.[0]?.content?.parts?.find((p: any) => typeof p?.text === 'string')?.text || '';
+      const parsed = JSON.parse(text || '{}');
+      if (parsed.valid === false && (parsed.confidence === 'high' || parsed.confidence === 'medium')) {
+        return { valid: false, warning: parsed.reason || 'Tabletop output could not meet strict overhead constraints.' };
+      }
+      if (parsed.valid === false) {
+        return { valid: true, warning: parsed.reason || 'Best effort tabletop: strict overhead conversion may be limited by source angle.' };
+      }
+      return { valid: true };
+    }
+
+    const validationResp = await fetch(chatCompletionsUrl(aiConfig), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: resolveModelForTask('pro_photo', aiConfig),
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: validationPrompt },
+            { type: 'image_url', image_url: { url: `data:${sourceMime};base64,${sourceBase64}` } },
+            { type: 'image_url', image_url: { url: generatedImageDataUrl } },
+          ],
+        }],
+      }),
+    });
+    if (!validationResp.ok) return { valid: true };
+    const validationData = await validationResp.json();
+    const rawContent = validationData?.choices?.[0]?.message?.content || '{}';
+    const textContent = typeof rawContent === 'string'
+      ? rawContent
+      : Array.isArray(rawContent)
+        ? rawContent.map((item: any) => item?.text || '').join('\n')
+        : '{}';
+    const parsed = JSON.parse(textContent || '{}');
+    if (parsed.valid === false && (parsed.confidence === 'high' || parsed.confidence === 'medium')) {
+      return { valid: false, warning: parsed.reason || 'Tabletop output could not meet strict overhead constraints.' };
+    }
+    if (parsed.valid === false) {
+      return { valid: true, warning: parsed.reason || 'Best effort tabletop: strict overhead conversion may be limited by source angle.' };
+    }
+    return { valid: true };
+  } catch (e) {
+    console.warn('[PRO-PHOTO] Tabletop validation skipped:', e);
+    return { valid: true };
+  }
 }
 
 // ── Main handler ─────────────────────────────────────────────────────
@@ -981,6 +1080,26 @@ Deno.serve(async (req) => {
       return jsonResp({ error: 'AI returned no image. Please try again.' }, 502);
     }
 
+    let generationWarning: string | null = null;
+    if (plan.mode === 'tabletop') {
+      const tabletopValidation = await validateTabletopCompliance(aiConfig, sourceMime, sourceBase64, generatedImage);
+      if (!tabletopValidation.valid) {
+        const tabletopError = tabletopValidation.warning || 'Tabletop conversion failed strict overhead validation. Please upload a flatter source photo.';
+        if (job_id) {
+          await supabase.from('editor_jobs').update({
+            status: 'error',
+            error_message: tabletopError,
+          }).eq('id', job_id);
+        }
+        return jsonResp({
+          error: tabletopError,
+          code: 'TABLETOP_STRICT_VALIDATION_FAILED',
+          shot_type: plan.mode,
+        }, 422);
+      }
+      generationWarning = tabletopValidation.warning || null;
+    }
+
     // ═══ STEP 5 — Store result ═══
     const imageBase64 = generatedImage.split(',')[1];
     const imgBin = atob(imageBase64);
@@ -1026,6 +1145,7 @@ Deno.serve(async (req) => {
         model: 'google/gemini-2.5-flash-image',
         generation_time_ms: generationTimeMs,
         style_sources: ctx.styleSourcesUsed,
+        generation_warning: generationWarning,
       },
       created_by: user.id,
       compliance_status: 'approved',
@@ -1079,6 +1199,7 @@ Deno.serve(async (req) => {
             model: 'google/gemini-2.5-flash-image',
             generation_time_ms: generationTimeMs,
             style_sources: ctx.styleSourcesUsed,
+            generation_warning: generationWarning,
           },
           metadata: {
             generation_mode: plan.mode,
@@ -1139,6 +1260,7 @@ Deno.serve(async (req) => {
       output_asset_id: outputAssetId,
       generation_mode: plan.mode,
       generation_plan: plan,
+      generation_warning: generationWarning,
     });
   } catch (err: unknown) {
     console.error('[PRO-PHOTO] ERROR:', err);

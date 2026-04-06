@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -168,13 +168,55 @@ export default function TheEditorPage() {
     storage_path: string | null;
     output_asset_id: string | null;
     shot_type: string;
+    generation_warning?: string | null;
   } | null>(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
+  const [venueReferenceCount, setVenueReferenceCount] = useState(0);
+  const [loadingVenueRefs, setLoadingVenueRefs] = useState(false);
 
   const [usage] = useState({ pro_photo_used: 3, reel_used: 1 });
   const [limits] = useState({ monthly_pro_photo_credits: 50, monthly_reel_credits: 20 });
+
+  useEffect(() => {
+    const loadVenueReferenceCount = async () => {
+      if (!currentVenue?.id || !user) {
+        setVenueReferenceCount(0);
+        return;
+      }
+
+      setLoadingVenueRefs(true);
+      try {
+        const [modernRefs, legacyRefs] = await Promise.all([
+          supabase
+            .from('venue_style_reference_assets')
+            .select('id', { count: 'exact', head: true })
+            .eq('venue_id', currentVenue.id)
+            .eq('approved', true)
+            .eq('status', 'active'),
+          supabase
+            .from('style_reference_assets')
+            .select('id', { count: 'exact', head: true })
+            .eq('venue_id', currentVenue.id)
+            .eq('status', 'analyzed')
+            .in('channel', ['atmosphere', 'brand', 'plating']),
+        ]);
+
+        const modernCount = modernRefs.count || 0;
+        const legacyCount = legacyRefs.count || 0;
+        setVenueReferenceCount(modernCount > 0 ? modernCount : legacyCount);
+      } catch {
+        setVenueReferenceCount(0);
+      } finally {
+        setLoadingVenueRefs(false);
+      }
+    };
+
+    loadVenueReferenceCount();
+  }, [currentVenue?.id, user]);
+
+  const venueMatchBlocked = shotType === 'venue_match' && venueReferenceCount === 0;
 
   // When shot type changes, update bg/comp defaults
   const handleShotTypeChange = (type: ShotType) => {
@@ -212,6 +254,14 @@ export default function TheEditorPage() {
 
   const handleGenerate = async () => {
     if (!currentVenue || !user || !uploadedFile) return;
+    if (venueMatchBlocked) {
+      toast({
+        variant: 'destructive',
+        title: 'Venue references required',
+        description: 'Venue Match needs approved venue references before generation can run.',
+      });
+      return;
+    }
     if (usage.pro_photo_used >= limits.monthly_pro_photo_credits) {
       toast({ variant: 'destructive', title: 'Credit limit reached', description: 'Contact admin to increase credits.' });
       return;
@@ -277,6 +327,7 @@ export default function TheEditorPage() {
         storage_path: data.storage_path || null,
         output_asset_id: data.output_asset_id || null,
         shot_type: data.generation_mode || shotType,
+        generation_warning: data.generation_warning || null,
       });
 
       if (planId && data.output_asset_id) {
@@ -590,6 +641,19 @@ export default function TheEditorPage() {
               ))}
             </div>
 
+            <div className="space-y-2">
+              {shotType === 'tabletop' && (
+                <div className="rounded-md border border-amber-200 bg-amber-50/50 px-2.5 py-2 text-[11px] text-amber-700">
+                  Best with flatter source angles
+                </div>
+              )}
+              {shotType === 'venue_match' && venueReferenceCount === 0 && !loadingVenueRefs && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
+                  Venue Match requires approved venue references. Add references before generating.
+                </div>
+              )}
+            </div>
+
             {/* Advanced controls toggle */}
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
@@ -663,7 +727,7 @@ export default function TheEditorPage() {
             {/* Generate CTA */}
             <Button
               onClick={handleGenerate}
-              disabled={!uploadedFile || generating}
+              disabled={!uploadedFile || generating || venueMatchBlocked || loadingVenueRefs}
               className="w-full gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"
               size="lg"
             >
@@ -747,6 +811,13 @@ export default function TheEditorPage() {
                     </div>
                   </div>
                 </div>
+
+                {jobResult.generation_warning && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-300/40 bg-amber-100/40">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800">{jobResult.generation_warning}</p>
+                  </div>
+                )}
 
                 {/* Feedback controls */}
                 <div className="rounded-xl border border-border bg-card p-4 space-y-3">
