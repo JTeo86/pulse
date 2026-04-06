@@ -81,9 +81,9 @@ const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[]
 // ── Shot Type defaults map ───────────────────────────────────────────
 
 const SHOT_TYPE_DEFAULTS: Record<ShotType, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
-  tabletop: { bg: 'close', comp: 'locked' },
-  angle: { bg: 'close', comp: 'mostly_preserved' },
-  venue_match: { bg: 'exact', comp: 'mostly_preserved' },
+  tabletop: { bg: 'exact', comp: 'locked' },
+  angle: { bg: 'close', comp: 'locked' },
+  venue_match: { bg: 'exact', comp: 'locked' },
   campaign: { bg: 'creative', comp: 'flexible' },
 };
 
@@ -152,8 +152,8 @@ export default function TheEditorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [shotType, setShotType] = useState<ShotType>('tabletop');
-  const [backgroundAdherence, setBackgroundAdherence] = useState<BackgroundAdherence>('exact');
-  const [compositionFidelity, setCompositionFidelity] = useState<CompositionFidelity>('mostly_preserved');
+  const [backgroundAdherence, setBackgroundAdherence] = useState<BackgroundAdherence>(SHOT_TYPE_DEFAULTS.tabletop.bg);
+  const [compositionFidelity, setCompositionFidelity] = useState<CompositionFidelity>(SHOT_TYPE_DEFAULTS.tabletop.comp);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [generating, setGenerating] = useState(false);
@@ -302,7 +302,15 @@ export default function TheEditorPage() {
         description: planId ? 'Saved to Content Library. Asset linked to campaign.' : 'Review the result below.',
       });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Generation failed', description: err.message || 'AI photo generation failed. Please try again.' });
+      const errMessage = err?.message || 'AI photo generation failed. Please try again.';
+      const venueMatchMissingRefs = errMessage.toLowerCase().includes('venue match needs approved venue reference images before it can generate');
+      toast({
+        variant: 'destructive',
+        title: 'Generation failed',
+        description: venueMatchMissingRefs
+          ? 'Venue Match needs approved venue reference images before it can generate.'
+          : errMessage,
+      });
     } finally {
       setGenerating(false);
     }

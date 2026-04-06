@@ -279,32 +279,32 @@ function buildGenerationPlan(
     case 'tabletop':
       return {
         mode: 'tabletop',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
+        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
         composition_fidelity: 'locked',
-        preservation_level: 0.96,
-        composition_flexibility: 0.04,
-        background_flexibility: 0.04,
+        preservation_level: 0.98,
+        composition_flexibility: 0.01,
+        background_flexibility: 0.01,
         plating_refinement: 0.02,
-        lighting_drama: 0.04,
-        styling_intensity: 0.03,
+        lighting_drama: 0.03,
+        styling_intensity: 0.02,
         prop_invention: false,
         realism_guardrails: 'strict',
-        reference_strength: 'light',
+        reference_strength: 'medium',
       };
     case 'angle':
       return {
         mode: 'angle',
         background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
-        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'mostly_preserved',
-        preservation_level: 0.9,
-        composition_flexibility: 0.12,
-        background_flexibility: hasAuthenticityBias ? 0.1 : 0.14,
-        plating_refinement: 0.06,
-        lighting_drama: 0.14,
-        styling_intensity: hasAuthenticityBias ? 0.06 : 0.1,
+        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
+        preservation_level: 0.95,
+        composition_flexibility: 0.04,
+        background_flexibility: hasAuthenticityBias ? 0.05 : 0.07,
+        plating_refinement: 0.04,
+        lighting_drama: 0.1,
+        styling_intensity: hasAuthenticityBias ? 0.05 : 0.07,
         prop_invention: false,
         realism_guardrails: 'strict',
-        reference_strength: 'medium',
+        reference_strength: 'strong',
       };
     case 'venue_match':
       return {
@@ -470,14 +470,14 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 
   if (plan.mode === 'tabletop') {
     shotDirective = `SHOT TYPE — TABLETOP (STRICT):
-- MUST be true top-down overhead shot, flat lay.
+- MUST be a top-down overhead flat-lay food photo.
 - Camera angle must be near-top-down (85–90° overhead).
 - Frame the dish centrally or slightly offset with clean negative space.
 - The perspective should feel like someone standing directly over the table looking straight down.
 - Keep a close crop around the dish with minimal dead space.
 - Keep the composition clean, minimal, and uncluttered.
-- Background is ONLY a single-plane flat textured surface — NO room, NO furniture, NO depth, NO scene.
-- no angle perspective, no side view, no background wall, no room scene.
+- Background is ONLY a single continuous textured surface plane — NO room, NO furniture, NO depth, NO scene.
+- No angle perspective, no side view, no horizon line, no wall backdrop, no room scene.
 - This is a TEXTURE MODE, not a scene mode.`;
 
     lightingDirective = `LIGHTING — FLAT, NATURAL, MINIMAL CORRECTION:
@@ -500,6 +500,7 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - The surface must remain one plane from foreground to background with no seam, horizon, edge, wall split, or backdrop transition.
 - ABSOLUTELY NO: chairs, tables with legs, room walls, dining room interiors, window light sources, other tables, place settings, tablescapes, restaurant interiors, or any depth beyond the surface itself.
 - ABSOLUTELY NO: glasses, cutlery, napkins, flowers, candles, menus, decorative props, or any object not already present in the source photograph.
+- No additional props unless they are already present in the source image.
 - ABSOLUTELY NO: marble (unless venue references explicitly show marble), luxury surfaces, fine-dining staging, or editorial setups.
 - Preserve minor real-world imperfections (slight texture variation, small scratches, natural wear).
 - The surface should feel like a real table or counter — not a studio set.
@@ -509,7 +510,7 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 
   } else if (plan.mode === 'angle') {
     shotDirective = `SHOT TYPE — ANGLE SHOT (STRICT):
-- Present the dish from a natural 3/4 angle or side perspective (approximately 30-60° from horizontal).
+- Present the dish as a close 3/4 food photo or close side shot (approximately 30-60° from horizontal).
 - The dish must be the clear hero in the foreground with natural depth behind it.
 - Keep a close crop so the dish fills most of the frame.
 - Use subtle shallow depth-of-field — dish sharp, background gently soft.
@@ -532,10 +533,11 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Avoid stock-photo-level polish, HDR effects, or visible retouching.`;
 
     environmentDirective = `ENVIRONMENT — CONTINUOUS TEXTURED BACKGROUND (STRICT):
-- Use one continuous textured background, no separation between surface and background.
-- No visible horizon line, seam, corner, edge, or wall+table split.
+- Use a single continuous textured background plane, no separation between surface and background.
+- No visible horizon line, seam, corner, edge, wall/background split, or wall+table split.
 - Keep depth subtle through lighting/focus only — not through environmental scene layers.
 - ABSOLUTELY NO: furniture clusters, luxury dining-room templates, staged place settings, visible restaurant interiors, other tables, chairs, or room architecture.
+- No dining table setup or furniture-heavy staging.
 - ABSOLUTELY NO: props not already present in the source (no glasses, cutlery, napkins, flowers, candles, menus).
 - ABSOLUTELY NO: marble (unless venue references explicitly show marble), generic luxury surfaces, or fine-dining staging.
 - Keep the background secondary — the dish is the entire story.
@@ -572,6 +574,9 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - The output environment must be RECOGNIZABLY the same location as the references.
 - Do NOT add ANY element not visible in reference images.
 - Do NOT substitute any reference element with a generic alternative (no marble unless refs show marble).
+- Match the uploaded venue references as literally as possible.
+- Use the venue's actual material, lighting, and backdrop cues.
+- Do not substitute a generic premium restaurant background if venue references exist.
 - References dominate all styling choices (surface, wall/background, mood, light); do not fall back to generic defaults.`;
 
     modeGoal = `GOAL: The output must look like it was photographed in the exact same physical location shown in the reference images, with the uploaded dish placed naturally into that setting. References define everything — surface, lighting, mood, materials, composition style. This is a LITERAL match mode, not an inspiration mode. If the result could have come from a different venue, it has failed.`;
@@ -640,7 +645,7 @@ ${!plan.prop_invention ? '- STRICTLY DO NOT add any props, decorations, flowers,
     }
   } else if (plan.mode === 'venue_match') {
     if (hasRefs) {
-      refInstruction = `CRITICAL: The provided reference images define the EXACT target environment. Reproduce the table surface, wall tones, material textures, lighting direction, color temperature, and ambient feel from these references as faithfully as possible. The output must look like it was photographed in the same physical location shown in the references. Do NOT substitute with generic surfaces or lighting.`;
+      refInstruction = `CRITICAL: Match the uploaded venue references as literally as possible. The provided reference images define the EXACT target environment. Reproduce the table surface, wall tones, material textures, lighting direction, color temperature, ambient feel, venue mood, and framing cues from these references as faithfully as possible. The output must look like it was photographed in the same physical location shown in the references. Do NOT substitute with generic surfaces or lighting.`;
     } else {
       refInstruction = `No venue references available. Venue Match requires references and must not run without them.`;
     }
@@ -656,6 +661,7 @@ ${!plan.prop_invention ? '- STRICTLY DO NOT add any props, decorations, flowers,
     referencePriorityDirective = `REFERENCE PRIORITY — LITERAL MODE (HIGHEST PRIORITY):
 - The uploaded venue references are the ABSOLUTE PRIMARY ANCHORS — not inspiration.
 - Match visible cues from references: surface material, wall tone, lighting quality, color temperature, and ambient atmosphere.
+- Match framing style cues from references where possible while preserving the source dish framing.
 - If a creative choice conflicts with references, REFERENCES WIN ALWAYS.
 - Keep creative drift near zero. The output environment must be recognizably the same location as the references.
 - Do NOT substitute any element with a generic alternative.
@@ -780,14 +786,19 @@ Deno.serve(async (req) => {
     );
 
     if (plan.mode === 'venue_match' && ctx.referenceImages.length === 0) {
-      const venueMatchError = 'Add venue references to use Venue Match';
+      const venueMatchError = 'Venue Match needs approved venue reference images before it can generate.';
       if (job_id) {
         await supabase.from('editor_jobs').update({
           status: 'error',
           error_message: venueMatchError,
         }).eq('id', job_id);
       }
-      return jsonResp({ error: venueMatchError }, 400);
+      return jsonResp({
+        error: venueMatchError,
+        code: 'VENUE_MATCH_REQUIRES_REFERENCES',
+        shot_type: plan.mode,
+        reference_count: 0,
+      }, 400);
     }
 
     const prompt = buildPrompt(ctx, plan);
@@ -800,7 +811,7 @@ Deno.serve(async (req) => {
       const bTableBias = /(table|surface|atmosphere)/i.test(b.channel) ? 1 : 0;
       return bTableBias - aTableBias;
     });
-    const referenceLimit = plan.mode === 'venue_match' ? 8 : (plan.mode === 'campaign' ? 3 : 2);
+    const referenceLimit = plan.mode === 'venue_match' ? 12 : (plan.mode === 'campaign' ? 3 : 2);
     const selectedReferences = sortedReferences.slice(0, referenceLimit);
 
     // Build Gemini message content
