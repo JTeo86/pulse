@@ -280,7 +280,7 @@ function buildGenerationPlan(
       return {
         mode: 'tabletop',
         background_adherence: (backgroundAdherence as BackgroundAdherence) || 'close',
-        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
+        composition_fidelity: 'locked',
         preservation_level: 0.96,
         composition_flexibility: 0.04,
         background_flexibility: 0.04,
@@ -470,11 +470,14 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 
   if (plan.mode === 'tabletop') {
     shotDirective = `SHOT TYPE — TABLETOP (STRICT):
-- MUST be true top-down or near top-down composition (overhead or max 10° tilt off vertical).
+- MUST be true top-down overhead shot, flat lay.
+- Camera angle must be near-top-down (85–90° overhead).
 - Frame the dish centrally or slightly offset with clean negative space.
 - The perspective should feel like someone standing directly over the table looking straight down.
+- Keep a close crop around the dish with minimal dead space.
 - Keep the composition clean, minimal, and uncluttered.
-- Background is ONLY a flat textured surface — NO room, NO furniture, NO depth, NO scene.
+- Background is ONLY a single-plane flat textured surface — NO room, NO furniture, NO depth, NO scene.
+- no angle perspective, no side view, no background wall, no room scene.
 - This is a TEXTURE MODE, not a scene mode.`;
 
     lightingDirective = `LIGHTING — FLAT, NATURAL, MINIMAL CORRECTION:
@@ -493,7 +496,8 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - Absolutely no "professional photography" look — this must feel casual and real.`;
 
     environmentDirective = `ENVIRONMENT — FLAT TEXTURED SURFACE ONLY (STRICT):
-- The ONLY background allowed is a single flat textured surface: stone, plaster, matte concrete, worn wood, subtle ceramic, or a simple venue-toned matte material.
+- The ONLY background allowed is a single continuous flat textured surface: stone, plaster, matte concrete, worn wood, subtle ceramic, or a simple venue-toned matte material.
+- The surface must remain one plane from foreground to background with no seam, horizon, edge, wall split, or backdrop transition.
 - ABSOLUTELY NO: chairs, tables with legs, room walls, dining room interiors, window light sources, other tables, place settings, tablescapes, restaurant interiors, or any depth beyond the surface itself.
 - ABSOLUTELY NO: glasses, cutlery, napkins, flowers, candles, menus, decorative props, or any object not already present in the source photograph.
 - ABSOLUTELY NO: marble (unless venue references explicitly show marble), luxury surfaces, fine-dining staging, or editorial setups.
@@ -507,6 +511,7 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
     shotDirective = `SHOT TYPE — ANGLE SHOT (STRICT):
 - Present the dish from a natural 3/4 angle or side perspective (approximately 30-60° from horizontal).
 - The dish must be the clear hero in the foreground with natural depth behind it.
+- Keep a close crop so the dish fills most of the frame.
 - Use subtle shallow depth-of-field — dish sharp, background gently soft.
 - The angle should feel like someone sitting at a table took this photo naturally on their phone.
 - Do NOT use extreme low angles, overly dramatic perspectives, or editorial compositions.
@@ -526,9 +531,10 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - The image should feel like a good food photo by someone competent, not a professional shoot.
 - Avoid stock-photo-level polish, HDR effects, or visible retouching.`;
 
-    environmentDirective = `ENVIRONMENT — TEXTURED SURFACE WITH SUBTLE DEPTH (STRICT):
-- Use a simple textured surface (table or counter) with a soft, non-distracting background falloff behind it.
-- The background should be a simple wall tone, soft blur, or neutral gradient — NOT a room scene.
+    environmentDirective = `ENVIRONMENT — CONTINUOUS TEXTURED BACKGROUND (STRICT):
+- Use one continuous textured background, no separation between surface and background.
+- No visible horizon line, seam, corner, edge, or wall+table split.
+- Keep depth subtle through lighting/focus only — not through environmental scene layers.
 - ABSOLUTELY NO: furniture clusters, luxury dining-room templates, staged place settings, visible restaurant interiors, other tables, chairs, or room architecture.
 - ABSOLUTELY NO: props not already present in the source (no glasses, cutlery, napkins, flowers, candles, menus).
 - ABSOLUTELY NO: marble (unless venue references explicitly show marble), generic luxury surfaces, or fine-dining staging.
@@ -566,7 +572,7 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - The output environment must be RECOGNIZABLY the same location as the references.
 - Do NOT add ANY element not visible in reference images.
 - Do NOT substitute any reference element with a generic alternative (no marble unless refs show marble).
-- If NO references are provided, preserve the original photo's environment with minimal cleanup only.`;
+- References dominate all styling choices (surface, wall/background, mood, light); do not fall back to generic defaults.`;
 
     modeGoal = `GOAL: The output must look like it was photographed in the exact same physical location shown in the reference images, with the uploaded dish placed naturally into that setting. References define everything — surface, lighting, mood, materials, composition style. This is a LITERAL match mode, not an inspiration mode. If the result could have come from a different venue, it has failed.`;
 
@@ -601,6 +607,11 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
 - The scene should look professionally styled for a marketing campaign.
 - Include subtle premium details: fabric texture, reflective surfaces, fine tableware.`;
 
+    if (hasRefs) {
+      environmentDirective += `
+- Bias props, material finishes, and color accents toward venue references when references are available.`;
+    }
+
     modeGoal = `GOAL: The output should look dramatically elevated — like a premium ad campaign or magazine editorial. Think high-end food magazine cover or luxury hotel marketing. The dish is the hero in a cinematic, aspirational scene. This mode is explicitly for campaign/hero content, not everyday social posting.`;
   }
 
@@ -631,7 +642,7 @@ ${!plan.prop_invention ? '- STRICTLY DO NOT add any props, decorations, flowers,
     if (hasRefs) {
       refInstruction = `CRITICAL: The provided reference images define the EXACT target environment. Reproduce the table surface, wall tones, material textures, lighting direction, color temperature, and ambient feel from these references as faithfully as possible. The output must look like it was photographed in the same physical location shown in the references. Do NOT substitute with generic surfaces or lighting.`;
     } else {
-      refInstruction = `No venue references available. Preserve the original photo's environment with minimal cleanup. Use a simple ${surfaceTone}. Do NOT invent a restaurant scene.`;
+      refInstruction = `No venue references available. Venue Match requires references and must not run without them.`;
     }
   } else {
     // Campaign — full scene allowed
@@ -649,6 +660,9 @@ ${!plan.prop_invention ? '- STRICTLY DO NOT add any props, decorations, flowers,
 - Keep creative drift near zero. The output environment must be recognizably the same location as the references.
 - Do NOT substitute any element with a generic alternative.
 - Do NOT use marble, linen, or luxury defaults unless references explicitly show them.`;
+  } else if (plan.mode === 'venue_match' && !hasRefs) {
+    referencePriorityDirective = `REFERENCE PRIORITY:
+- Venue Match has no references; generation must be blocked with a clear error.`;
   } else if ((plan.mode === 'tabletop' || plan.mode === 'angle') && hasRefs) {
     referencePriorityDirective = `REFERENCE USAGE — SURFACE & PALETTE ONLY:
 - Extract ONLY the surface material type and color palette from references.
@@ -764,6 +778,18 @@ Deno.serve(async (req) => {
       composition_fidelity,
       ctx.feedbackSignals,
     );
+
+    if (plan.mode === 'venue_match' && ctx.referenceImages.length === 0) {
+      const venueMatchError = 'Add venue references to use Venue Match';
+      if (job_id) {
+        await supabase.from('editor_jobs').update({
+          status: 'error',
+          error_message: venueMatchError,
+        }).eq('id', job_id);
+      }
+      return jsonResp({ error: venueMatchError }, 400);
+    }
+
     const prompt = buildPrompt(ctx, plan);
 
     console.log(`[PRO-PHOTO] ShotType=${plan.mode} bg_adherence=${plan.background_adherence} comp_fidelity=${plan.composition_fidelity} prop_invention=${plan.prop_invention}`);
