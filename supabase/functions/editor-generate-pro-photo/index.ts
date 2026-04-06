@@ -314,8 +314,8 @@ function buildGenerationPlan(
     case 'venue_match':
       return {
         mode: 'venue_match',
-        background_adherence: (backgroundAdherence as BackgroundAdherence) || 'exact',
-        composition_fidelity: (compositionFidelity as CompositionFidelity) || 'locked',
+        background_adherence: 'exact',
+        composition_fidelity: 'locked',
         preservation_level: 0.97,
         composition_flexibility: 0.03,
         background_flexibility: 0.01,
@@ -394,6 +394,15 @@ function buildPrompt(ctx: VenueStyleContext, plan: GenerationPlan): string {
   let backgroundDirective: string;
   switch (plan.background_adherence) {
     case 'exact':
+      if (plan.mode === 'tabletop' || plan.mode === 'angle') {
+        backgroundDirective = `BACKGROUND — EXACT CONTINUOUS SURFACE:
+- Keep a single continuous textured surface plane only, edge-to-edge.
+- Keep texture/material realistic and venue-faithful where references exist.
+- No wall plane, no wall/table split, no horizon line, no scene build.
+- No room interiors or furniture.
+- No added props unless they already exist in the source image.`;
+        break;
+      }
       backgroundDirective = `BACKGROUND — EXACT MATCH:
 - Keep the original background and table surface as-is.
 - Only remove obvious distractions (trash, fingers, phone edges, stray crumbs).
@@ -823,6 +832,96 @@ If criteria are not met, set valid=false and explain briefly.`;
   }
 }
 
+async function assessTabletopSourceFeasibility(
+  aiConfig: Awaited<ReturnType<typeof resolveAiConfig>>,
+  sourceMime: string,
+  sourceBase64: string,
+): Promise<{ shouldBlock: boolean; warning?: string }> {
+  const feasibilityPrompt = `You are assessing whether a source food photo can be edited into a strict TABLETOP result.
+Return JSON only with this exact schema:
+{"feasible": boolean, "confidence": "high"|"medium"|"low", "reason": "string"}
+
+Strict TABLETOP target:
+- near 90-degree overhead / top-down flat-lay
+- close crop
+- single continuous textured surface
+- no wall split, no horizon, no room scene, no furniture
+
+If the source angle is strongly oblique/side and cannot be converted without obvious artifacts or fake geometry, set feasible=false.`;
+
+  try {
+    if (aiConfig.source === 'platform_api_keys') {
+      const nativeModel = resolveModelForTask('pro_photo', aiConfig);
+      const nativeEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${nativeModel}:generateContent?key=${aiConfig.apiKey}`;
+      const feasibilityResp = await fetch(nativeEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { text: feasibilityPrompt },
+              { inlineData: { mimeType: sourceMime, data: sourceBase64 } },
+            ],
+          }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            maxOutputTokens: 300,
+          },
+        }),
+      });
+      if (!feasibilityResp.ok) return { shouldBlock: false };
+      const feasibilityData = await feasibilityResp.json();
+      const text = feasibilityData?.candidates?.[0]?.content?.parts?.find((p: any) => typeof p?.text === 'string')?.text || '';
+      const parsed = JSON.parse(text || '{}');
+      if (parsed.feasible === false && (parsed.confidence === 'high' || parsed.confidence === 'medium')) {
+        return { shouldBlock: true, warning: parsed.reason || 'Source angle is too oblique for strict tabletop mode.' };
+      }
+      if (parsed.feasible === false) {
+        return { shouldBlock: false, warning: parsed.reason || 'Best effort tabletop: source angle may limit true overhead conversion.' };
+      }
+      return { shouldBlock: false };
+    }
+
+    const feasibilityResp = await fetch(chatCompletionsUrl(aiConfig), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${aiConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: resolveModelForTask('pro_photo', aiConfig),
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: feasibilityPrompt },
+            { type: 'image_url', image_url: { url: `data:${sourceMime};base64,${sourceBase64}` } },
+          ],
+        }],
+      }),
+    });
+    if (!feasibilityResp.ok) return { shouldBlock: false };
+    const feasibilityData = await feasibilityResp.json();
+    const rawContent = feasibilityData?.choices?.[0]?.message?.content || '{}';
+    const textContent = typeof rawContent === 'string'
+      ? rawContent
+      : Array.isArray(rawContent)
+        ? rawContent.map((item: any) => item?.text || '').join('\n')
+        : '{}';
+    const parsed = JSON.parse(textContent || '{}');
+    if (parsed.feasible === false && (parsed.confidence === 'high' || parsed.confidence === 'medium')) {
+      return { shouldBlock: true, warning: parsed.reason || 'Source angle is too oblique for strict tabletop mode.' };
+    }
+    if (parsed.feasible === false) {
+      return { shouldBlock: false, warning: parsed.reason || 'Best effort tabletop: source angle may limit true overhead conversion.' };
+    }
+    return { shouldBlock: false };
+  } catch (e) {
+    console.warn('[PRO-PHOTO] Tabletop feasibility check skipped:', e);
+    return { shouldBlock: false };
+  }
+}
+
 // ── Main handler ─────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -897,7 +996,33 @@ Deno.serve(async (req) => {
         code: 'VENUE_MATCH_REQUIRES_REFERENCES',
         shot_type: plan.mode,
         reference_count: 0,
+        details: {
+          requirement: 'At least one approved venue reference image is required for venue_match mode.',
+          action: 'Upload and approve venue references, then regenerate.',
+        },
       }, 400);
+    }
+
+    let generationWarning: string | null = null;
+
+    if (plan.mode === 'tabletop') {
+      const feasibility = await assessTabletopSourceFeasibility(aiConfig, sourceMime, sourceBase64);
+      if (feasibility.shouldBlock) {
+        const feasibilityError = feasibility.warning || 'Source photo angle is too oblique for strict tabletop mode. Please upload a flatter source image.';
+        if (job_id) {
+          await supabase.from('editor_jobs').update({
+            status: 'error',
+            error_message: feasibilityError,
+          }).eq('id', job_id);
+        }
+        return jsonResp({
+          error: feasibilityError,
+          code: 'TABLETOP_SOURCE_NOT_FEASIBLE',
+          shot_type: plan.mode,
+          reference_count: ctx.referenceImages.length,
+        }, 422);
+      }
+      if (feasibility.warning) generationWarning = feasibility.warning;
     }
 
     const prompt = buildPrompt(ctx, plan);
@@ -1080,7 +1205,6 @@ Deno.serve(async (req) => {
       return jsonResp({ error: 'AI returned no image. Please try again.' }, 502);
     }
 
-    let generationWarning: string | null = null;
     if (plan.mode === 'tabletop') {
       const tabletopValidation = await validateTabletopCompliance(aiConfig, sourceMime, sourceBase64, generatedImage);
       if (!tabletopValidation.valid) {
@@ -1097,7 +1221,11 @@ Deno.serve(async (req) => {
           shot_type: plan.mode,
         }, 422);
       }
-      generationWarning = tabletopValidation.warning || null;
+      if (tabletopValidation.warning) {
+        generationWarning = generationWarning
+          ? `${generationWarning} ${tabletopValidation.warning}`
+          : tabletopValidation.warning;
+      }
     }
 
     // ═══ STEP 5 — Store result ═══

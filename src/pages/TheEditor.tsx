@@ -82,7 +82,7 @@ const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[]
 
 const SHOT_TYPE_DEFAULTS: Record<ShotType, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
   tabletop: { bg: 'exact', comp: 'locked' },
-  angle: { bg: 'close', comp: 'locked' },
+  angle: { bg: 'exact', comp: 'locked' },
   venue_match: { bg: 'exact', comp: 'locked' },
   campaign: { bg: 'creative', comp: 'flexible' },
 };
@@ -170,6 +170,7 @@ export default function TheEditorPage() {
     shot_type: string;
     generation_warning?: string | null;
   } | null>(null);
+  const latestResultRef = useRef<{ url: string; shotType: string } | null>(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
@@ -217,6 +218,14 @@ export default function TheEditorPage() {
   }, [currentVenue?.id, user]);
 
   const venueMatchBlocked = shotType === 'venue_match' && venueReferenceCount === 0;
+
+  useEffect(() => {
+    if (!jobResult?.final_image_url) return;
+    latestResultRef.current = {
+      url: jobResult.final_image_url,
+      shotType: jobResult.shot_type || shotType,
+    };
+  }, [jobResult, shotType]);
 
   // When shot type changes, update bg/comp defaults
   const handleShotTypeChange = (type: ShotType) => {
@@ -385,9 +394,11 @@ export default function TheEditorPage() {
   };
 
   const handleDownloadLatest = async () => {
-    const latestUrl = jobResult?.final_image_url;
+    const latest = latestResultRef.current;
+    const latestUrl = latest?.url || jobResult?.final_image_url;
     if (!latestUrl) return;
-    await handleDownload(latestUrl, `pro-photo-${shotType}-${Date.now()}.jpg`);
+    const effectiveShotType = latest?.shotType || shotType;
+    await handleDownload(latestUrl, `pro-photo-${effectiveShotType}-${Date.now()}.jpg`);
   };
 
   const handleFidelityConfirm = async () => {
