@@ -218,6 +218,9 @@ export default function TheEditorPage() {
     }
 
     setGenerating(true);
+    setJobResult(null);
+    setSavedToLibrary(false);
+    setFidelityConfirmed(false);
     setFeedbackSent(null);
     try {
       const base64 = await fileToBase64(uploadedFile);
@@ -252,7 +255,10 @@ export default function TheEditorPage() {
           skip_library_save: skipLibrarySave,
         },
       });
-      if (fnError) throw fnError;
+      if (fnError) {
+        const fnMessage = (data as any)?.error || fnError.message;
+        throw new Error(fnMessage);
+      }
 
       // Validate the response contains a usable result
       if (!data?.final_image_url) {
@@ -317,6 +323,12 @@ export default function TheEditorPage() {
     } catch {
       window.open(url, '_blank');
     }
+  };
+
+  const handleDownloadLatest = async () => {
+    const latestUrl = jobResult?.final_image_url;
+    if (!latestUrl) return;
+    await handleDownload(latestUrl, `pro-photo-${shotType}-${Date.now()}.jpg`);
   };
 
   const handleFidelityConfirm = async () => {
@@ -677,7 +689,7 @@ export default function TheEditorPage() {
               </motion.div>
             ) : (
               <motion.div
-                key="result"
+                key={`result-${jobId || jobResult.final_image_url}`}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
@@ -815,7 +827,7 @@ export default function TheEditorPage() {
                     )}
                   </Button>
                   <Button
-                    onClick={() => handleDownload(jobResult.final_image_url, `pro-photo-${shotType}-${Date.now()}.jpg`)}
+                    onClick={handleDownloadLatest}
                     variant="outline"
                     className="w-full gap-1.5 text-xs"
                     size="sm"
