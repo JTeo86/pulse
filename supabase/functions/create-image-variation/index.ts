@@ -172,7 +172,7 @@ ANTI-DUPLICATION:
 - If the result would look nearly identical to the parent, push harder on the variation strategy.
 - Do NOT produce a near-duplicate with only pixel-level differences.
 
-Parent image mode was: ${parentMode || 'authentic_social'}.
+Parent image mode was: ${parentMode || 'social_ready'}.
 ${notes ? `Additional notes: ${notes}` : ''}
 
 The result must be a professional restaurant marketing photograph.
@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
     // Determine parent mode from metadata
     const parentSettings = (parent.generation_settings || {}) as Record<string, unknown>;
     const parentMetadata = (parent.metadata || {}) as Record<string, unknown>;
-    const parentMode = (parentMetadata.generation_mode as string) || (parentSettings.generation_mode as string) || (parentSettings.realism_mode as string) || 'tabletop';
+    const parentMode = (parentMetadata.generation_mode as string) || (parentSettings.generation_mode as string) || (parentSettings.realism_mode as string) || 'social_ready';
 
     // Determine lineage
     const rootAssetId = parent.root_asset_id || parent.id;

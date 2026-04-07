@@ -4,9 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, Camera, Wand2, Download,
   CheckSquare, Square, AlertTriangle, Loader2, Star,
-  RotateCcw, Image as ImageIcon, Info, ChevronDown, ChevronRight,
+  RotateCcw, Image as ImageIcon, Info,
   ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2,
-  Target, Layout, ArrowLeft
+  ArrowLeft
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
@@ -20,51 +20,29 @@ import { cn } from '@/lib/utils';
 
 // ── Types ────────────────────────────────────────────────────────────
 
-type ShotType = 'tabletop' | 'angle' | 'venue_match' | 'campaign';
-type BackgroundAdherence = 'exact' | 'close' | 'inspired' | 'creative';
-type CompositionFidelity = 'locked' | 'mostly_preserved' | 'flexible' | 'creative';
+type ShotType = 'social_ready' | 'backdrop' | 'campaign';
 
 const SHOT_TYPES: { key: ShotType; label: string; desc: string; detail: string; warn?: boolean; default?: boolean }[] = [
   {
-    key: 'tabletop',
-    label: 'Tabletop',
-    desc: 'Clean top-down food photography with a simple textured background.',
-    detail: 'Everyday social content. Minimal, believable, texture-led — no scenes, no props, no staging.',
+    key: 'social_ready',
+    label: 'Social Ready',
+    desc: 'Improve your real photo for posting. Keeps the original scene.',
+    detail: 'Natural clean-up and polish while preserving composition, angle, and environment.',
     default: true,
   },
   {
-    key: 'angle',
-    label: 'Angle Shot',
-    desc: 'Natural 3/4 angle shot with subtle depth and a clean textured setting.',
-    detail: 'More depth than Tabletop but still simple and postable. No room scenes or luxury staging.',
-  },
-  {
-    key: 'venue_match',
-    label: 'Venue Match',
-    desc: 'Closest match to your real venue style, surfaces, and lighting references.',
-    detail: 'Strongest venue-faithful mode. Uploaded references drive the entire environment.',
+    key: 'backdrop',
+    label: 'Backdrop',
+    desc: 'Place your dish on a clean or branded surface.',
+    detail: 'Dish-first compositing workflow with a single continuous surface and realistic shadow.',
   },
   {
     key: 'campaign',
     label: 'Campaign',
-    desc: 'Premium hero image for launches, ads, and promotional campaigns.',
-    detail: 'Stylized, dramatic, polished. Best for ads, posters, and marketing campaigns.',
+    desc: 'Create a stylised promotional image.',
+    detail: 'Creative, high-impact campaign styling while preserving dish identity.',
     warn: true,
   },
-];
-
-const BACKGROUND_OPTIONS: { key: BackgroundAdherence; label: string; desc: string }[] = [
-  { key: 'exact', label: 'Exact / strict match', desc: 'Closest possible match to source or references' },
-  { key: 'close', label: 'Close / authentic', desc: 'Same material language with light cleanup only' },
-  { key: 'inspired', label: 'Inspired / elevated', desc: 'Moderate creative lift while staying venue-aware' },
-  { key: 'creative', label: 'Creative / editorial', desc: 'Maximum styling freedom (best for Campaign)' },
-];
-
-const COMPOSITION_OPTIONS: { key: CompositionFidelity; label: string; desc: string }[] = [
-  { key: 'locked', label: 'Locked', desc: 'Exact same angle and framing' },
-  { key: 'mostly_preserved', label: 'Mostly preserved', desc: 'Same shot, slightly improved' },
-  { key: 'flexible', label: 'Flexible', desc: 'May reframe for better composition' },
-  { key: 'creative', label: 'Creative', desc: 'Full creative freedom' },
 ];
 
 const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[] = [
@@ -77,15 +55,6 @@ const FEEDBACK_OPTIONS: { type: string; label: string; icon: typeof ThumbsUp }[]
   { type: 'not_our_style', label: 'Not Our Style', icon: Eye },
   { type: 'dish_changed', label: 'Dish Changed', icon: Utensils },
 ];
-
-// ── Shot Type defaults map ───────────────────────────────────────────
-
-const SHOT_TYPE_DEFAULTS: Record<ShotType, { bg: BackgroundAdherence; comp: CompositionFidelity }> = {
-  tabletop: { bg: 'exact', comp: 'locked' },
-  angle: { bg: 'exact', comp: 'locked' },
-  venue_match: { bg: 'exact', comp: 'locked' },
-  campaign: { bg: 'creative', comp: 'flexible' },
-};
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -151,10 +120,7 @@ export default function TheEditorPage() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [shotType, setShotType] = useState<ShotType>('tabletop');
-  const [backgroundAdherence, setBackgroundAdherence] = useState<BackgroundAdherence>(SHOT_TYPE_DEFAULTS.tabletop.bg);
-  const [compositionFidelity, setCompositionFidelity] = useState<CompositionFidelity>(SHOT_TYPE_DEFAULTS.tabletop.comp);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [shotType, setShotType] = useState<ShotType>('social_ready');
 
   const [generating, setGenerating] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -167,73 +133,23 @@ export default function TheEditorPage() {
     edited_asset_id: string | null;
     storage_path: string | null;
     output_asset_id: string | null;
-    shot_type: string;
+    generation_mode: string;
     generation_warning?: string | null;
   } | null>(null);
-  const latestResultRef = useRef<{ url: string; shotType: string } | null>(null);
+  const latestResultRef = useRef<{ url: string; generationMode: string } | null>(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
-  const [venueReferenceCount, setVenueReferenceCount] = useState(0);
-  const [loadingVenueRefs, setLoadingVenueRefs] = useState(false);
-
   const [usage] = useState({ pro_photo_used: 3, reel_used: 1 });
   const [limits] = useState({ monthly_pro_photo_credits: 50, monthly_reel_credits: 20 });
-
-  useEffect(() => {
-    const loadVenueReferenceCount = async () => {
-      if (!currentVenue?.id || !user) {
-        setVenueReferenceCount(0);
-        return;
-      }
-
-      setLoadingVenueRefs(true);
-      try {
-        const [modernRefs, legacyRefs] = await Promise.all([
-          supabase
-            .from('venue_style_reference_assets')
-            .select('id', { count: 'exact', head: true })
-            .eq('venue_id', currentVenue.id)
-            .eq('approved', true)
-            .eq('status', 'active'),
-          supabase
-            .from('style_reference_assets')
-            .select('id', { count: 'exact', head: true })
-            .eq('venue_id', currentVenue.id)
-            .eq('status', 'analyzed')
-            .in('channel', ['atmosphere', 'brand', 'plating']),
-        ]);
-
-        const modernCount = modernRefs.count || 0;
-        const legacyCount = legacyRefs.count || 0;
-        setVenueReferenceCount(modernCount > 0 ? modernCount : legacyCount);
-      } catch {
-        setVenueReferenceCount(0);
-      } finally {
-        setLoadingVenueRefs(false);
-      }
-    };
-
-    loadVenueReferenceCount();
-  }, [currentVenue?.id, user]);
-
-  const venueMatchBlocked = shotType === 'venue_match' && venueReferenceCount === 0;
 
   useEffect(() => {
     if (!jobResult?.final_image_url) return;
     latestResultRef.current = {
       url: jobResult.final_image_url,
-      shotType: jobResult.shot_type || shotType,
+      generationMode: jobResult.generation_mode || shotType,
     };
   }, [jobResult, shotType]);
-
-  // When shot type changes, update bg/comp defaults
-  const handleShotTypeChange = (type: ShotType) => {
-    setShotType(type);
-    const defaults = SHOT_TYPE_DEFAULTS[type];
-    setBackgroundAdherence(defaults.bg);
-    setCompositionFidelity(defaults.comp);
-  };
 
   const handleFileDrop = useCallback(async (file: File) => {
     if (!currentVenue || !user) return;
@@ -263,14 +179,6 @@ export default function TheEditorPage() {
 
   const handleGenerate = async () => {
     if (!currentVenue || !user || !uploadedFile) return;
-    if (venueMatchBlocked) {
-      toast({
-        variant: 'destructive',
-        title: 'Venue references required',
-        description: 'Venue Match needs approved venue references before generation can run.',
-      });
-      return;
-    }
     if (usage.pro_photo_used >= limits.monthly_pro_photo_credits) {
       toast({ variant: 'destructive', title: 'Credit limit reached', description: 'Contact admin to increase credits.' });
       return;
@@ -309,8 +217,6 @@ export default function TheEditorPage() {
           sourceFileBase64: base64,
           sourceFileName: uploadedFile.name,
           realism_mode: shotType,
-          background_adherence: backgroundAdherence,
-          composition_fidelity: compositionFidelity,
           skip_library_save: skipLibrarySave,
         },
       });
@@ -335,7 +241,7 @@ export default function TheEditorPage() {
         edited_asset_id: data.edited_asset_id || null,
         storage_path: data.storage_path || null,
         output_asset_id: data.output_asset_id || null,
-        shot_type: data.generation_mode || shotType,
+        generation_mode: data.generation_mode || shotType,
         generation_warning: data.generation_warning || null,
       });
 
@@ -363,13 +269,10 @@ export default function TheEditorPage() {
       });
     } catch (err: any) {
       const errMessage = err?.message || 'AI photo generation failed. Please try again.';
-      const venueMatchMissingRefs = errMessage.toLowerCase().includes('venue match needs approved venue reference images before it can generate');
       toast({
         variant: 'destructive',
         title: 'Generation failed',
-        description: venueMatchMissingRefs
-          ? 'Venue Match needs approved venue reference images before it can generate.'
-          : errMessage,
+        description: errMessage,
       });
     } finally {
       setGenerating(false);
@@ -397,7 +300,7 @@ export default function TheEditorPage() {
     const latest = latestResultRef.current;
     const latestUrl = latest?.url || jobResult?.final_image_url;
     if (!latestUrl) return;
-    const effectiveShotType = latest?.shotType || shotType;
+    const effectiveShotType = latest?.generationMode || shotType;
     await handleDownload(latestUrl, `pro-photo-${effectiveShotType}-${Date.now()}.jpg`);
   };
 
@@ -474,8 +377,6 @@ export default function TheEditorPage() {
         prompt_snapshot: { generation_mode: shotType },
         generation_settings: {
           generation_mode: shotType,
-          background_adherence: backgroundAdherence,
-          composition_fidelity: compositionFidelity,
           reference_count: jobResult.reference_count,
           style_sources: jobResult.style_sources,
         },
@@ -627,13 +528,13 @@ export default function TheEditorPage() {
           <div className={cn('rounded-xl border bg-card p-5 space-y-4 transition-opacity', !uploadedFile ? 'opacity-40 pointer-events-none' : '')}>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">2</span>
-              <span className="font-medium text-sm">Shot Type</span>
+              <span className="font-medium text-sm">Mode</span>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               {SHOT_TYPES.map((m) => (
                 <button
                   key={m.key}
-                  onClick={() => handleShotTypeChange(m.key)}
+                  onClick={() => setShotType(m.key)}
                   className={cn(
                     'p-2.5 rounded-lg border text-left transition-all relative',
                     shotType === m.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/30'
@@ -652,93 +553,10 @@ export default function TheEditorPage() {
               ))}
             </div>
 
-            <div className="space-y-2">
-              {shotType === 'tabletop' && (
-                <div className="rounded-md border border-amber-200 bg-amber-50/50 px-2.5 py-2 text-[11px] text-amber-700">
-                  Best with flatter source angles
-                </div>
-              )}
-              {shotType === 'venue_match' && venueReferenceCount === 0 && !loadingVenueRefs && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
-                  Venue Match requires approved venue references. Add references before generating.
-                </div>
-              )}
-            </div>
-
-            {/* Advanced controls toggle */}
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-            >
-              {showAdvanced ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-              <span className="font-medium">Advanced controls</span>
-            </button>
-
-            <AnimatePresence>
-              {showAdvanced && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden space-y-4"
-                >
-                  {/* Background Adherence */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                      <Target className="w-3.5 h-3.5 text-accent" />
-                      Background Adherence
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      {BACKGROUND_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.key}
-                          onClick={() => setBackgroundAdherence(opt.key)}
-                          className={cn(
-                            'p-2 rounded-md border text-left transition-all',
-                            backgroundAdherence === opt.key
-                              ? 'border-accent bg-accent/10'
-                              : 'border-border/50 hover:border-border'
-                          )}
-                        >
-                          <p className="text-[10px] font-semibold">{opt.label}</p>
-                          <p className="text-[9px] text-muted-foreground leading-tight">{opt.desc}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Composition Fidelity */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                      <Layout className="w-3.5 h-3.5 text-accent" />
-                      Composition Fidelity
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      {COMPOSITION_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.key}
-                          onClick={() => setCompositionFidelity(opt.key)}
-                          className={cn(
-                            'p-2 rounded-md border text-left transition-all',
-                            compositionFidelity === opt.key
-                              ? 'border-accent bg-accent/10'
-                              : 'border-border/50 hover:border-border'
-                          )}
-                        >
-                          <p className="text-[10px] font-semibold">{opt.label}</p>
-                          <p className="text-[9px] text-muted-foreground leading-tight">{opt.desc}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* Generate CTA */}
             <Button
               onClick={handleGenerate}
-              disabled={!uploadedFile || generating || venueMatchBlocked || loadingVenueRefs}
+              disabled={!uploadedFile || generating}
               className="w-full gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"
               size="lg"
             >
@@ -802,18 +620,8 @@ export default function TheEditorPage() {
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="flex items-center gap-2">
                       <Camera className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Shot:</span>
-                      <span className="font-medium capitalize">{(jobResult.shot_type || shotType).replace(/_/g, ' ')}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Target className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Background:</span>
-                      <span className="font-medium capitalize">{backgroundAdherence.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Layout className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Composition:</span>
-                      <span className="font-medium capitalize">{compositionFidelity.replace(/_/g, ' ')}</span>
+                      <span className="text-muted-foreground">Mode:</span>
+                      <span className="font-medium capitalize">{(jobResult.generation_mode || shotType).replace(/_/g, ' ')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Info className="w-3.5 h-3.5 text-muted-foreground" />
@@ -897,7 +705,7 @@ export default function TheEditorPage() {
                 {!fidelityConfirmed && shotType === 'campaign' && isAdmin && (
                   <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                     <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                    <p className="text-sm text-destructive">Campaign mode outputs are heavily stylized. Consider using Tabletop for everyday social content.</p>
+                    <p className="text-sm text-destructive">Campaign mode outputs are heavily stylized. Consider using Social Ready for everyday posting.</p>
                   </div>
                 )}
 
