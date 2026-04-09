@@ -809,9 +809,23 @@ function ReviewFeed({ venueId }: { venueId: string }) {
   );
 }
 
-function ReviewIntelligenceBrief({ venueId }: { venueId: string }) {
+function themeSummaryLine(theme: ThemeInsight, type: 'praise' | 'complaint') {
+  if (type === 'praise') {
+    if (theme.praiseCount >= 5) return 'consistently praised';
+    if (theme.praiseCount >= 3) return 'often praised';
+    return 'getting positive mentions';
+  }
+  if (theme.complaintCount >= 5) return 'frequent concern';
+  if (theme.complaintCount >= 3) return 'mixed at busy periods';
+  return 'occasional concern';
+}
+
+function ReputationWorkflowTab({ venueId }: { venueId: string }) {
+  const queryClient = useQueryClient();
+  const [writerTask, setWriterTask] = useState<ResponseTask | null>(null);
+
   const { data: reviews } = useQuery({
-    queryKey: ['reviews-intel-brief', venueId],
+    queryKey: ['reviews-workflow', venueId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('reviews')
@@ -826,7 +840,7 @@ function ReviewIntelligenceBrief({ venueId }: { venueId: string }) {
   });
 
   const { data: pendingTasks } = useQuery({
-    queryKey: ['response-tasks-intel-brief', venueId],
+    queryKey: ['response-tasks-workflow', venueId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('review_response_tasks' as any)
@@ -839,6 +853,42 @@ function ReviewIntelligenceBrief({ venueId }: { venueId: string }) {
       return data as unknown as ResponseTask[];
     },
   });
+
+  const refreshWorkflow = () => {
+    queryClient.invalidateQueries({ queryKey: ['response-tasks-workflow', venueId] });
+    queryClient.invalidateQueries({ queryKey: ['response-tasks', venueId] });
+  };
+
+  const updateStatus = async (taskId: string, status: string) => {
+    const { error } = await supabase
+      .from('review_response_tasks' as any)
+      .update({ status } as any)
+      .eq('id', taskId);
+    if (error) {
+      toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: `Task marked ${status}` });
+    refreshWorkflow();
+  };
+
+  const approveDraft = async (task: ResponseTask) => {
+    if (!task.draft_response?.trim()) return;
+    const { error } = await supabase
+      .from('review_response_tasks' as any)
+      .update({
+        final_response: task.draft_response,
+        status: 'responded',
+        approved_at: new Date().toISOString(),
+      } as any)
+      .eq('id', task.id);
+    if (error) {
+      toast({ title: 'Approval failed', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Reply approved' });
+    refreshWorkflow();
+  };
 
   const recentReviews = (reviews || []).slice(0, 60);
   const themeMap: Record<ThemeInsight['theme'], ThemeInsight> = {
@@ -856,11 +906,25 @@ function ReviewIntelligenceBrief({ venueId }: { venueId: string }) {
   });
 
   const themeInsights = Object.values(themeMap).sort((a, b) => (b.praiseCount + b.complaintCount) - (a.praiseCount + a.complaintCount));
-  const topPraiseThemes = [...themeInsights].sort((a, b) => b.praiseCount - a.praiseCount).filter(t => t.praiseCount > 0).slice(0, 2);
+  const topPraiseThemes = [...themeInsights].sort((a, b) => b.praiseCount - a.praiseCount).filter(t => t.praiseCount > 0).slice(0, 3);
   const recurringIssues = [...themeInsights].sort((a, b) => b.complaintCount - a.complaintCount).filter(t => t.complaintCount >= 2).slice(0, 3);
 
-  const urgentNegatives = (pendingTasks || []).filter(task => (task.rating || 0) <= 2 || task.ai_priority === 'P1');
-  const readyToApprove = (pendingTasks || []).filter(task => !!task.draft_response?.trim());
+  const tasks = pendingTasks || [];
+  const urgentNegatives = tasks.filter(task => (task.rating || 0) <= 2 || task.ai_priority === 'P1' || (task.review_text?.toLowerCase().includes('wait') ?? false));
+  const readyToApprove = tasks.filter(task => !!task.draft_response?.trim());
+  const urgentQueue = [...tasks]
+    .filter(task => (task.rating || 0) <= 2 || task.ai_priority === 'P1' || !!task.draft_response?.trim())
+    .sort((a, b) => {
+      const score = (task: ResponseTask) => ((task.rating || 5) <= 2 ? 4 : 0) + (task.ai_priority === 'P1' ? 3 : task.ai_priority === 'P2' ? 2 : 0) + (task.draft_response ? 2 : 0);
+      return score(b) - score(a) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    })
+    .slice(0, 8);
+  const draftQueue = [...readyToApprove]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 10);
+
+  const topPositiveTheme = topPraiseThemes[0];
+  const topRecurringIssue = recurringIssues[0];
 
   const positiveTrendSuggestions = topPraiseThemes.map(theme => {
     if (theme.theme === 'food') return 'Guests keep praising the tasting menu and dishes — turn this into a post.';
@@ -871,95 +935,159 @@ function ReviewIntelligenceBrief({ venueId }: { venueId: string }) {
   });
 
   return (
-    <Card className="border-accent/20 bg-accent/5">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-accent" />
-          Pulse review summary
-        </CardTitle>
-        <CardDescription>
-          Pulse reviewed your latest feedback and highlighted what needs action now, what keeps repeating, and what can become content.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-4">
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Urgent negatives</p>
+    <div className="space-y-4">
+      <Card className="border-accent/20 bg-accent/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-accent" />
+            Pulse reviewed your latest feedback
+          </CardTitle>
+          <CardDescription>Your weekly reputation workflow is ready.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 md:grid-cols-3">
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted-foreground">Urgent replies</p>
               <p className="text-2xl font-semibold text-destructive">{urgentNegatives.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Pending drafted replies</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted-foreground">Draft replies ready</p>
               <p className="text-2xl font-semibold">{readyToApprove.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Recurring issues</p>
+            </div>
+            <div className="rounded-lg border bg-background p-3">
+              <p className="text-xs text-muted-foreground">Recurring issues detected</p>
               <p className="text-2xl font-semibold">{recurringIssues.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Positive trends</p>
-              <p className="text-2xl font-semibold text-accent">{topPraiseThemes.length}</p>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">What guests are praising most</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {topPraiseThemes.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Not enough signals yet. Fetch more reviews this week.</p>
-              ) : topPraiseThemes.map(theme => (
-                <div key={theme.theme} className="flex items-center justify-between text-sm">
-                  <span>{themeLabel(theme.theme)}</span>
-                  <Badge variant="outline" className="text-accent border-accent/30">{theme.praiseCount} praise mentions</Badge>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Reputation snapshot</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p><span className="text-muted-foreground">Guests are loving:</span> {topPositiveTheme ? `${themeLabel(topPositiveTheme.theme)} (${topPositiveTheme.praiseCount} positive mentions)` : 'No clear positive theme yet this week.'}</p>
+          <p><span className="text-muted-foreground">Recurring issue:</span> {topRecurringIssue ? `${themeLabel(topRecurringIssue.theme)} (${topRecurringIssue.complaintCount} complaint mentions)` : 'No repeating complaint pattern detected.'}</p>
+          <p><span className="text-muted-foreground">Reviews needing urgent attention:</span> {urgentNegatives.length}</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Urgent reply queue</CardTitle>
+          <CardDescription>Low ratings, recent negatives, and draft-ready items first.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {urgentQueue.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No urgent replies right now.</p>
+          ) : urgentQueue.map(task => (
+            <div key={task.id} className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <SourceBadge source={task.source} />
+                    {renderStars(task.rating)}
+                    {task.ai_priority && <Badge variant="outline" className={`text-[10px] ${priorityColor[task.ai_priority] || ''}`}>{task.ai_priority}</Badge>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{task.author_name || 'Anonymous'} • {formatReviewDate(task.review_date, task.created_at)}</p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+                {task.draft_response && <Badge className="text-[10px]">Draft ready</Badge>}
+              </div>
+              <p className="text-sm text-muted-foreground line-clamp-2">{task.review_text || 'No review text available.'}</p>
+              <div className="rounded-md bg-muted/40 p-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">AI drafted reply</p>
+                <p className="text-xs line-clamp-2">{task.draft_response || 'No draft yet — click Edit to generate one.'}</p>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {task.draft_response ? (
+                  <Button size="sm" onClick={() => approveDraft(task)}><ThumbsUp className="w-3 h-3 mr-1" />Approve</Button>
+                ) : (
+                  <Button size="sm" onClick={() => setWriterTask(task)}><Edit2 className="w-3 h-3 mr-1" />Write draft</Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => setWriterTask(task)}><Edit2 className="w-3 h-3 mr-1" />Edit</Button>
+                <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'ignored')}><ThumbsDown className="w-3 h-3 mr-1" />Skip</Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Complaints repeating now</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {recurringIssues.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No repeating complaint themes detected this week.</p>
-              ) : recurringIssues.map(theme => (
-                <div key={theme.theme} className="flex items-center justify-between text-sm">
-                  <span>{themeLabel(theme.theme)}</span>
-                  <Badge variant="outline" className="text-destructive border-destructive/30">{theme.complaintCount} complaints</Badge>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Draft reply queue</CardTitle>
+          <CardDescription>Newest drafted replies awaiting approval.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {draftQueue.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No drafts waiting for approval.</p>
+          ) : draftQueue.map(task => (
+            <div key={task.id} className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Awaiting approval</Badge>
+                  <SourceBadge source={task.source} />
+                  {renderStars(task.rating)}
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+                <span className="text-xs text-muted-foreground">{formatReviewDate(task.review_date, task.created_at)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2">{task.review_text}</p>
+              <p className="text-sm line-clamp-2">{task.draft_response}</p>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => approveDraft(task)}><ThumbsUp className="w-3 h-3 mr-1" />Approve</Button>
+                <Button size="sm" variant="outline" onClick={() => setWriterTask(task)}><Edit2 className="w-3 h-3 mr-1" />Edit</Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-accent" />
-              Positive trends worth turning into content
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {positiveTrendSuggestions.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No strong positive trend yet. Recheck after next review fetch.</p>
-            ) : positiveTrendSuggestions.map((suggestion, i) => (
-              <p key={i} className="text-sm text-muted-foreground">• {suggestion}</p>
-            ))}
-          </CardContent>
-        </Card>
-      </CardContent>
-    </Card>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">What guests are saying</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-2 md:grid-cols-2">
+          {(['food', 'service', 'ambiance', 'value', 'other'] as ThemeInsight['theme'][]).map(themeKey => {
+            const theme = themeMap[themeKey];
+            const hasData = theme.praiseCount + theme.complaintCount > 0;
+            const summary = theme.complaintCount > theme.praiseCount
+              ? themeSummaryLine(theme, 'complaint')
+              : themeSummaryLine(theme, 'praise');
+            return (
+              <div key={theme.theme} className="rounded-lg border p-3">
+                <p className="text-sm font-medium">{themeLabel(theme.theme)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{hasData ? summary : 'No strong signal yet this week.'}</p>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-accent" />
+            Content opportunities from reviews
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {positiveTrendSuggestions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No strong positive trend yet. Recheck after next review fetch.</p>
+          ) : positiveTrendSuggestions.map((suggestion, i) => (
+            <p key={i} className="text-sm text-muted-foreground">• {suggestion}</p>
+          ))}
+        </CardContent>
+      </Card>
+
+      {writerTask && (
+        <ResponseWriterModal
+          task={writerTask}
+          open={!!writerTask}
+          onClose={() => setWriterTask(null)}
+          onDraftSaved={refreshWorkflow}
+        />
+      )}
+    </div>
   );
 }
 
@@ -1645,7 +1773,7 @@ function WeeklyReport({ venueId, venueTimezone }: { venueId: string; venueTimezo
 export default function ReviewsAnalytics() {
   const { currentVenue } = useVenue();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'report';
+  const activeTab = searchParams.get('tab') || 'workflow';
 
   const handleTabChange = (value: string) => {
     setSearchParams({ tab: value }, { replace: true });
@@ -1659,24 +1787,22 @@ export default function ReviewsAnalytics() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <PageHeader
         title="Reviews & Feedback"
-        description="Pulse monitors Google and OpenTable feedback, drafts replies, and surfaces recurring themes for your team."
+        description="Pulse prepares your weekly reputation workload so your team can respond fast and spot what to amplify."
       />
-
-      <div className="mb-6">
-        <ReviewIntelligenceBrief venueId={currentVenue.id} />
-      </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
+          <TabsTrigger value="workflow" className="gap-2"><Sparkles className="w-4 h-4" />Reputation Workflow</TabsTrigger>
+          <TabsTrigger value="respond" className="gap-2"><ShieldAlert className="w-4 h-4" />All Reply Tasks</TabsTrigger>
           <TabsTrigger value="report" className="gap-2"><FileText className="w-4 h-4" />Weekly Report</TabsTrigger>
-          <TabsTrigger value="feed" className="gap-2"><MessageSquare className="w-4 h-4" />Review Feed</TabsTrigger>
-          <TabsTrigger value="respond" className="gap-2"><ShieldAlert className="w-4 h-4" />Needs Response</TabsTrigger>
+          <TabsTrigger value="feed" className="gap-2"><MessageSquare className="w-4 h-4" />Raw Review Feed</TabsTrigger>
           <TabsTrigger value="setup" className="gap-2"><Settings2 className="w-4 h-4" />Sources Setup</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="workflow"><ReputationWorkflowTab venueId={currentVenue.id} /></TabsContent>
+        <TabsContent value="respond"><NeedsResponseTab venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
         <TabsContent value="report"><WeeklyReport venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
         <TabsContent value="feed"><ReviewFeed venueId={currentVenue.id} /></TabsContent>
-        <TabsContent value="respond"><NeedsResponseTab venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
         <TabsContent value="setup"><ReviewSourcesSetup venueId={currentVenue.id} /></TabsContent>
       </Tabs>
     </motion.div>
