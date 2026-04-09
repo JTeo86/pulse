@@ -550,7 +550,7 @@ async function selectAssetSources(
     .select("id, title, public_url, storage_path, metadata, status")
     .eq("venue_id", venueId)
     .eq("asset_type", "image")
-    .in("status", ["approved", "draft", "scheduled", "published"])
+    .in("status", ["approved", "ready", "draft", "queued", "scheduled", "published"])
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -590,7 +590,7 @@ async function selectAssetSources(
     .from("content_items")
     .select("id, title, media_master_url, storage_path, badges, status")
     .eq("venue_id", venueId)
-    .eq("status", "approved")
+    .in("status", ["approved", "ready"])
     .not("media_master_url", "is", null)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -604,7 +604,7 @@ async function selectAssetSources(
     .select("id, title, public_url, storage_path, source_type, status")
     .eq("venue_id", venueId)
     .eq("asset_type", "image")
-    .in("status", ["approved", "draft", "scheduled", "published"])
+    .in("status", ["approved", "ready", "draft", "queued", "scheduled", "published"])
     .order("created_at", { ascending: false })
     .limit(120);
 
@@ -616,7 +616,7 @@ async function selectAssetSources(
     .from("guest_submissions")
     .select("id, image_url, guest_name, created_at, status")
     .eq("venue_id", venueId)
-    .eq("status", "approved")
+    .in("status", ["approved", "ready"])
     .order("created_at", { ascending: false })
     .limit(120);
   const guestSubmissionAssets = (guestSubmissionsRes.data || []).filter((item: any) => !!item.image_url);

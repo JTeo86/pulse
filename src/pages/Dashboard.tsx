@@ -43,7 +43,7 @@ export default function DashboardPage() {
           .eq('venue_id', currentVenue.id);
 
         const drafts = contentItems?.filter(c => c.status === 'draft' || c.status === 'needs_changes').length || 0;
-        const approved = contentItems?.filter(c => c.status === 'approved' || c.status === 'sent_to_buffer').length || 0;
+        const approved = contentItems?.filter(c => ['approved', 'ready', 'queued', 'sent_to_buffer', 'scheduled', 'exported'].includes(c.status || '')).length || 0;
         const published = contentItems?.filter(c => c.status === 'published').length || 0;
 
         setStats({
@@ -65,7 +65,7 @@ export default function DashboardPage() {
   const statCards = [
     { label: 'Uploads', value: stats.uploads, icon: Upload, href: '/upload' },
     { label: 'Drafts to Review', value: stats.drafts, icon: FileEdit, href: '/drafts' },
-    { label: 'Approved', value: stats.approved, icon: CheckCircle, href: '/publishing' },
+    { label: 'In Publishing Queue', value: stats.approved, icon: CheckCircle, href: '/publishing' },
     { label: 'Published', value: stats.published, icon: Clock, href: '/publishing' },
   ];
 
@@ -152,7 +152,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center mb-2 text-accent font-medium">4</div>
-              <p className="text-muted-foreground">Approved content is sent to Buffer</p>
+              <p className="text-muted-foreground">Approved content moves into Pulse's internal publishing queue</p>
             </div>
           </div>
         </div>
