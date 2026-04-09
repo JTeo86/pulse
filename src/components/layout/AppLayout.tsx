@@ -51,13 +51,16 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
-const primaryNavigation: NavItem[] = [
+const workflowNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
   { name: 'Content', href: '/content/library', icon: FolderOpen },
-  { name: 'Setup', href: '/setup', icon: Settings },
   { name: 'Autopilot', href: '/autopilot', icon: Zap },
   { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
+];
+
+const setupNavigation: NavItem[] = [
+  { name: 'Setup', href: '/setup', icon: Settings },
 ];
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
@@ -204,7 +207,7 @@ function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5">
-              {primaryNavigation.map((item) => (
+              {workflowNavigation.map((item) => (
                 <SidebarMenuItem key={item.name}>
                   <div className="relative">
                     <NavItemComponent item={item} />
@@ -214,6 +217,14 @@ function AppSidebar() {
                       </span>
                     )}
                   </div>
+                </SidebarMenuItem>
+              ))}
+              <SidebarMenuItem className="my-2">
+                <div className="border-t border-sidebar-border" />
+              </SidebarMenuItem>
+              {setupNavigation.map((item) => (
+                <SidebarMenuItem key={item.name}>
+                  <NavItemComponent item={item} />
                 </SidebarMenuItem>
               ))}
               {isPlatformAdmin && (
@@ -280,8 +291,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  const allNavItems: NavItem[] = [
-    ...primaryNavigation,
+  const primaryMobileNavItems: NavItem[] = workflowNavigation;
+  const secondaryMobileNavItems: NavItem[] = [
+    ...setupNavigation,
     ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
 
@@ -338,7 +350,26 @@ export function AppLayout({ children }: AppLayoutProps) {
             >
               <nav className="p-4 space-y-1 flex flex-col h-[calc(100%-3.5rem)]">
                 <div className="flex-1 space-y-1 overflow-y-auto">
-                  {allNavItems.map((item) => (
+                  {primaryMobileNavItems.map((item) => (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        location.pathname === item.href
+                          ? 'bg-accent/10 text-accent'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                      }`}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <item.icon className="w-4 h-4" />
+                      {item.name}
+                      {item.badge && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent ml-auto">{item.badge}</span>
+                      )}
+                    </Link>
+                  ))}
+                  <div className="my-3 border-t border-border" />
+                  {secondaryMobileNavItems.map((item) => (
                     <Link
                       key={item.name}
                       to={item.href}
