@@ -25,6 +25,7 @@ interface TodayOverview {
   needsAttention: number;
   contentGaps: number;
   scheduledNext14Days: number;
+  draftsAwaitingApproval: number;
   lastAutopilotRun: {
     status: string;
     createdAt: string;
@@ -35,6 +36,7 @@ interface TodayOverview {
     recommendedActions?: string[];
     sourceSummary?: Record<string, number>;
   } | null;
+  nextPulseRunLabel: string | null;
 }
 
 export default function Home() {
@@ -62,7 +64,7 @@ export default function Home() {
       const twoWeeksOut = new Date(now);
       twoWeeksOut.setDate(now.getDate() + 14);
 
-      const [pendingReplies, pendingGuestPhotos, draftContent, scheduledContent, latestAutopilotRun] = await Promise.all([
+      const [pendingReplies, pendingGuestPhotos, draftContent, scheduledContent, latestAutopilotRun, autopilotSettings] = await Promise.all([
         supabase
           .from('review_response_tasks')
           .select('*', { count: 'exact', head: true })
@@ -92,16 +94,27 @@ export default function Home() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from('autopilot_settings')
+          .select('frequency, run_time, is_enabled')
+          .eq('venue_id', currentVenue.id)
+          .maybeSingle(),
       ]);
 
       const repliesPending = pendingReplies.count ?? 0;
       const guestApprovalsPending = pendingGuestPhotos.count ?? 0;
       const contentDrafts = draftContent.count ?? 0;
       const scheduledNext14Days = scheduledContent.count ?? 0;
+      const draftsAwaitingApproval = repliesPending + contentDrafts;
       const approvalsNeeded = repliesPending + guestApprovalsPending;
       const preparedByPulse = repliesPending + contentDrafts;
       const needsAttention = approvalsNeeded + (todaysActions.filter((a) => a.due_state === 'overdue').length || 0);
       const contentGaps = Math.max(0, 14 - scheduledNext14Days);
+
+      const settings = autopilotSettings.data;
+      const nextPulseRunLabel = settings?.is_enabled
+        ? describeNextRun(settings.frequency || '3x_week', settings.run_time || '09:00:00')
+        : null;
 
       const run = latestAutopilotRun.data;
 
@@ -112,6 +125,8 @@ export default function Home() {
         needsAttention,
         contentGaps,
         scheduledNext14Days,
+        draftsAwaitingApproval,
+        nextPulseRunLabel,
         lastAutopilotRun: run
           ? {
               status: run.run_status || run.status,
@@ -224,25 +239,32 @@ export default function Home() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-accent" />
-                Last Autopilot run
+                Pulse activity
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               {!overview?.lastAutopilotRun ? (
-                <p className="text-sm text-muted-foreground">No runs yet. Enable Autopilot in Setup to start preparing content each week.</p>
+                <p className="text-sm text-muted-foreground">Pulse is active in the background. Finish Automation Settings in Setup to start preparing content each week.</p>
               ) : (
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
                   <div className="space-y-1.5">
+                    <p className="text-sm font-medium">Pulse is active</p>
                     <p className="text-sm font-medium">
-                      Status: <span className="capitalize">{overview.lastAutopilotRun.status.replace('_', ' ')}</span>
+                      Last run: <span className="capitalize">{overview.lastAutopilotRun.status.replace('_', ' ')}</span>
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Ran {formatRunTime(overview.lastAutopilotRun.createdAt)} • Saved {overview.lastAutopilotRun.itemsSaved} item{overview.lastAutopilotRun.itemsSaved === 1 ? '' : 's'}
+                      Ran {formatRunTime(overview.lastAutopilotRun.createdAt)} • Generated {overview.lastAutopilotRun.itemsSaved} content item{overview.lastAutopilotRun.itemsSaved === 1 ? '' : 's'}
                       {overview.lastAutopilotRun.itemsFailed > 0 ? ` • ${overview.lastAutopilotRun.itemsFailed} failed` : ''}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Drafted {overview.draftsAwaitingApproval} replies/content items that may need approval.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {overview.nextPulseRunLabel ? `Next run: ${overview.nextPulseRunLabel}` : 'Next run: set cadence in Setup'}
                     </p>
                     {overview.lastAutopilotRun.assetBlocked && (
                       <p className="text-xs text-amber-700 dark:text-amber-400">
-                        No reusable weekend-ready assets found. Add more photos to improve Autopilot output.
+                        Blocker: weak asset coverage. Add weekend-ready photos to strengthen Pulse output.
                       </p>
                     )}
                     {overview.lastAutopilotRun.copyOnlyFallbackUsed && !overview.lastAutopilotRun.assetBlocked && (
@@ -259,7 +281,7 @@ export default function Home() {
                     ) : null}
                   </div>
                   <Button variant="outline" asChild>
-                    <Link to="/autopilot">Open Autopilot</Link>
+                    <Link to="/setup?tab=automation">Automation settings</Link>
                   </Button>
                 </div>
               )}
@@ -350,4 +372,12 @@ function ActionLink({ to, label }: { to: string; label: string }) {
       <Badge variant="outline" className="text-[10px]">Open</Badge>
     </Link>
   );
+}
+
+function describeNextRun(frequency: string, runTime: string): string {
+  const time = runTime.slice(0, 5);
+  if (frequency === 'daily') return `Daily at ${time}`;
+  if (frequency === '3x_week') return `3× weekly at ${time}`;
+  if (frequency === 'weekly') return `Weekly at ${time}`;
+  return `Scheduled at ${time}`;
 }

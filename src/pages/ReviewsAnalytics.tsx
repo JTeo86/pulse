@@ -875,10 +875,10 @@ function ReviewIntelligenceBrief({ venueId }: { venueId: string }) {
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
-          Reviews Intelligence Snapshot
+          Pulse review summary
         </CardTitle>
         <CardDescription>
-          Your weekly operator brief: what needs action now, what keeps repeating, and what is marketable.
+          Pulse reviewed your latest feedback and highlighted what needs action now, what keeps repeating, and what can become content.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -1659,7 +1659,7 @@ export default function ReviewsAnalytics() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <PageHeader
         title="Reviews & Feedback"
-        description="Aggregate reviews from Google and OpenTable via SerpAPI. Generate AI-powered weekly reports and manage responses."
+        description="Pulse monitors Google and OpenTable feedback, drafts replies, and surfaces recurring themes for your team."
       />
 
       <div className="mb-6">

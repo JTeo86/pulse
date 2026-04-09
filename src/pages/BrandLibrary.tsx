@@ -69,7 +69,7 @@ interface SelectableVenueAsset {
   resolvedUrl: string | null;
 }
 
-type LibraryTab = 'all' | 'autopilot' | 'uploads' | 'pro_photo' | 'archived';
+type LibraryTab = 'all' | 'ready' | 'pulse_suggested' | 'scheduled' | 'archived';
 type InventoryStateFilter = 'all' | 'ready_to_post' | 'needs_image' | 'needs_caption';
 type ReadinessState = 'ready_to_post' | 'needs_image' | 'needs_caption' | 'unformed';
 type ConversionResult = { ok: true; payload: Record<string, unknown> } | { ok: false; reason: string };
@@ -84,7 +84,7 @@ export default function BrandLibraryPage() {
 
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'autopilot' : 'all') as LibraryTab);
+  const [tab, setTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'pulse_suggested' : 'all') as LibraryTab);
   const [inventoryFilter, setInventoryFilter] = useState<InventoryStateFilter>('all');
   const [view, setView] = useState<'card' | 'list'>('card');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -303,17 +303,20 @@ export default function BrandLibraryPage() {
       if (autopilotRunIdFilter && item.autopilot_run_id !== autopilotRunIdFilter) return false;
       if (contentItemIdsFilter && !contentItemIdsFilter.has(item.id)) return false;
 
-      const category = getContentCategory(item);
+      const readiness = getReadinessState(item);
+
       if (tab === 'archived') {
         if (item.status !== 'archived') return false;
+      } else if (tab === 'scheduled') {
+        if (!['scheduled', 'published'].includes(item.status)) return false;
       } else {
         if (['scheduled', 'published'].includes(item.status)) return false;
         if (item.status === 'archived') return false;
-        if (tab !== 'all' && category !== tab) return false;
+        if (tab === 'ready' && readiness !== 'ready_to_post') return false;
+        if (tab === 'pulse_suggested' && item.source !== 'autopilot') return false;
       }
 
-      const readiness = getReadinessState(item);
-      if (tab !== 'archived' && readiness === 'unformed') return false;
+      if (tab !== 'archived' && tab !== 'scheduled' && readiness === 'unformed') return false;
 
       if (inventoryFilter === 'ready_to_post' && readiness !== 'ready_to_post') return false;
       if (inventoryFilter === 'needs_image' && readiness !== 'needs_image') return false;
@@ -370,7 +373,7 @@ export default function BrandLibraryPage() {
         status: 'scheduled',
         scheduled_for: schedule,
         caption_final: item.caption_final || item.caption_draft || null,
-        source_plan_title: item.source === 'autopilot' ? 'Content Scheduled (Autopilot)' : 'Content Scheduled',
+        source_plan_title: item.source === 'autopilot' ? 'Content Scheduled (Pulse)' : 'Content Scheduled',
       };
       const { error } = await supabase.from('content_items').update(patch).eq('id', item.id);
       if (error) {
@@ -562,22 +565,59 @@ export default function BrandLibraryPage() {
     });
   }, [assetSearch, venueImageAssets]);
 
+  const queueSummary = useMemo(() => {
+    const pulseSuggested = items.filter((item) => item.source === 'autopilot' && item.status !== 'archived').length;
+    const ready = items.filter((item) => getReadinessState(item) === 'ready_to_post' && !['archived'].includes(item.status)).length;
+    const scheduled = items.filter((item) => ['scheduled', 'published'].includes(item.status)).length;
+
+    const scheduledWeekdays = new Set(
+      items
+        .filter((item) => item.scheduled_for)
+        .map((item) => new Date(item.scheduled_for as string).getDay()),
+    );
+    const gaps: string[] = [];
+    if (!scheduledWeekdays.has(5)) gaps.push('No Friday push scheduled yet');
+    if (!scheduledWeekdays.has(0) && !scheduledWeekdays.has(6)) gaps.push('Low weekend coverage');
+
+    return { pulseSuggested, ready, scheduled, gaps };
+  }, [items]);
+
   return (
     <div className="space-y-6">
       {autopilotRunIdFilter && (
-        <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/autopilot')}>
-          <ArrowLeft className="w-4 h-4" /> Back to Autopilot
+        <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/home')}>
+          <ArrowLeft className="w-4 h-4" /> Back to Home
         </Button>
       )}
       <PageHeader title="Content" description="Your content inventory. Review assets and drafts here, then send ready posts to Calendar." />
+
+      <Card className="border-accent/20">
+        <CardContent className="p-4 space-y-2">
+          <p className="text-sm font-medium">Pulse prepared this queue</p>
+          <p className="text-xs text-muted-foreground">
+            {queueSummary.pulseSuggested} Pulse-suggested items • {queueSummary.ready} ready to publish • {queueSummary.scheduled} scheduled or published
+          </p>
+          {queueSummary.gaps.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {queueSummary.gaps.map((gap) => (
+                <Badge key={gap} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
+                  {gap}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Coverage looks healthy this week.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="autopilot">Autopilot</TabsTrigger>
-            <TabsTrigger value="uploads">Uploads</TabsTrigger>
-            <TabsTrigger value="pro_photo">Pro Photo</TabsTrigger>
+            <TabsTrigger value="ready">Ready</TabsTrigger>
+            <TabsTrigger value="pulse_suggested">Pulse Suggested</TabsTrigger>
+            <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
             <TabsTrigger value="archived">Archived</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -622,7 +662,7 @@ export default function BrandLibraryPage() {
       {loading ? (
         <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
       ) : visibleItems.length === 0 ? (
-        <EmptyState icon={Sparkles} title="No content items yet" description="Run Autopilot, upload photos, or use Pro Photo to build your content inventory." />
+        <EmptyState icon={Sparkles} title="No content items yet" description="Pulse will prepare suggestions as activity comes in. You can also upload photos to start the queue." />
       ) : view === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {visibleItems.map((item) => {
@@ -672,6 +712,7 @@ export default function BrandLibraryPage() {
                   <div className="flex flex-wrap gap-1">
                     <Badge variant={readinessBadge.variant}>{readinessBadge.label}</Badge>
                     <Badge variant="outline">{getSourceLabel(item)}</Badge>
+                    {item.source === 'autopilot' && <Badge variant="secondary">Needs approval</Badge>}
                     {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
                     {item.origin === 'content_asset' && <Badge variant="outline">Asset</Badge>}
                   </div>
@@ -1180,24 +1221,10 @@ function getAutopilotSourceLabel(item: LibraryItem): string | null {
   return 'Source: based on brand profile';
 }
 
-function getContentCategory(item: LibraryItem): Exclude<LibraryTab, 'all'> {
-  if (item.status === 'archived') return 'archived';
-  if (item.source === 'autopilot') return 'autopilot';
-
+function getSourceLabel(item: LibraryItem): string {
+  if (item.source === 'autopilot') return 'Pulse suggested';
   const sourceType = (item.source_type || '').toLowerCase();
   const runType = (item.run_type || '').toLowerCase();
-  const hasMedia = !!(item.media_url || item.storage_path || item.resolvedUrl);
-
-  if (
-    sourceType.includes('upload') ||
-    sourceType.includes('manual') ||
-    sourceType.includes('guest') ||
-    sourceType.includes('camera') ||
-    sourceType.includes('phone')
-  ) {
-    return 'uploads';
-  }
-
   if (
     item.source === 'generated' ||
     sourceType.includes('generated') ||
@@ -1207,19 +1234,9 @@ function getContentCategory(item: LibraryItem): Exclude<LibraryTab, 'all'> {
     runType.includes('photo') ||
     runType.includes('editor') ||
     runType.includes('image')
-  ) {
-    return 'pro_photo';
-  }
-
-  if (item.source === 'manual' && hasMedia) return 'uploads';
-  return 'uploads';
-}
-
-function getSourceLabel(item: LibraryItem): string {
-  if (item.source === 'autopilot') return 'Autopilot';
-  const category = getContentCategory(item);
-  if (category === 'pro_photo') return 'Pro Photo';
-  if (category === 'uploads') return 'Upload';
+  ) return 'Auto-prepared';
+  if (item.source === 'planner') return 'From plan';
+  if (item.source === 'manual') return 'Manual';
   return item.source;
 }
 
