@@ -72,3 +72,10 @@ verify_jwt = false
 [functions.generate-weekly-revenue-brief]
 verify_jwt = false
 
+
+
+[functions.generate-weekly-report]
+verify_jwt = false
+
+[functions.run-weekly-pulse-schedule]
+verify_jwt = false
