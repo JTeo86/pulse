@@ -12,12 +12,14 @@ interface ReferralFlags {
 interface ReferralAccess {
   flags: ReferralFlags;
   venueHasAccess: boolean;
+  adminHasAccess: boolean;
+  canAccessReferral: boolean;
   isBetaVenue: boolean;
   isLoading: boolean;
 }
 
 export function useReferralAccess(): ReferralAccess {
-  const { currentVenue } = useVenue();
+  const { currentVenue, isAdmin } = useVenue();
 
   const { data: flagRows, isLoading: flagsLoading } = useQuery({
     queryKey: ['referral-flags'],
@@ -68,9 +70,14 @@ export function useReferralAccess(): ReferralAccess {
     }
   }
 
+  const adminHasAccess = flags.moduleEnabled && isAdmin;
+  const canAccessReferral = venueHasAccess || adminHasAccess;
+
   return {
     flags,
     venueHasAccess,
+    adminHasAccess,
+    canAccessReferral,
     isBetaVenue,
     isLoading: flagsLoading || betaLoading,
   };

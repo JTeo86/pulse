@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function ReferralGuard({ children }: Props) {
-  const { venueHasAccess, isLoading } = useReferralAccess();
+  const { canAccessReferral, isLoading } = useReferralAccess();
 
   if (isLoading) {
     return (
@@ -18,7 +18,7 @@ export function ReferralGuard({ children }: Props) {
     );
   }
 
-  if (!venueHasAccess) {
+  if (!canAccessReferral) {
     return <Navigate to="/home" replace />;
   }
 
