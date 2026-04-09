@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
+import { addDays, format, isAfter, isBefore, startOfDay } from 'date-fns';
 import {
   Archive, ArrowLeft, CalendarDays, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
   Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle, MoreHorizontal, Check, Maximize2
@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl, isSignedUrl } from '@/hooks/use-resolved-media';
+import { MediaImage } from '@/components/ui/media-image';
 
 interface LibraryItem {
   id: string;
@@ -39,6 +40,7 @@ interface LibraryItem {
   caption_final: string | null;
   asset_type: string | null;
   media_url: string | null;
+  thumbnail_url?: string | null;
   storage_path: string | null;
   resolvedUrl: string | null;
   resolvedFrom?: 'content_item' | 'content_asset' | 'edited_asset' | 'editor_job' | 'media_variants' | null;
@@ -565,22 +567,92 @@ export default function BrandLibraryPage() {
     });
   }, [assetSearch, venueImageAssets]);
 
-  const queueSummary = useMemo(() => {
-    const pulseSuggested = items.filter((item) => item.source === 'autopilot' && item.status !== 'archived').length;
-    const ready = items.filter((item) => getReadinessState(item) === 'ready_to_post' && !['archived'].includes(item.status)).length;
-    const scheduled = items.filter((item) => ['scheduled', 'published'].includes(item.status)).length;
+  const queueItems = useMemo(() => {
+    const now = new Date();
+    const in14Days = addDays(now, 14);
 
-    const scheduledWeekdays = new Set(
-      items
-        .filter((item) => item.scheduled_for)
-        .map((item) => new Date(item.scheduled_for as string).getDay()),
-    );
-    const gaps: string[] = [];
-    if (!scheduledWeekdays.has(5)) gaps.push('No Friday push scheduled yet');
-    if (!scheduledWeekdays.has(0) && !scheduledWeekdays.has(6)) gaps.push('Low weekend coverage');
-
-    return { pulseSuggested, ready, scheduled, gaps };
+    return items
+      .filter((item) => item.status !== 'archived' && item.status !== 'published')
+      .map((item) => {
+        const readiness = getReadinessState(item);
+        const queueTime = item.scheduled_for || item.suggested_scheduled_for || null;
+        const queueDate = queueTime ? new Date(queueTime) : null;
+        const statusLabel = getQueueStatusLabel(item, readiness);
+        const inWindow = queueDate
+          ? isAfter(queueDate, addDays(now, -1)) && isBefore(queueDate, addDays(in14Days, 1))
+          : true;
+        const needsApproval = statusLabel === 'Needs approval';
+        const isReadyOrScheduled = statusLabel === 'Ready' || statusLabel === 'Scheduled';
+        return { item, readiness, queueTime, queueDate, statusLabel, inWindow, needsApproval, isReadyOrScheduled };
+      })
+      .filter((entry) => entry.inWindow)
+      .sort((a, b) => {
+        if (a.queueDate && b.queueDate) return a.queueDate.getTime() - b.queueDate.getTime();
+        if (a.queueDate && !b.queueDate) return -1;
+        if (!a.queueDate && b.queueDate) return 1;
+        return new Date(b.item.created_at).getTime() - new Date(a.item.created_at).getTime();
+      });
   }, [items]);
+
+  const queueSections = useMemo(() => {
+    const needsApproval = queueItems.filter((entry) => entry.needsApproval);
+    const readyScheduled = queueItems.filter((entry) => !entry.needsApproval && entry.isReadyOrScheduled);
+    const ideas = queueItems.filter((entry) => !entry.needsApproval && !entry.isReadyOrScheduled);
+    return { needsApproval, readyScheduled, ideas };
+  }, [queueItems]);
+
+  const coverageSummary = useMemo(() => {
+    const start = startOfDay(new Date());
+    const end = addDays(start, 7);
+    const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const coveredDays = new Set<number>();
+    let hasLunchContent = false;
+
+    for (const entry of queueItems) {
+      if (!entry.queueDate) continue;
+      if (!(isAfter(entry.queueDate, addDays(start, -1)) && isBefore(entry.queueDate, end))) continue;
+      coveredDays.add(entry.queueDate.getDay());
+      const hour = entry.queueDate.getHours();
+      if (hour >= 11 && hour <= 14) hasLunchContent = true;
+    }
+
+    const missingDayNames = Array.from({ length: 7 }, (_, offset) => addDays(start, offset))
+      .filter((date) => !coveredDays.has(date.getDay()))
+      .map((date) => weekdayNames[date.getDay()]);
+
+    const gaps: string[] = [];
+    if (missingDayNames.includes('Friday')) gaps.push('Missing Friday');
+    if (missingDayNames.includes('Saturday') || missingDayNames.includes('Sunday')) gaps.push('Missing weekend');
+    if (!hasLunchContent) gaps.push('No lunch content');
+
+    return {
+      coveredDaysCount: 7 - missingDayNames.length,
+      missingDayNames,
+      gaps,
+    };
+  }, [queueItems]);
+
+  const headerSummary = useMemo(() => {
+    const readyCount = queueItems.filter((entry) => entry.statusLabel === 'Ready' || entry.statusLabel === 'Scheduled').length;
+    const needsApprovalCount = queueItems.filter((entry) => entry.statusLabel === 'Needs approval').length;
+    return { readyCount, needsApprovalCount, gapCount: coverageSummary.gaps.length };
+  }, [queueItems, coverageSummary.gaps.length]);
+
+  const approveItem = async (item: LibraryItem) => {
+    if (item.origin === 'content_item') {
+      const { error } = await supabase.from('content_items').update({ status: 'approved' }).eq('id', item.id);
+      if (error) {
+        toast({ variant: 'destructive', title: 'Approve failed', description: error.message });
+        return;
+      }
+      toast({ title: 'Approved' });
+      fetchItems();
+      return;
+    }
+
+    toast({ title: 'Open item', description: 'This item needs to be converted into a post before approval.' });
+    openEdit(item);
+  };
 
   return (
     <div className="space-y-6">
@@ -589,67 +661,138 @@ export default function BrandLibraryPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Home
         </Button>
       )}
-      <PageHeader title="Content" description="Your content inventory. Review assets and drafts here, then send ready posts to Calendar." />
+      <PageHeader title="Content Queue" description="Pulse prepared your week. Review, approve, and keep the next 7–14 days covered." />
 
-      <Card className="border-accent/20">
+      <Card className="border-accent/30 bg-accent/5">
         <CardContent className="p-4 space-y-2">
-          <p className="text-sm font-medium">Pulse prepared this queue</p>
-          <p className="text-xs text-muted-foreground">
-            {queueSummary.pulseSuggested} Pulse-suggested items • {queueSummary.ready} ready to publish • {queueSummary.scheduled} scheduled or published
-          </p>
-          {queueSummary.gaps.length > 0 ? (
+          <p className="text-sm font-medium">Pulse prepared your week</p>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="px-2 py-1">{headerSummary.readyCount} ready</Badge>
+            <Badge variant="outline" className="px-2 py-1 border-amber-500/40 text-amber-700 dark:text-amber-300">{headerSummary.needsApprovalCount} need approval</Badge>
+            <Badge variant="outline" className="px-2 py-1">{headerSummary.gapCount} gaps</Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <p className="text-sm font-medium">Coverage: {coverageSummary.coveredDaysCount} / 7 days</p>
+          {coverageSummary.missingDayNames.length > 0 ? (
+            <p className="text-xs text-muted-foreground">Missing: {coverageSummary.missingDayNames.join(', ')}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">All 7 days have content lined up.</p>
+          )}
+          {coverageSummary.gaps.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {queueSummary.gaps.map((gap) => (
+              {coverageSummary.gaps.map((gap) => (
                 <Badge key={gap} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
                   {gap}
                 </Badge>
               ))}
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Coverage looks healthy this week.</p>
           )}
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="ready">Ready</TabsTrigger>
-            <TabsTrigger value="pulse_suggested">Pulse Suggested</TabsTrigger>
-            <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
-            <TabsTrigger value="archived">Archived</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <div className="flex items-center gap-2">
-          <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
-          <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
-        </div>
+      <div className="space-y-4">
+        {([
+          { key: 'needsApproval', title: 'Needs approval', entries: queueSections.needsApproval, tone: 'border-amber-400/40 bg-amber-50/50 dark:bg-amber-950/10' },
+          { key: 'readyScheduled', title: 'Scheduled / Ready', entries: queueSections.readyScheduled, tone: '' },
+          { key: 'ideas', title: 'Ideas (optional)', entries: queueSections.ideas, tone: '' },
+        ] as const).map((section) => (
+          <Card key={section.key} className={section.tone}>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">{section.title}</p>
+                <Badge variant="outline">{section.entries.length}</Badge>
+              </div>
+              {section.entries.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nothing here right now.</p>
+              ) : (
+                <div className="space-y-3">
+                  {section.entries.map(({ item, statusLabel, queueTime }) => {
+                    const displayImageUrl = getDisplayImageUrl(item);
+                    const sourceLabel = getSourceLabel(item);
+                    return (
+                      <div key={buildItemKey(item)} className="flex flex-col md:flex-row gap-3 rounded-lg border p-3">
+                        <MediaImage
+                          src={item.thumbnail_url || displayImageUrl}
+                          fallbackSrc={displayImageUrl}
+                          alt={item.title || 'Queue preview'}
+                          containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
+                          aspectClassName=""
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : statusLabel === 'Scheduled' ? 'default' : 'outline'}>{statusLabel}</Badge>
+                            <Badge variant="outline">{sourceLabel}</Badge>
+                            <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
+                          </div>
+                          <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled post'}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this post.'}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
+                            <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
+                            <Button size="sm" variant="outline" onClick={() => setScheduleTarget(item)}>Reschedule</Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {tab !== 'archived' && (
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs text-muted-foreground mr-1">Inventory filter:</p>
-          {([
-            { value: 'all', label: 'All inventory' },
-            { value: 'ready_to_post', label: 'Ready to Post' },
-            { value: 'needs_image', label: 'Needs Image' },
-            { value: 'needs_caption', label: 'Needs Caption' },
-          ] as const).map((option) => (
-            <Button
-              key={option.value}
-              size="sm"
-              variant={inventoryFilter === option.value ? 'default' : 'outline'}
-              onClick={() => setInventoryFilter(option.value)}
-              className="h-8"
-            >
-              {option.label}
-            </Button>
-          ))}
-          <p className="text-xs text-muted-foreground ml-2">Items with no image and no caption are hidden until started.</p>
-        </div>
-      )}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <p className="text-sm font-medium">Library & uploads (secondary)</p>
+              <p className="text-xs text-muted-foreground">Use this only when you need to dig deeper into assets.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
+              <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
+            </div>
+          </div>
+
+          <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="ready">Ready</TabsTrigger>
+              <TabsTrigger value="pulse_suggested">Pulse Suggested</TabsTrigger>
+              <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+              <TabsTrigger value="archived">Archived</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {tab !== 'archived' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs text-muted-foreground mr-1">Inventory filter:</p>
+              {([
+                { value: 'all', label: 'All inventory' },
+                { value: 'ready_to_post', label: 'Ready to Post' },
+                { value: 'needs_image', label: 'Needs Image' },
+                { value: 'needs_caption', label: 'Needs Caption' },
+              ] as const).map((option) => (
+                <Button
+                  key={option.value}
+                  size="sm"
+                  variant={inventoryFilter === option.value ? 'default' : 'outline'}
+                  onClick={() => setInventoryFilter(option.value)}
+                  className="h-8"
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {selected.size > 0 && (
         <div className="rounded-lg border p-3 flex flex-wrap items-center gap-2">
@@ -1087,7 +1230,8 @@ function mapContentAsset(row: any): LibraryItem {
     caption_draft: null,
     caption_final: null,
     asset_type: row.asset_type || null,
-    media_url: row.public_url || row.thumbnail_url || null,
+    media_url: row.thumbnail_url || row.public_url || null,
+    thumbnail_url: row.thumbnail_url || null,
     storage_path: row.storage_path || null,
     resolvedUrl: null,
     resolvedFrom: row.public_url || row.thumbnail_url || row.storage_path ? 'content_asset' : null,
@@ -1118,6 +1262,13 @@ function getReadinessBadge(readiness: ReadinessState): { label: string; variant:
   if (readiness === 'needs_image') return { label: 'Needs Image', variant: 'outline' };
   if (readiness === 'needs_caption') return { label: 'Needs Caption', variant: 'secondary' };
   return { label: 'Needs Caption', variant: 'secondary' };
+}
+
+function getQueueStatusLabel(item: LibraryItem, readiness: ReadinessState): 'Needs approval' | 'Ready' | 'Scheduled' {
+  if (item.status === 'scheduled' && item.scheduled_for) return 'Scheduled';
+  if (item.source === 'autopilot' && !['approved', 'scheduled', 'published'].includes(item.status)) return 'Needs approval';
+  if (readiness === 'ready_to_post') return 'Ready';
+  return 'Needs approval';
 }
 
 function getNextActionLabel(readiness: ReadinessState): string {
@@ -1222,10 +1373,18 @@ function getAutopilotSourceLabel(item: LibraryItem): string | null {
 }
 
 function getSourceLabel(item: LibraryItem): string {
-  if (item.source === 'autopilot') return 'Pulse suggested';
   const sourceType = (item.source_type || '').toLowerCase();
   const runType = (item.run_type || '').toLowerCase();
+  const badges = (item.badges || []).map((badge) => badge.toLowerCase());
   if (
+    runType.includes('review') ||
+    badges.some((badge) => badge.includes('review')) ||
+    (item.content_brief || '').toLowerCase().includes('review')
+  ) return 'Review-driven';
+  if (item.campaign_tag || item.source === 'planner' || (item.source_plan_title || '').toLowerCase().includes('campaign')) return 'Campaign';
+  if (item.source === 'manual') return 'Manual';
+  if (
+    item.source === 'autopilot' ||
     item.source === 'generated' ||
     sourceType.includes('generated') ||
     sourceType.includes('pro_photo') ||
@@ -1234,9 +1393,7 @@ function getSourceLabel(item: LibraryItem): string {
     runType.includes('photo') ||
     runType.includes('editor') ||
     runType.includes('image')
-  ) return 'Auto-prepared';
-  if (item.source === 'planner') return 'From plan';
-  if (item.source === 'manual') return 'Manual';
+  ) return 'Pulse suggested';
   return item.source;
 }
 
