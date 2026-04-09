@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Trash2, Plus } from 'lucide-react';
+import { Calendar, Clock, Trash2, Plus, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { PageHeader } from '@/components/ui/page-header';
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarContentCard, type ScheduledItem } from '@/components/calendar/CalendarContentCard';
 import { CreateCalendarItemDialog } from '@/components/calendar/CreateCalendarItemDialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +30,7 @@ export default function ContentScheduler() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const { contentSuggestions } = useMarketOpportunities(5);
 
   const fetchScheduled = useCallback(async () => {
     if (!currentVenue) return;
@@ -185,6 +188,24 @@ export default function ContentScheduler() {
             Delete
           </Button>
         </div>
+      )}
+
+      {contentSuggestions.length > 0 && (
+        <Card className="border-accent/20 bg-accent/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent" />
+              Content suggestions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-1">
+              {contentSuggestions.map((suggestion) => (
+                <p key={suggestion} className="text-sm text-muted-foreground">• {suggestion}</p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {loading ? (

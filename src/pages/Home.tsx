@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
 
 type HomeTab = 'today' | 'opportunities' | 'plans';
 
@@ -38,13 +39,11 @@ type ContentApprovalItem = {
 interface TodayOverview {
   preparedContentCount: number;
   pendingRepliesCount: number;
-  opportunitiesCount: number;
   urgentReviewsCount: number;
   positiveTheme: string;
   negativeTheme: string | null;
   coveredDaysCount: number;
   coverageGaps: string[];
-  opportunityLines: string[];
   pendingReplies: ReplyTask[];
   pendingContent: ContentApprovalItem[];
   lastAutopilotRun: {
@@ -81,6 +80,7 @@ export default function Home() {
   }, [searchParams]);
 
   const [activeTab, setActiveTab] = useState<HomeTab>(initialTab);
+  const { opportunities: marketOpportunities, isLoading: opportunitiesLoading } = useMarketOpportunities(5);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -145,12 +145,6 @@ export default function Home() {
       const urgentReviewsCount = pendingReplyRows.filter((task) => (task.rating ?? 5) <= 2 || task.ai_priority === 'P1').length;
       const { positiveTheme, negativeTheme } = detectThemes(recentReviewsRows);
       const coverage = buildCoverageSummary(scheduledContent.data ?? []);
-      const opportunities = buildOpportunityLines({
-        urgentReviewsCount,
-        positiveTheme,
-        negativeTheme,
-        coverageGaps: coverage.gaps,
-      });
 
       const run = latestAutopilotRun.data;
       const generatedPosts = run?.saved_count ?? run?.items_saved ?? 0;
@@ -159,13 +153,11 @@ export default function Home() {
       return {
         preparedContentCount: pendingContentRows.length,
         pendingRepliesCount: pendingReplyRows.length,
-        opportunitiesCount: opportunities.length,
         urgentReviewsCount,
         positiveTheme,
         negativeTheme,
         coveredDaysCount: coverage.coveredDaysCount,
         coverageGaps: coverage.gaps,
-        opportunityLines: opportunities,
         pendingReplies: pendingReplyRows,
         pendingContent: pendingContentRows,
         lastAutopilotRun: run
@@ -299,7 +291,7 @@ export default function Home() {
                       <span>•</span>
                       <span>{overview?.pendingRepliesCount ?? 0} replies drafted</span>
                       <span>•</span>
-                      <span>{overview?.opportunitiesCount ?? 0} opportunities detected</span>
+                      <span>{marketOpportunities.length} opportunities detected</span>
                     </div>
                   </div>
                   <Button asChild>
@@ -388,13 +380,28 @@ export default function Home() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Opportunities</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 pt-0">
-                {(overview?.opportunityLines ?? ['No immediate opportunities detected']).map((line) => (
-                  <p key={line} className="text-sm">• {line}</p>
-                ))}
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/home?tab=opportunities">View more</Link>
-                </Button>
+              <CardContent className="space-y-3 pt-0">
+                {opportunitiesLoading ? (
+                  <Skeleton className="h-24 rounded-lg" />
+                ) : marketOpportunities.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No immediate opportunities detected.</p>
+                ) : (
+                  marketOpportunities.slice(0, 5).map((item) => (
+                    <div key={`${item.title}-${item.suggestedAction}`} className="rounded-md border border-border/60 p-2">
+                      <p className="text-sm font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.description}</p>
+                      <p className="text-xs mt-1">Action: {item.suggestedAction}</p>
+                    </div>
+                  ))
+                )}
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/home?tab=opportunities">View more</Link>
+                  </Button>
+                  <Button size="sm" asChild>
+                    <Link to="/plans">Generate campaign</Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -517,42 +524,6 @@ function buildCoverageSummary(scheduledItems: Array<{ scheduled_for: string | nu
     coveredDaysCount: coveredDays.size,
     gaps,
   };
-}
-
-function buildOpportunityLines({
-  urgentReviewsCount,
-  positiveTheme,
-  negativeTheme,
-  coverageGaps,
-}: {
-  urgentReviewsCount: number;
-  positiveTheme: string;
-  negativeTheme: string | null;
-  coverageGaps: string[];
-}) {
-  const items: string[] = [];
-
-  if (coverageGaps.length > 0) {
-    items.push('Bank holiday and weekend slots are underutilised. Add a weekend campaign.');
-  }
-
-  if (positiveTheme.toLowerCase().includes('food')) {
-    items.push('Food quality is trending in reviews. Turn this into a hero post this week.');
-  }
-
-  if (positiveTheme.toLowerCase().includes('service')) {
-    items.push('Service praise is trending. Showcase team stories in your next reel.');
-  }
-
-  if (negativeTheme) {
-    items.push(`Guests keep flagging ${negativeTheme.toLowerCase()}. Address it in posts and replies.`);
-  }
-
-  if (urgentReviewsCount > 0) {
-    items.push(`${urgentReviewsCount} urgent reviews need a same-day reply.`);
-  }
-
-  return items.slice(0, 3);
 }
 
 function formatLastRun(timestamp: string) {

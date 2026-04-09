@@ -29,6 +29,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { getCompletedReviewWeekRange } from '@/lib/review-weekly-cycle';
+import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface ReviewSource {
@@ -823,6 +824,7 @@ function themeSummaryLine(theme: ThemeInsight, type: 'praise' | 'complaint') {
 function ReputationWorkflowTab({ venueId }: { venueId: string }) {
   const queryClient = useQueryClient();
   const [writerTask, setWriterTask] = useState<ResponseTask | null>(null);
+  const { reviewContentSuggestions } = useMarketOpportunities(5);
 
   const { data: reviews } = useQuery({
     queryKey: ['reviews-workflow', venueId],
@@ -925,14 +927,6 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
 
   const topPositiveTheme = topPraiseThemes[0];
   const topRecurringIssue = recurringIssues[0];
-
-  const positiveTrendSuggestions = topPraiseThemes.map(theme => {
-    if (theme.theme === 'food') return 'Guests keep praising the tasting menu and dishes — turn this into a post.';
-    if (theme.theme === 'service') return 'Service mentions are strong — highlight your team in next week’s content queue.';
-    if (theme.theme === 'ambiance') return 'Ambiance is resonating — share a vibe-focused reel or photo story.';
-    if (theme.theme === 'value') return 'Value feedback is positive — post a “what guests say is worth it” spotlight.';
-    return 'Positive sentiment is building — convert standout quotes into social proof content.';
-  });
 
   return (
     <div className="space-y-4">
@@ -1071,9 +1065,9 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-1.5">
-          {positiveTrendSuggestions.length === 0 ? (
+          {reviewContentSuggestions.length === 0 ? (
             <p className="text-xs text-muted-foreground">No strong positive trend yet. Recheck after next review fetch.</p>
-          ) : positiveTrendSuggestions.map((suggestion, i) => (
+          ) : reviewContentSuggestions.map((suggestion, i) => (
             <p key={i} className="text-sm text-muted-foreground">• {suggestion}</p>
           ))}
         </CardContent>
