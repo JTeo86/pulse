@@ -6,7 +6,7 @@ import {
   Search, Edit2, Power, PowerOff, Trash2, HelpCircle,
   CheckCircle2, XCircle, AlertCircle, Clock, ChevronDown, ChevronRight,
   ExternalLink, Link2, ShieldAlert, Copy, ThumbsUp, ThumbsDown,
-  Archive, Send, Bot, Zap, Activity,
+  Archive, Send, Bot, Zap, Activity, Sparkles, TrendingUp,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -100,6 +100,20 @@ interface ResponseTask {
   created_at: string;
 }
 
+interface ThemeInsight {
+  theme: 'food' | 'service' | 'ambiance' | 'value' | 'other';
+  praiseCount: number;
+  complaintCount: number;
+}
+
+const themeKeywords: Record<ThemeInsight['theme'], string[]> = {
+  food: ['food', 'dish', 'menu', 'tasting', 'meal', 'flavor', 'taste', 'dessert', 'cocktail', 'wine', 'drinks'],
+  service: ['service', 'staff', 'server', 'host', 'manager', 'wait', 'friendly', 'rude', 'attentive', 'slow'],
+  ambiance: ['ambiance', 'atmosphere', 'music', 'lighting', 'decor', 'vibe', 'noise', 'noisy', 'loud', 'quiet'],
+  value: ['value', 'price', 'expensive', 'overpriced', 'worth', 'portion', 'bill', 'cost', 'affordable'],
+  other: [],
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────
 
 function extractGoogleId(url: string): { id: string; kind: string } | null {
@@ -173,6 +187,32 @@ const priorityColor: Record<string, string> = {
   P2: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
   P3: 'bg-muted text-muted-foreground border-border',
 };
+
+function classifyTheme(text: string | null): ThemeInsight['theme'] {
+  if (!text) return 'other';
+  const normalized = text.toLowerCase();
+  for (const [theme, keywords] of Object.entries(themeKeywords) as [ThemeInsight['theme'], string[]][]) {
+    if (theme === 'other') continue;
+    if (keywords.some(keyword => normalized.includes(keyword))) return theme;
+  }
+  return 'other';
+}
+
+function isPositiveReview(review: { rating: number | null; review_text: string | null }) {
+  const text = review.review_text?.toLowerCase() || '';
+  const positiveWords = ['great', 'amazing', 'excellent', 'love', 'perfect', 'delicious', 'fantastic', 'friendly', 'best'];
+  return (review.rating || 0) >= 4 || positiveWords.some(w => text.includes(w));
+}
+
+function isNegativeReview(review: { rating: number | null; review_text: string | null }) {
+  const text = review.review_text?.toLowerCase() || '';
+  const negativeWords = ['bad', 'poor', 'slow', 'rude', 'awful', 'disappoint', 'cold', 'overpriced', 'worst', 'waited'];
+  return (review.rating || 0) <= 2 || negativeWords.some(w => text.includes(w));
+}
+
+function themeLabel(theme: ThemeInsight['theme']) {
+  return theme.charAt(0).toUpperCase() + theme.slice(1);
+}
 
 // ── Source Setup ────────────────────────────────────────────────────────
 
@@ -769,6 +809,160 @@ function ReviewFeed({ venueId }: { venueId: string }) {
   );
 }
 
+function ReviewIntelligenceBrief({ venueId }: { venueId: string }) {
+  const { data: reviews } = useQuery({
+    queryKey: ['reviews-intel-brief', venueId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('id, review_text, rating, review_date, created_at')
+        .eq('venue_id', venueId)
+        .order('review_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(120);
+      if (error) throw error;
+      return data as Array<{ id: string; review_text: string | null; rating: number | null; review_date: string | null; created_at: string }>;
+    },
+  });
+
+  const { data: pendingTasks } = useQuery({
+    queryKey: ['response-tasks-intel-brief', venueId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('review_response_tasks' as any)
+        .select('*')
+        .eq('venue_id', venueId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(80);
+      if (error) throw error;
+      return data as unknown as ResponseTask[];
+    },
+  });
+
+  const recentReviews = (reviews || []).slice(0, 60);
+  const themeMap: Record<ThemeInsight['theme'], ThemeInsight> = {
+    food: { theme: 'food', praiseCount: 0, complaintCount: 0 },
+    service: { theme: 'service', praiseCount: 0, complaintCount: 0 },
+    ambiance: { theme: 'ambiance', praiseCount: 0, complaintCount: 0 },
+    value: { theme: 'value', praiseCount: 0, complaintCount: 0 },
+    other: { theme: 'other', praiseCount: 0, complaintCount: 0 },
+  };
+
+  recentReviews.forEach(review => {
+    const theme = classifyTheme(review.review_text);
+    if (isPositiveReview(review)) themeMap[theme].praiseCount += 1;
+    if (isNegativeReview(review)) themeMap[theme].complaintCount += 1;
+  });
+
+  const themeInsights = Object.values(themeMap).sort((a, b) => (b.praiseCount + b.complaintCount) - (a.praiseCount + a.complaintCount));
+  const topPraiseThemes = [...themeInsights].sort((a, b) => b.praiseCount - a.praiseCount).filter(t => t.praiseCount > 0).slice(0, 2);
+  const recurringIssues = [...themeInsights].sort((a, b) => b.complaintCount - a.complaintCount).filter(t => t.complaintCount >= 2).slice(0, 3);
+
+  const urgentNegatives = (pendingTasks || []).filter(task => (task.rating || 0) <= 2 || task.ai_priority === 'P1');
+  const readyToApprove = (pendingTasks || []).filter(task => !!task.draft_response?.trim());
+
+  const positiveTrendSuggestions = topPraiseThemes.map(theme => {
+    if (theme.theme === 'food') return 'Guests keep praising the tasting menu and dishes — turn this into a post.';
+    if (theme.theme === 'service') return 'Service mentions are strong — highlight your team in next week’s content queue.';
+    if (theme.theme === 'ambiance') return 'Ambiance is resonating — share a vibe-focused reel or photo story.';
+    if (theme.theme === 'value') return 'Value feedback is positive — post a “what guests say is worth it” spotlight.';
+    return 'Positive sentiment is building — convert standout quotes into social proof content.';
+  });
+
+  return (
+    <Card className="border-accent/20 bg-accent/5">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-accent" />
+          Reviews Intelligence Snapshot
+        </CardTitle>
+        <CardDescription>
+          Your weekly operator brief: what needs action now, what keeps repeating, and what is marketable.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-4">
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">Urgent negatives</p>
+              <p className="text-2xl font-semibold text-destructive">{urgentNegatives.length}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">Pending drafted replies</p>
+              <p className="text-2xl font-semibold">{readyToApprove.length}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">Recurring issues</p>
+              <p className="text-2xl font-semibold">{recurringIssues.length}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3">
+              <p className="text-xs text-muted-foreground">Positive trends</p>
+              <p className="text-2xl font-semibold text-accent">{topPraiseThemes.length}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">What guests are praising most</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {topPraiseThemes.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Not enough signals yet. Fetch more reviews this week.</p>
+              ) : topPraiseThemes.map(theme => (
+                <div key={theme.theme} className="flex items-center justify-between text-sm">
+                  <span>{themeLabel(theme.theme)}</span>
+                  <Badge variant="outline" className="text-accent border-accent/30">{theme.praiseCount} praise mentions</Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Complaints repeating now</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {recurringIssues.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No repeating complaint themes detected this week.</p>
+              ) : recurringIssues.map(theme => (
+                <div key={theme.theme} className="flex items-center justify-between text-sm">
+                  <span>{themeLabel(theme.theme)}</span>
+                  <Badge variant="outline" className="text-destructive border-destructive/30">{theme.complaintCount} complaints</Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-accent" />
+              Positive trends worth turning into content
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {positiveTrendSuggestions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No strong positive trend yet. Recheck after next review fetch.</p>
+            ) : positiveTrendSuggestions.map((suggestion, i) => (
+              <p key={i} className="text-sm text-muted-foreground">• {suggestion}</p>
+            ))}
+          </CardContent>
+        </Card>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Needs Response Tab ─────────────────────────────────────────────────
 
 function ResponseWriterModal({
@@ -1006,6 +1200,28 @@ function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTi
     onError: (e) => toast({ title: 'Triage failed', description: e.message, variant: 'destructive' }),
   });
 
+  const approveDraft = async (task: ResponseTask) => {
+    if (!task.draft_response?.trim()) return;
+    const { error } = await supabase
+      .from('review_response_tasks' as any)
+      .update({
+        final_response: task.draft_response,
+        status: 'responded',
+        approved_at: new Date().toISOString(),
+      } as any)
+      .eq('id', task.id);
+    if (error) {
+      toast({ title: 'Approval failed', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Reply approved', description: 'Moved to responded and ready to post.' });
+      refresh();
+    }
+  };
+
+  const pendingTasks = (tasks || []).filter(t => t.status === 'pending');
+  const readyForApproval = pendingTasks.filter(t => !!t.draft_response?.trim());
+  const needsDrafting = pendingTasks.filter(t => !t.draft_response?.trim());
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1040,6 +1256,59 @@ function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTi
         </Card>
       ) : (
         <div className="space-y-3">
+          {filter === 'pending' && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <Card className="border-accent/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Approve in one sitting</CardTitle>
+                  <CardDescription>{readyForApproval.length} drafts are ready for final sign-off.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                  {readyForApproval.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No drafts ready yet. Use “Write response” to generate drafts first.</p>
+                  ) : readyForApproval.map(task => (
+                    <div key={task.id} className="rounded-lg border p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {renderStars(task.rating)}
+                          <span className="text-xs">{task.author_name || 'Anonymous'}</span>
+                        </div>
+                        {task.ai_priority && <Badge variant="outline" className={`text-[10px] ${priorityColor[task.ai_priority] || ''}`}>{task.ai_priority}</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{task.draft_response}</p>
+                      <Button size="sm" className="w-full" onClick={() => approveDraft(task)}>
+                        <ThumbsUp className="w-3 h-3 mr-1" /> Quick approve
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Needs drafting now</CardTitle>
+                  <CardDescription>{needsDrafting.length} pending reviews still need a draft reply.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {needsDrafting.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Great—everything pending already has a draft.</p>
+                  ) : (
+                    <ul className="space-y-1.5 text-sm">
+                      {needsDrafting.slice(0, 6).map(task => (
+                        <li key={task.id} className="text-muted-foreground flex items-center justify-between gap-2">
+                          <span className="truncate">{task.author_name || 'Anonymous'} • {formatReviewDate(task.review_date, task.created_at)}</span>
+                          <Button size="sm" variant="outline" onClick={() => setWriterTask(task)}>
+                            Draft
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {tasks.map(task => (
             <Card key={task.id}>
               <CardContent className="p-4 space-y-3">
@@ -1080,6 +1349,11 @@ function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTi
                     <Button size="sm" onClick={() => setWriterTask(task)}>
                       <Edit2 className="w-3 h-3 mr-1" /> Write response
                     </Button>
+                    {task.draft_response && (
+                      <Button size="sm" variant="outline" onClick={() => approveDraft(task)}>
+                        <ThumbsUp className="w-3 h-3 mr-1" /> Approve draft
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => updateStatus(task.id, 'ignored')}>
                       <ThumbsDown className="w-3 h-3 mr-1" /> Ignore
                     </Button>
@@ -1387,6 +1661,10 @@ export default function ReviewsAnalytics() {
         title="Reviews & Feedback"
         description="Aggregate reviews from Google and OpenTable via SerpAPI. Generate AI-powered weekly reports and manage responses."
       />
+
+      <div className="mb-6">
+        <ReviewIntelligenceBrief venueId={currentVenue.id} />
+      </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
