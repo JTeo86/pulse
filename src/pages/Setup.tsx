@@ -10,11 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Pencil, Save, ImageIcon, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { X, Pencil, Save, ImageIcon, ChevronDown, Loader2 } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl } from '@/hooks/use-resolved-media';
+import { WebsiteAnalysisEntry } from '@/components/setup/WebsiteAnalysisEntry';
+import { ProfileConfirmationCard } from '@/components/setup/ProfileConfirmationCard';
 
 const visualTypes = ['dish', 'drink', 'dessert', 'interior', 'chef/prep', 'event', 'lifestyle'];
 
@@ -30,7 +32,9 @@ type SetupState = {
   voiceStyle: string;
   visualStyle: string;
   contentGoals: string;
+  suggestedContentAngles: string;
   autopilotMode: 'conservative' | 'creative';
+  autopilotPreference: 'light' | 'balanced' | 'active';
   requireAssetForRuns: boolean;
   allowCopyOnlyFallback: boolean;
   approvalMode: 'require_approval' | 'auto_schedule';
@@ -44,9 +48,8 @@ type WebsiteSuggestions = {
   tone: string;
   audience: string;
   positioning: string;
-  voiceStyle: string;
-  visualStyle: string;
-  contentGoals: string;
+  keySellingPoints: string;
+  suggestedContentAngles: string;
 };
 
 type WebsiteAnalysisResult = {
@@ -68,7 +71,9 @@ const defaultState: SetupState = {
   voiceStyle: '',
   visualStyle: '',
   contentGoals: '',
+  suggestedContentAngles: '',
   autopilotMode: 'conservative',
+  autopilotPreference: 'balanced',
   requireAssetForRuns: true,
   allowCopyOnlyFallback: false,
   approvalMode: 'require_approval',
@@ -106,6 +111,7 @@ export default function SetupPage() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [websiteAnalyzed, setWebsiteAnalyzed] = useState(false);
   const [coreProfileConfirmed, setCoreProfileConfirmed] = useState(false);
+  const [minimalSetupComplete, setMinimalSetupComplete] = useState(false);
 
   const onboarding = searchParams.get('onboarding') === '1';
   const requestedTab = searchParams.get('tab') === 'automation' ? 'automation' : 'basics';
@@ -158,18 +164,21 @@ export default function SetupPage() {
         tone: profileRes.data?.venue_tone || '',
         audience: profileRes.data?.target_audience || '',
         positioning: profileRes.data?.brand_summary || '',
-        voiceStyle: rules.voiceStyle || '',
+        voiceStyle: rules.voiceStyle || profileRes.data?.venue_tone || '',
         visualStyle: rules.visualStyle || profileRes.data?.style_summary || '',
-        contentGoals: rules.contentGoals || profileRes.data?.key_selling_points || '',
-        autopilotMode: 'conservative',
-        requireAssetForRuns: true,
-        allowCopyOnlyFallback: false,
+        contentGoals: profileRes.data?.key_selling_points || '',
+        suggestedContentAngles: rules.suggestedContentAngles || rules.contentGoals || '',
+        autopilotMode: ((settingsRes.data?.mode as SetupState['autopilotMode']) || 'conservative'),
+        autopilotPreference: mapAutopilotPreference((settingsRes.data?.mode as SetupState['autopilotMode']) || 'conservative', (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week'),
+        requireAssetForRuns: settingsRes.data?.require_asset_for_runs ?? true,
+        allowCopyOnlyFallback: settingsRes.data?.allow_copy_only_fallback ?? false,
         approvalMode: (settingsRes.data?.approval_mode as SetupState['approvalMode']) || 'require_approval',
         frequency: (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week',
       });
       setAnalysisUrl(currentVenue.website_url || '');
       setWebsiteAnalyzed(Boolean(currentVenue.website_url && profileRes.data));
       setCoreProfileConfirmed(Boolean(currentVenue.name && profileRes.data?.cuisine_type && profileRes.data?.brand_summary));
+      setMinimalSetupComplete(Boolean(currentVenue.website_url && profileRes.data && settingsRes.data));
       await fetchAssets(currentVenue.id);
     })();
   }, [currentVenue?.id]);
@@ -178,10 +187,9 @@ export default function SetupPage() {
     let done = 0;
     if (websiteAnalyzed) done++;
     if (coreProfileConfirmed) done++;
-    if (assets.length > 0) done++;
-    if (state.frequency && state.approvalMode) done++;
-    return Math.round((done / 4) * 100);
-  }, [websiteAnalyzed, coreProfileConfirmed, assets.length, state.frequency, state.approvalMode]);
+    if (minimalSetupComplete) done++;
+    return Math.round((done / 3) * 100);
+  }, [websiteAnalyzed, coreProfileConfirmed, minimalSetupComplete]);
 
   const analyzeWebsite = async () => {
     if (!analysisUrl.trim()) {
@@ -237,9 +245,10 @@ export default function SetupPage() {
       tone: draft.tone || prev.tone,
       audience: draft.audience || prev.audience,
       positioning: draft.positioning || prev.positioning,
-      voiceStyle: draft.voiceStyle || prev.voiceStyle,
-      visualStyle: draft.visualStyle || prev.visualStyle,
-      contentGoals: draft.contentGoals || prev.contentGoals,
+      voiceStyle: draft.tone || prev.voiceStyle,
+      visualStyle: prev.visualStyle,
+      contentGoals: draft.keySellingPoints || prev.contentGoals,
+      suggestedContentAngles: draft.suggestedContentAngles || prev.suggestedContentAngles,
     }));
 
     setCoreProfileConfirmed(false);
@@ -254,6 +263,7 @@ export default function SetupPage() {
         voiceStyle: state.voiceStyle,
         visualStyle: state.visualStyle,
         contentGoals: state.contentGoals,
+        suggestedContentAngles: state.suggestedContentAngles,
       });
 
       await Promise.all([
@@ -289,6 +299,7 @@ export default function SetupPage() {
       ]);
 
       await refreshVenues();
+      setMinimalSetupComplete(true);
       toast({ title: 'Setup saved', description: 'Pulse now has what it needs to generate better content.' });
     } catch (error: any) {
       toast({ title: 'Failed to save setup', description: error.message, variant: 'destructive' });
@@ -405,41 +416,22 @@ export default function SetupPage() {
           </TabsList>
 
           <TabsContent value="basics" className="space-y-4">
-            <Card className="border-primary/20">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Analyse my venue
-                </CardTitle>
-                <CardDescription>
-                  Step 1: add your website. Step 2: let Pulse infer your profile. Step 3: review, edit, and confirm.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid sm:grid-cols-[1fr_auto] gap-3">
-                  <Input
-                    value={analysisUrl}
-                    onChange={(e) => setAnalysisUrl(e.target.value)}
-                    placeholder="https://yourvenue.com"
-                  />
-                  <Button onClick={analyzeWebsite} disabled={analysisLoading}>
-                    {analysisLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analysing...</> : 'Analyse website'}
-                  </Button>
-                </div>
-                {analysisError ? <p className="text-sm text-destructive">{analysisError}</p> : null}
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <Badge variant={websiteAnalyzed ? 'default' : 'outline'}>Website analysed</Badge>
-                  <Badge variant={coreProfileConfirmed ? 'default' : 'outline'}>Core profile confirmed</Badge>
-                </div>
-              </CardContent>
-            </Card>
+            <WebsiteAnalysisEntry
+              analysisUrl={analysisUrl}
+              analysisLoading={analysisLoading}
+              analysisError={analysisError}
+              websiteAnalyzed={websiteAnalyzed}
+              coreProfileConfirmed={coreProfileConfirmed}
+              onUrlChange={setAnalysisUrl}
+              onAnalyze={analyzeWebsite}
+            />
 
             {analysisResult ? (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Review inferred profile</CardTitle>
+                  <CardTitle className="text-base">Draft profile ready</CardTitle>
                   <CardDescription>
-                    Confidence: <span className="font-medium">{analysisResult.confidence}</span>. Suggestions are drafts and never auto-overwrite saved data.
+                    Pulse created this from your website. Nothing is saved until you confirm.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -449,51 +441,107 @@ export default function SetupPage() {
                     <Suggestion label="Location" value={analysisResult.suggestions.location} />
                     <Suggestion label="Tone" value={analysisResult.suggestions.tone} />
                     <Suggestion label="Audience" value={analysisResult.suggestions.audience} />
-                    <Suggestion label="Voice style" value={analysisResult.suggestions.voiceStyle} />
+                    <Suggestion label="Positioning" value={analysisResult.suggestions.positioning} />
                   </div>
-                  <Suggestion label="Positioning" value={analysisResult.suggestions.positioning} multiline />
-                  <Suggestion label="Visual style" value={analysisResult.suggestions.visualStyle} multiline />
-                  <Suggestion label="Content goals / selling points" value={analysisResult.suggestions.contentGoals} multiline />
+                  <Suggestion label="Key selling points" value={analysisResult.suggestions.keySellingPoints} multiline />
+                  <Suggestion label="Suggested content angles" value={analysisResult.suggestions.suggestedContentAngles} multiline />
                   {analysisResult.warnings?.length ? (
                     <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
                       {analysisResult.warnings[0]}
                     </div>
                   ) : null}
                   <div className="flex gap-2">
-                    <Button onClick={applySuggestions}>Use these as my draft</Button>
+                    <Button onClick={applySuggestions}>Use this draft</Button>
                     <Button variant="outline" onClick={() => setAnalysisResult(null)}>Dismiss</Button>
                   </div>
                 </CardContent>
               </Card>
             ) : null}
 
+            <ProfileConfirmationCard
+              values={{
+                cuisineType: state.cuisineType,
+                audience: state.audience,
+                tone: state.tone,
+                positioning: state.positioning,
+                keyStrengths: state.contentGoals,
+              }}
+              confirmed={coreProfileConfirmed}
+              onChange={(field, value) => {
+                if (field === 'keyStrengths') {
+                  setState((s) => ({ ...s, contentGoals: value }));
+                  return;
+                }
+                setState((s) => ({ ...s, [field]: value }));
+              }}
+              onConfirm={() => setCoreProfileConfirmed((v) => !v)}
+            />
+
             <Card>
-              <CardContent className="pt-6 grid sm:grid-cols-2 gap-4">
-                <Field label="Venue name" value={state.venueName} onChange={(v) => setState((s) => ({ ...s, venueName: v }))} />
-                <Field label="Cuisine type" value={state.cuisineType} onChange={(v) => setState((s) => ({ ...s, cuisineType: v }))} />
-                <Field label="Location" value={state.location} onChange={(v) => setState((s) => ({ ...s, location: v }))} />
-                <Field label="Website" value={state.website} onChange={(v) => setState((s) => ({ ...s, website: v }))} />
-                <Field label="Instagram (optional)" value={state.instagram} onChange={(v) => setState((s) => ({ ...s, instagram: v }))} />
-                <Field label="Tone / positioning" value={state.tone} onChange={(v) => setState((s) => ({ ...s, tone: v }))} />
-                <div className="sm:col-span-2"><Field label="Target audience" value={state.audience} onChange={(v) => setState((s) => ({ ...s, audience: v }))} /></div>
-                <div className="sm:col-span-2">
-                  <Label>Brand positioning</Label>
-                  <Textarea value={state.positioning} onChange={(e) => setState((s) => ({ ...s, positioning: e.target.value }))} />
-                </div>
-                <div className="sm:col-span-2 flex items-center justify-between rounded-md border p-3">
-                  <div>
-                    <p className="font-medium text-sm">Confirm core profile</p>
-                    <p className="text-xs text-muted-foreground">Step 4: confirm this profile reflects your venue (you can still edit anytime).</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={coreProfileConfirmed ? 'secondary' : 'default'}
-                    onClick={() => setCoreProfileConfirmed((v) => !v)}
+              <CardHeader>
+                <CardTitle className="text-base">Optional finishing touches</CardTitle>
+                <CardDescription>
+                  Add these now, or skip and come back later.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid sm:grid-cols-2 gap-4">
+                <Field label="Instagram handle (optional)" value={state.instagram} onChange={(v) => setState((s) => ({ ...s, instagram: v }))} />
+                <div>
+                  <Label>Autopilot preference (optional)</Label>
+                  <Select
+                    value={state.autopilotPreference}
+                    onValueChange={(v: SetupState['autopilotPreference']) => {
+                      const mapped = deriveAutopilotFromPreference(v);
+                      setState((s) => ({
+                        ...s,
+                        autopilotPreference: v,
+                        autopilotMode: mapped.mode,
+                        frequency: mapped.frequency,
+                        approvalMode: mapped.approvalMode,
+                      }));
+                    }}
                   >
-                    <CheckCircle2 className="h-4 w-4 mr-1" />
-                    {coreProfileConfirmed ? 'Confirmed' : 'Confirm profile'}
-                  </Button>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="balanced">Balanced</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div className="sm:col-span-2">
+                  <Label>Photo uploads (optional)</Label>
+                  <Input type="file" accept="image/*,video/*" multiple onChange={(e) => uploadStarterAssets(e.target.files)} disabled={uploading} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">Advanced manual editing</CardTitle>
+                <CardDescription>
+                  Prefer full control? Expand this section to edit every field directly.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <details>
+                  <summary className="cursor-pointer text-sm font-medium inline-flex items-center gap-2">
+                    <ChevronDown className="h-4 w-4" />
+                    Open manual fields
+                  </summary>
+                  <div className="pt-4 grid sm:grid-cols-2 gap-4">
+                    <Field label="Venue name" value={state.venueName} onChange={(v) => setState((s) => ({ ...s, venueName: v }))} />
+                    <Field label="Cuisine type" value={state.cuisineType} onChange={(v) => setState((s) => ({ ...s, cuisineType: v }))} />
+                    <Field label="Location" value={state.location} onChange={(v) => setState((s) => ({ ...s, location: v }))} />
+                    <Field label="Website" value={state.website} onChange={(v) => setState((s) => ({ ...s, website: v }))} />
+                    <Field label="Tone" value={state.tone} onChange={(v) => setState((s) => ({ ...s, tone: v }))} />
+                    <div className="sm:col-span-2"><Field label="Target audience" value={state.audience} onChange={(v) => setState((s) => ({ ...s, audience: v }))} /></div>
+                    <div className="sm:col-span-2">
+                      <Label>Brand positioning</Label>
+                      <Textarea value={state.positioning} onChange={(e) => setState((s) => ({ ...s, positioning: e.target.value }))} />
+                    </div>
+                  </div>
+                </details>
               </CardContent>
             </Card>
           </TabsContent>
@@ -502,7 +550,8 @@ export default function SetupPage() {
             <Card><CardContent className="pt-6 space-y-4">
               <div><Label>Voice style</Label><Textarea value={state.voiceStyle} onChange={(e) => setState((s) => ({ ...s, voiceStyle: e.target.value }))} /></div>
               <div><Label>Visual style</Label><Textarea value={state.visualStyle} onChange={(e) => setState((s) => ({ ...s, visualStyle: e.target.value }))} /></div>
-              <div><Label>Content goals</Label><Textarea value={state.contentGoals} onChange={(e) => setState((s) => ({ ...s, contentGoals: e.target.value }))} /></div>
+              <div><Label>Key selling points</Label><Textarea value={state.contentGoals} onChange={(e) => setState((s) => ({ ...s, contentGoals: e.target.value }))} /></div>
+              <div><Label>Suggested content angles</Label><Textarea value={state.suggestedContentAngles} onChange={(e) => setState((s) => ({ ...s, suggestedContentAngles: e.target.value }))} /></div>
             </CardContent></Card>
           </TabsContent>
 
@@ -645,4 +694,37 @@ function parseRules(raw: string | null | undefined): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+function deriveAutopilotFromPreference(preference: SetupState['autopilotPreference']) {
+  if (preference === 'light') {
+    return {
+      mode: 'conservative' as const,
+      frequency: 'weekly' as const,
+      approvalMode: 'require_approval' as const,
+    };
+  }
+
+  if (preference === 'active') {
+    return {
+      mode: 'creative' as const,
+      frequency: 'daily' as const,
+      approvalMode: 'auto_schedule' as const,
+    };
+  }
+
+  return {
+    mode: 'conservative' as const,
+    frequency: '3x_week' as const,
+    approvalMode: 'require_approval' as const,
+  };
+}
+
+function mapAutopilotPreference(
+  mode: SetupState['autopilotMode'],
+  frequency: SetupState['frequency'],
+): SetupState['autopilotPreference'] {
+  if (mode === 'creative' && frequency === 'daily') return 'active';
+  if (frequency === 'weekly') return 'light';
+  return 'balanced';
 }

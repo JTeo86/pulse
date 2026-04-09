@@ -25,9 +25,8 @@ const emptySuggestions = {
   tone: "",
   audience: "",
   positioning: "",
-  voiceStyle: "",
-  visualStyle: "",
-  contentGoals: "",
+  keySellingPoints: "",
+  suggestedContentAngles: "",
 };
 
 Deno.serve(async (req) => {
@@ -134,9 +133,8 @@ Return strictly JSON in this format:
   "tone": "",
   "audience": "",
   "positioning": "",
-  "voiceStyle": "",
-  "visualStyle": "",
-  "contentGoals": "",
+  "keySellingPoints": "",
+  "suggestedContentAngles": "",
   "confidence": "high|medium|low"
 }
 Rules:
@@ -177,9 +175,8 @@ Generate onboarding draft values.`,
           tone: clean(parsed.tone),
           audience: clean(parsed.audience),
           positioning: clean(parsed.positioning),
-          voiceStyle: clean(parsed.voiceStyle),
-          visualStyle: clean(parsed.visualStyle),
-          contentGoals: clean(parsed.contentGoals),
+          keySellingPoints: clean(parsed.keySellingPoints || parsed.contentGoals),
+          suggestedContentAngles: clean(parsed.suggestedContentAngles),
         };
         confidence = ["high", "medium", "low"].includes(parsed.confidence)
           ? parsed.confidence
@@ -279,7 +276,8 @@ function fallbackSuggestionsFromUrl(url: string) {
       ...emptySuggestions,
       venueName: brandGuess,
       positioning: "Neighborhood hospitality venue focused on memorable guest experiences.",
-      contentGoals: "Highlight signature offerings, ambience, social proof, and repeat-visit reasons.",
+      keySellingPoints: "Highlight signature offerings, ambience, social proof, and repeat-visit reasons.",
+      suggestedContentAngles: "Menu highlights, behind-the-scenes prep moments, guest experiences, and local community moments.",
     };
   } catch {
     return emptySuggestions;
