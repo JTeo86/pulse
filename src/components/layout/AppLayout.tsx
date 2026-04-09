@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home,
-  Zap,
   FolderOpen,
   CalendarCheck2,
   MessageSquareText,
@@ -55,7 +54,6 @@ const workflowNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
   { name: 'Content', href: '/content/library', icon: FolderOpen },
-  { name: 'Autopilot', href: '/autopilot', icon: Zap },
   { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
 ];
 

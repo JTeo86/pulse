@@ -52,7 +52,7 @@ export default function AutopilotPage() {
   if (loading) {
     return (
       <>
-        <PageHeader title="Autopilot" description="AI-driven marketing assistant" />
+        <PageHeader title="Automation Settings & Diagnostics" description="Advanced controls and run history for Pulse Engine." />
         <div className="p-6 space-y-4">
           <Skeleton className="h-40 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -64,16 +64,16 @@ export default function AutopilotPage() {
   return (
     <>
       <PageHeader
-        title="Autopilot"
-        description="Autopilot creates content first, then you review it in Content and schedule it in Calendar."
+        title="Automation Settings & Diagnostics"
+        description="Pulse runs in the background. Use this page for advanced controls and troubleshooting."
       />
 
       <div className="p-6 space-y-6 max-w-5xl">
         <Alert>
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Autopilot → Content → Calendar</AlertTitle>
+          <AlertTitle>Pulse Engine runs in the background</AlertTitle>
           <AlertDescription>
-            Generated items land in Content drafts by default. Review them, approve, and send to Calendar when ready.
+            This compatibility page remains available for existing bookmarks. Day-to-day work now lives in Home, Content, Reviews, and Setup.
           </AlertDescription>
         </Alert>
         <Card className="border-accent/20">
@@ -84,7 +84,7 @@ export default function AutopilotPage() {
                   <Zap className="w-5 h-5 text-accent" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">Autopilot Engine</CardTitle>
+                  <CardTitle className="text-lg">Pulse Engine</CardTitle>
                   <CardDescription>
                     {isEnabled ? 'Autopilot is active and generating content' : 'Enable to start automatic content generation'}
                   </CardDescription>

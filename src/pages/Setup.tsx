@@ -108,6 +108,7 @@ export default function SetupPage() {
   const [coreProfileConfirmed, setCoreProfileConfirmed] = useState(false);
 
   const onboarding = searchParams.get('onboarding') === '1';
+  const requestedTab = searchParams.get('tab') === 'automation' ? 'automation' : 'basics';
 
   const fetchAssets = async (venueId: string) => {
     setLoadingAssets(true);
@@ -331,7 +332,7 @@ export default function SetupPage() {
         });
       }
       await fetchAssets(currentVenue.id);
-      toast({ title: 'Assets uploaded', description: `${files.length} starter asset(s) added to your Autopilot pool.` });
+      toast({ title: 'Assets uploaded', description: `${files.length} starter asset(s) added to your Pulse asset pool.` });
     } catch (error: any) {
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
     } finally {
@@ -389,18 +390,18 @@ export default function SetupPage() {
               <Badge variant="secondary">{completion}% complete</Badge>
             </CardTitle>
             <CardDescription>
-              {onboarding ? 'Welcome! Complete this once and Pulse can start producing useful content immediately.' : 'Keep setup updated so Autopilot stays on-brand.'}
+              {onboarding ? 'Welcome! Complete this once and Pulse can start producing useful content immediately.' : 'Keep setup updated so Pulse keeps preparing strong outcomes in the background.'}
             </CardDescription>
           </CardHeader>
         </Card>
 
-        <Tabs defaultValue="basics" className="space-y-4">
+        <Tabs defaultValue={requestedTab} className="space-y-4">
           <TabsList className="grid grid-cols-5 w-full">
             <TabsTrigger value="basics">Venue</TabsTrigger>
             <TabsTrigger value="brand">Brand</TabsTrigger>
             <TabsTrigger value="assets">Asset Pool</TabsTrigger>
             <TabsTrigger value="integrations">Integrations</TabsTrigger>
-            <TabsTrigger value="autopilot">Autopilot</TabsTrigger>
+            <TabsTrigger value="automation">Automation</TabsTrigger>
           </TabsList>
 
           <TabsContent value="basics" className="space-y-4">
@@ -507,12 +508,12 @@ export default function SetupPage() {
 
           <TabsContent value="assets">
             <Card><CardContent className="pt-6 space-y-4">
-              <p className="text-sm text-muted-foreground">Upload real starter photos so Autopilot can generate asset-backed posts from day one.</p>
+              <p className="text-sm text-muted-foreground">Upload real starter photos so Pulse can prepare asset-backed posts from day one.</p>
               <div className="flex items-center gap-3">
                 <Input type="file" accept="image/*,video/*" multiple onChange={(e) => uploadStarterAssets(e.target.files)} disabled={uploading} />
                 <Badge variant="outline">{assets.length} assets in pool</Badge>
               </div>
-              <p className="text-xs text-muted-foreground">Default metadata applied: reusable by Autopilot, evergreen, medium priority, visual type: dish. Edit metadata in Content as needed.</p>
+              <p className="text-xs text-muted-foreground">Default metadata applied: reusable by Pulse, evergreen, medium priority, visual type: dish. Edit metadata in Content as needed.</p>
               <div className="flex flex-wrap gap-2">{visualTypes.map((t) => <Badge variant="secondary" key={t}>{t}</Badge>)}</div>
 
               {loadingAssets ? (
@@ -523,7 +524,7 @@ export default function SetupPage() {
               ) : assets.length === 0 ? (
                 <div className="rounded-md border border-dashed p-6 text-center space-y-1">
                   <p className="font-medium">No assets uploaded yet</p>
-                  <p className="text-sm text-muted-foreground">Upload starter images to build your Asset Pool for Autopilot and Content Library.</p>
+                  <p className="text-sm text-muted-foreground">Upload starter images to build your Asset Pool for Pulse and Content Library.</p>
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -586,13 +587,26 @@ export default function SetupPage() {
             </CardContent></Card>
           </TabsContent>
 
-          <TabsContent value="autopilot">
+          <TabsContent value="automation">
             <Card><CardContent className="pt-6 space-y-4">
+              <div>
+                <p className="font-medium text-sm">Pulse Engine Settings</p>
+                <p className="text-xs text-muted-foreground">Set cadence, approval behavior, and fallback rules for how Pulse prepares content and replies.</p>
+              </div>
               <div className="flex items-center justify-between"><Label>Require image asset for runs</Label><Switch checked={state.requireAssetForRuns} onCheckedChange={(v) => setState((s) => ({ ...s, requireAssetForRuns: v }))} /></div>
               <div className="flex items-center justify-between"><Label>Allow copy-only fallback</Label><Switch checked={state.allowCopyOnlyFallback} onCheckedChange={(v) => setState((s) => ({ ...s, allowCopyOnlyFallback: v }))} /></div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div><Label>Mode</Label><Select value={state.autopilotMode} onValueChange={(v: 'conservative' | 'creative') => setState((s) => ({ ...s, autopilotMode: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="conservative">Conservative</SelectItem><SelectItem value="creative">Creative</SelectItem></SelectContent></Select></div>
                 <div><Label>Run frequency</Label><Select value={state.frequency} onValueChange={(v: 'daily' | '3x_week' | 'weekly') => setState((s) => ({ ...s, frequency: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="daily">Daily</SelectItem><SelectItem value="3x_week">3x weekly</SelectItem><SelectItem value="weekly">Weekly</SelectItem></SelectContent></Select></div>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Diagnostics and run history</p>
+                  <p className="text-xs text-muted-foreground">Use this when you need deeper troubleshooting details.</p>
+                </div>
+                <Button variant="outline" onClick={() => window.location.assign('/autopilot')}>
+                  View run history
+                </Button>
               </div>
             </CardContent></Card>
           </TabsContent>
