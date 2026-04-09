@@ -66,8 +66,8 @@ const AI_DEFAULTS: Array<{
 }> = [
   {
     key: 'gemini_replate_model',
-    label: 'Gemini Model',
-    description: 'Model ID for Pro Photo generation. Must be image-capable (e.g. gemini-2.5-flash-image).',
+    label: 'AI Model',
+    description: 'Model ID for Pro Photo generation. Must be image-capable.',
     type: 'text',
     defaultValue: 'gemini-2.5-flash-image',
   },
@@ -250,7 +250,7 @@ export default function PlatformConfigTab() {
                 <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${aiOpen ? 'rotate-180' : ''}`} />
               </div>
               <CardDescription>
-                Gemini model selection and generation parameters. Not visible to users.
+                AI model selection and generation parameters. Not visible to users.
               </CardDescription>
             </CardHeader>
           </CollapsibleTrigger>

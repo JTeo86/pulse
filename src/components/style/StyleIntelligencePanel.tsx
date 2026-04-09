@@ -172,7 +172,7 @@ export function StyleIntelligencePanel({ venueId, canEdit }: StyleIntelligencePa
         <div className="text-sm">
           <p className="text-foreground font-medium">How Style Intelligence works</p>
           <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-            Upload inspiration images across three channels. Gemini analyses each one for palette, lighting, composition, and mood. 
+            Upload inspiration images across three channels. AI analyses each one for palette, lighting, composition, and mood. 
             Pinned assets get 2× weight. The AI uses weighted scoring to build your venue's style signature — which automatically 
             influences image generation, reel creation, and copywriting.
           </p>

@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const photoRoomApiKey = Deno.env.get('PHOTOROOM_API_KEY');
 
-    if (!photoRoomApiKey) return jsonResp({ error: 'PhotoRoom API not configured' }, 500);
+    if (!photoRoomApiKey) return jsonResp({ error: 'AI image service not configured' }, 500);
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) return jsonResp({ error: 'Unauthorized' }, 401);
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     if (!photoRoomResponse.ok) {
       const errorText = await photoRoomResponse.text();
       console.error('[PHOTOROOM-EDIT] v2 error:', errorText);
-      return jsonResp({ error: 'PhotoRoom processing failed', details: errorText }, 500);
+      return jsonResp({ error: 'AI image processing failed', details: errorText }, 500);
     }
 
     const processedBuffer = await photoRoomResponse.arrayBuffer();

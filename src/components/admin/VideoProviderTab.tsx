@@ -210,9 +210,9 @@ export default function VideoProviderTab() {
               {/* Kling Provider */}
               <div className="flex items-center justify-between py-2">
                 <div>
-                  <p className="text-sm font-medium">Kling Provider Enabled</p>
+                  <p className="text-sm font-medium">Video Provider Enabled</p>
                   <p className="text-xs text-muted-foreground">
-                    Allow reel jobs to be sent to Kling AI for processing.
+                    Allow reel jobs to be sent to the configured video generation service for processing.
                   </p>
                 </div>
                 <Switch
@@ -233,7 +233,7 @@ export default function VideoProviderTab() {
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <Key className="w-4 h-4 text-muted-foreground" />
-                Kling Provider Configuration
+                Video Provider Configuration
               </h4>
               <Badge variant={statusInfo.variant} className="text-xs gap-1">
                 <StatusIcon className="w-3 h-3" />
@@ -248,7 +248,7 @@ export default function VideoProviderTab() {
                   <Input
                     id="kling-api-key"
                     type="password"
-                    placeholder={klingApiKey?.is_configured ? '••••••••••• (enter new value to update)' : 'Paste your Kling API key'}
+                    placeholder={klingApiKey?.is_configured ? '••••••••••• (enter new value to update)' : 'Paste your video provider API key'}
                     value={apiKeyValue}
                     onChange={(e) => setApiKeyValue(e.target.value)}
                   />
@@ -271,7 +271,7 @@ export default function VideoProviderTab() {
                   <Input
                     id="kling-api-secret"
                     type="password"
-                    placeholder={klingApiSecret?.is_configured ? '••••••••••• (enter new value to update)' : 'Paste your Kling API secret'}
+                    placeholder={klingApiSecret?.is_configured ? '••••••••••• (enter new value to update)' : 'Paste your video provider API secret'}
                     value={apiSecretValue}
                     onChange={(e) => setApiSecretValue(e.target.value)}
                   />
@@ -299,11 +299,11 @@ export default function VideoProviderTab() {
               Setup Guide
             </h5>
             <ul className="text-xs text-muted-foreground space-y-1.5 list-disc list-inside">
-              <li>Kling credentials are configured only here — they do not appear in the Integrations tab.</li>
+              <li>Video provider credentials are configured only here — they do not appear in the Integrations tab.</li>
               <li>Key values are write-only and never sent back to the browser.</li>
               <li>Reel Creator is hidden from venue users until both <strong>Video Features</strong> and <strong>Reel Creator Visible</strong> are enabled above.</li>
-              <li>Kling API credentials can be added at any time. Jobs queued before provider setup will be held in pending state.</li>
-              <li>Enable <strong>Kling Provider</strong> only after API credentials are saved and tested.</li>
+              <li>Video provider API credentials can be added at any time. Jobs queued before provider setup will be held in pending state.</li>
+              <li>Enable <strong>Video Provider</strong> only after API credentials are saved and tested.</li>
             </ul>
           </div>
         </CardContent>

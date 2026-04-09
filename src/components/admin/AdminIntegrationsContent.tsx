@@ -22,7 +22,7 @@ import {
 const CATEGORY_ORDER: KeyCategory[] = ['Reviews', 'Editor', 'Publishing'];
 const CATEGORY_META: Record<KeyCategory, { label: string; description: string }> = {
   Reviews:    { label: 'Reviews & Reputation',  description: 'Keys for ingesting Google, OpenTable and TripAdvisor reviews via SerpAPI.' },
-  Editor:     { label: 'AI / Creative',          description: 'Gemini powers Pro Photo image generation and creative AI features.' },
+  Editor:     { label: 'AI / Creative',          description: 'AI powers Pro Photo image generation and creative features.' },
   Publishing: { label: 'Publishing',             description: 'Internal publishing queue today; adapter-ready for future direct scheduler integrations.' },
   Video:      { label: 'Video / Reels',          description: '' },
   Other:      { label: 'Other',                  description: '' },
@@ -371,7 +371,7 @@ export default function AdminIntegrationsContent() {
         <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-start gap-3">
           <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
-            Video provider credentials (Kling API Key {"&"} Secret) are managed in the <strong>Video Provider</strong> tab.
+            Video provider credentials (API Key {"&"} Secret) are managed in the <strong>Video Provider</strong> tab.
           </p>
         </div>
       </div>

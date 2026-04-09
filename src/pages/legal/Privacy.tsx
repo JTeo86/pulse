@@ -115,7 +115,7 @@ export default function PrivacyPage() {
             <p className="text-muted-foreground mb-3">We share data with the following categories of processors under data processing agreements:</p>
             <div className="space-y-2 text-muted-foreground">
               <p><span className="font-medium text-foreground">Infrastructure &amp; database:</span> Supabase (EU/US hosting; covered by DPA and SCCs where applicable).</p>
-              <p><span className="font-medium text-foreground">AI model providers:</span> OpenAI, Google (used to generate content; see their respective privacy policies).</p>
+              <p><span className="font-medium text-foreground">AI processing providers:</span> Trusted third-party AI services (used to generate content; handled under applicable privacy commitments).</p>
               <p><span className="font-medium text-foreground">Email delivery:</span> Supabase Auth email (transactional notifications only).</p>
               <p><span className="font-medium text-foreground">Payment processing:</span> Stripe (if applicable; subject to Stripe's Privacy Policy).</p>
             </div>
