@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Pencil, Save, ImageIcon, Loader2 } from 'lucide-react';
+import { X, Pencil, Save, ImageIcon, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +35,25 @@ type SetupState = {
   allowCopyOnlyFallback: boolean;
   approvalMode: 'require_approval' | 'auto_schedule';
   frequency: 'daily' | '3x_week' | 'weekly';
+};
+
+type WebsiteSuggestions = {
+  venueName: string;
+  cuisineType: string;
+  location: string;
+  tone: string;
+  audience: string;
+  positioning: string;
+  voiceStyle: string;
+  visualStyle: string;
+  contentGoals: string;
+};
+
+type WebsiteAnalysisResult = {
+  website_url: string;
+  suggestions: WebsiteSuggestions;
+  confidence: 'high' | 'medium' | 'low';
+  warnings?: string[];
 };
 
 const defaultState: SetupState = {
@@ -81,6 +100,12 @@ export default function SetupPage() {
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [editingTags, setEditingTags] = useState('');
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+  const [analysisUrl, setAnalysisUrl] = useState('');
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<WebsiteAnalysisResult | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [websiteAnalyzed, setWebsiteAnalyzed] = useState(false);
+  const [coreProfileConfirmed, setCoreProfileConfirmed] = useState(false);
 
   const onboarding = searchParams.get('onboarding') === '1';
 
@@ -141,18 +166,84 @@ export default function SetupPage() {
         approvalMode: (settingsRes.data?.approval_mode as SetupState['approvalMode']) || 'require_approval',
         frequency: (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week',
       });
+      setAnalysisUrl(currentVenue.website_url || '');
+      setWebsiteAnalyzed(Boolean(currentVenue.website_url && profileRes.data));
+      setCoreProfileConfirmed(Boolean(currentVenue.name && profileRes.data?.cuisine_type && profileRes.data?.brand_summary));
       await fetchAssets(currentVenue.id);
     })();
   }, [currentVenue?.id]);
 
   const completion = useMemo(() => {
     let done = 0;
-    if (state.venueName && state.cuisineType && state.location) done++;
-    if (state.voiceStyle && state.visualStyle && state.contentGoals) done++;
+    if (websiteAnalyzed) done++;
+    if (coreProfileConfirmed) done++;
     if (assets.length > 0) done++;
-    if (state.frequency) done++;
+    if (state.frequency && state.approvalMode) done++;
     return Math.round((done / 4) * 100);
-  }, [state, assets.length]);
+  }, [websiteAnalyzed, coreProfileConfirmed, assets.length, state.frequency, state.approvalMode]);
+
+  const analyzeWebsite = async () => {
+    if (!analysisUrl.trim()) {
+      setAnalysisError('Enter a website URL to analyze.');
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    setAnalysisResult(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-venue-website', {
+        body: {
+          website_url: analysisUrl,
+          venue_id: currentVenue?.id,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.suggestions) throw new Error('No suggestions returned.');
+
+      setWebsiteAnalyzed(true);
+      setAnalysisResult(data as WebsiteAnalysisResult);
+
+      if (Array.isArray(data?.warnings) && data.warnings.length > 0) {
+        toast({
+          title: 'Analysis completed with partial data',
+          description: data.warnings[0],
+        });
+      } else {
+        toast({ title: 'Website analyzed', description: 'Pulse generated a draft profile. Review and confirm it below.' });
+      }
+    } catch (error: any) {
+      const message = error?.message || 'Website analysis failed. Please verify the URL and try again.';
+      setAnalysisError(message);
+      toast({ title: 'Analysis failed', description: message, variant: 'destructive' });
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const applySuggestions = () => {
+    if (!analysisResult?.suggestions) return;
+    const draft = analysisResult.suggestions;
+
+    setState((prev) => ({
+      ...prev,
+      website: analysisResult.website_url || prev.website,
+      venueName: draft.venueName || prev.venueName,
+      cuisineType: draft.cuisineType || prev.cuisineType,
+      location: draft.location || prev.location,
+      tone: draft.tone || prev.tone,
+      audience: draft.audience || prev.audience,
+      positioning: draft.positioning || prev.positioning,
+      voiceStyle: draft.voiceStyle || prev.voiceStyle,
+      visualStyle: draft.visualStyle || prev.visualStyle,
+      contentGoals: draft.contentGoals || prev.contentGoals,
+    }));
+
+    setCoreProfileConfirmed(false);
+    toast({ title: 'Draft applied', description: 'Suggestions were added as a draft. Edit anything before confirming.' });
+  };
 
   const saveSetup = async () => {
     if (!currentVenue) return;
@@ -312,20 +403,98 @@ export default function SetupPage() {
             <TabsTrigger value="autopilot">Autopilot</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="basics">
-            <Card><CardContent className="pt-6 grid sm:grid-cols-2 gap-4">
-              <Field label="Venue name" value={state.venueName} onChange={(v) => setState((s) => ({ ...s, venueName: v }))} />
-              <Field label="Cuisine type" value={state.cuisineType} onChange={(v) => setState((s) => ({ ...s, cuisineType: v }))} />
-              <Field label="Location" value={state.location} onChange={(v) => setState((s) => ({ ...s, location: v }))} />
-              <Field label="Website" value={state.website} onChange={(v) => setState((s) => ({ ...s, website: v }))} />
-              <Field label="Instagram" value={state.instagram} onChange={(v) => setState((s) => ({ ...s, instagram: v }))} />
-              <Field label="Tone / positioning" value={state.tone} onChange={(v) => setState((s) => ({ ...s, tone: v }))} />
-              <div className="sm:col-span-2"><Field label="Target audience" value={state.audience} onChange={(v) => setState((s) => ({ ...s, audience: v }))} /></div>
-              <div className="sm:col-span-2">
-                <Label>Brand positioning</Label>
-                <Textarea value={state.positioning} onChange={(e) => setState((s) => ({ ...s, positioning: e.target.value }))} />
-              </div>
-            </CardContent></Card>
+          <TabsContent value="basics" className="space-y-4">
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Analyse my venue
+                </CardTitle>
+                <CardDescription>
+                  Step 1: add your website. Step 2: let Pulse infer your profile. Step 3: review, edit, and confirm.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid sm:grid-cols-[1fr_auto] gap-3">
+                  <Input
+                    value={analysisUrl}
+                    onChange={(e) => setAnalysisUrl(e.target.value)}
+                    placeholder="https://yourvenue.com"
+                  />
+                  <Button onClick={analyzeWebsite} disabled={analysisLoading}>
+                    {analysisLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analysing...</> : 'Analyse website'}
+                  </Button>
+                </div>
+                {analysisError ? <p className="text-sm text-destructive">{analysisError}</p> : null}
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <Badge variant={websiteAnalyzed ? 'default' : 'outline'}>Website analysed</Badge>
+                  <Badge variant={coreProfileConfirmed ? 'default' : 'outline'}>Core profile confirmed</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {analysisResult ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Review inferred profile</CardTitle>
+                  <CardDescription>
+                    Confidence: <span className="font-medium">{analysisResult.confidence}</span>. Suggestions are drafts and never auto-overwrite saved data.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                    <Suggestion label="Venue name" value={analysisResult.suggestions.venueName} />
+                    <Suggestion label="Cuisine type" value={analysisResult.suggestions.cuisineType} />
+                    <Suggestion label="Location" value={analysisResult.suggestions.location} />
+                    <Suggestion label="Tone" value={analysisResult.suggestions.tone} />
+                    <Suggestion label="Audience" value={analysisResult.suggestions.audience} />
+                    <Suggestion label="Voice style" value={analysisResult.suggestions.voiceStyle} />
+                  </div>
+                  <Suggestion label="Positioning" value={analysisResult.suggestions.positioning} multiline />
+                  <Suggestion label="Visual style" value={analysisResult.suggestions.visualStyle} multiline />
+                  <Suggestion label="Content goals / selling points" value={analysisResult.suggestions.contentGoals} multiline />
+                  {analysisResult.warnings?.length ? (
+                    <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+                      {analysisResult.warnings[0]}
+                    </div>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <Button onClick={applySuggestions}>Use these as my draft</Button>
+                    <Button variant="outline" onClick={() => setAnalysisResult(null)}>Dismiss</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <Card>
+              <CardContent className="pt-6 grid sm:grid-cols-2 gap-4">
+                <Field label="Venue name" value={state.venueName} onChange={(v) => setState((s) => ({ ...s, venueName: v }))} />
+                <Field label="Cuisine type" value={state.cuisineType} onChange={(v) => setState((s) => ({ ...s, cuisineType: v }))} />
+                <Field label="Location" value={state.location} onChange={(v) => setState((s) => ({ ...s, location: v }))} />
+                <Field label="Website" value={state.website} onChange={(v) => setState((s) => ({ ...s, website: v }))} />
+                <Field label="Instagram (optional)" value={state.instagram} onChange={(v) => setState((s) => ({ ...s, instagram: v }))} />
+                <Field label="Tone / positioning" value={state.tone} onChange={(v) => setState((s) => ({ ...s, tone: v }))} />
+                <div className="sm:col-span-2"><Field label="Target audience" value={state.audience} onChange={(v) => setState((s) => ({ ...s, audience: v }))} /></div>
+                <div className="sm:col-span-2">
+                  <Label>Brand positioning</Label>
+                  <Textarea value={state.positioning} onChange={(e) => setState((s) => ({ ...s, positioning: e.target.value }))} />
+                </div>
+                <div className="sm:col-span-2 flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <p className="font-medium text-sm">Confirm core profile</p>
+                    <p className="text-xs text-muted-foreground">Step 4: confirm this profile reflects your venue (you can still edit anytime).</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={coreProfileConfirmed ? 'secondary' : 'default'}
+                    onClick={() => setCoreProfileConfirmed((v) => !v)}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                    {coreProfileConfirmed ? 'Confirmed' : 'Confirm profile'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="brand">
@@ -434,6 +603,15 @@ export default function SetupPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function Suggestion({ label, value, multiline = false }: { label: string; value: string; multiline?: boolean }) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <p className={`rounded-md border bg-muted/40 text-sm px-3 py-2 ${multiline ? 'min-h-16' : ''}`}>{value || '—'}</p>
+    </div>
   );
 }
 
