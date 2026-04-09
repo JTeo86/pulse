@@ -15,6 +15,10 @@ interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'onE
   containerClassName?: string;
   /** Aspect ratio class (e.g. 'aspect-square'). Applied to container. */
   aspectClassName?: string;
+  /** Hint browser about relative fetch priority when needed. */
+  fetchPriority?: 'high' | 'low';
+  /** Opt-in eager loading for above-the-fold/hero imagery. */
+  eager?: boolean;
 }
 
 /**
@@ -32,6 +36,8 @@ export function MediaImage({
   children,
   containerClassName,
   aspectClassName = 'aspect-square',
+  fetchPriority,
+  eager = false,
   className,
   alt = '',
   ...imgProps
@@ -62,6 +68,8 @@ export function MediaImage({
 
   const showSkeleton = status === 'loading' && !!activeSrc;
   const showError = status === 'error' || !activeSrc;
+  const loading = imgProps.loading ?? (eager ? 'eager' : 'lazy');
+  const decoding = imgProps.decoding ?? 'async';
 
   return (
     <div className={cn('relative overflow-hidden bg-muted', aspectClassName, containerClassName)}>
@@ -85,7 +93,9 @@ export function MediaImage({
           {...imgProps}
           src={activeSrc}
           alt={alt}
-          loading="lazy"
+          loading={loading}
+          decoding={decoding}
+          fetchPriority={fetchPriority}
           onLoad={handleLoad}
           onError={handleError}
           className={cn(

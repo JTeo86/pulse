@@ -3,6 +3,7 @@ import { Pin, Trash2, MessageSquare, Loader2, CheckCircle2, AlertCircle, Clock }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { MediaImage } from '@/components/ui/media-image';
 import { supabase } from '@/integrations/supabase/client';
 import { StyleAssetWithAnalysis } from '@/types/style-intelligence';
 import { useToast } from '@/hooks/use-toast';
@@ -86,11 +87,11 @@ export function StyleAssetCard({ asset, canEdit, onUpdate }: StyleAssetCardProps
     <div className="group relative rounded-xl overflow-hidden border border-border bg-card hover:border-accent/40 transition-all duration-200">
       {/* Thumbnail */}
       <div className="relative aspect-square">
-        <img
+        <MediaImage
           src={asset.thumbnailUrl}
           alt="Style reference"
-          className="w-full h-full object-cover"
-          loading="lazy"
+          aspectClassName="w-full h-full"
+          className="object-cover"
         />
 
         {/* Status badge */}

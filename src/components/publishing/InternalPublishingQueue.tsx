@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MediaImage } from '@/components/ui/media-image';
 import { useToast } from '@/hooks/use-toast';
 import { buildInternalPublishingAdapter, normalizePublishingStatus, type PublishingAction } from '@/lib/publishing-adapters';
 
@@ -194,7 +195,12 @@ export function InternalPublishingQueue() {
         <div className="flex gap-4">
           <div className="w-24 h-24 bg-muted rounded-lg flex-shrink-0 overflow-hidden">
             {item.media_master_url ? (
-              <img src={item.media_master_url} alt="" className="w-full h-full object-cover" />
+              <MediaImage
+                src={item.media_master_url}
+                alt=""
+                aspectClassName="w-full h-full"
+                className="object-cover"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                 <ImageOff className="w-5 h-5" />

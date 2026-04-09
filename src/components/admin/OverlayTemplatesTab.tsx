@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { MediaImage } from '@/components/ui/media-image';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -317,7 +318,12 @@ export default function OverlayTemplatesTab() {
                   <TableCell>
                     <div className="w-16 h-10 rounded overflow-hidden bg-muted flex items-center justify-center">
                       {template.preview_url ? (
-                        <img src={template.preview_url} alt={template.name} className="w-full h-full object-cover" />
+                        <MediaImage
+                          src={template.preview_url}
+                          alt={template.name}
+                          aspectClassName="w-full h-full"
+                          className="object-cover"
+                        />
                       ) : (
                         <Layers className="w-4 h-4 text-muted-foreground" />
                       )}

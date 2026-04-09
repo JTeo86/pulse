@@ -5,6 +5,7 @@ import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { MediaImage } from '@/components/ui/media-image';
 import { AssetPickerModal } from '@/components/planner/AssetPickerModal';
 import type { ContentAsset } from '@/hooks/use-content-assets';
 
@@ -97,13 +98,11 @@ export function CalendarMediaPicker({ value, onChange }: CalendarMediaPickerProp
             </div>
           ) : (
             <div className="aspect-video relative">
-              <img
+              <MediaImage
                 src={value.url}
                 alt={value.label}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
+                aspectClassName="w-full h-full"
+                className="object-cover"
               />
             </div>
           )}

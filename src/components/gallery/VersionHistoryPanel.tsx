@@ -19,6 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import { MediaImage } from '@/components/ui/media-image';
 import { ContentAsset, useAssetLineage } from '@/hooks/use-content-assets';
 
 interface VersionHistoryPanelProps {
@@ -111,11 +112,11 @@ export function VersionHistoryPanel({
                           {/* Thumbnail */}
                           {imageUrl && (
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted shrink-0">
-                              <img
+                              <MediaImage
                                 src={imageUrl}
                                 alt=""
-                                className="w-full h-full object-cover"
-                                loading="lazy"
+                                aspectClassName="w-full h-full"
+                                className="object-cover"
                               />
                             </div>
                           )}

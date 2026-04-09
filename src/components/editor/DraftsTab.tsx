@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { MediaImage } from '@/components/ui/media-image';
 import {
   Dialog,
   DialogContent,
@@ -182,10 +183,11 @@ export default function DraftsTab() {
             >
               <div className="aspect-video bg-muted flex items-center justify-center">
                 {item.media_master_url ? (
-                  <img 
-                    src={item.media_master_url} 
-                    alt="" 
-                    className="w-full h-full object-cover"
+                  <MediaImage
+                    src={item.media_master_url}
+                    alt=""
+                    aspectClassName="w-full h-full"
+                    className="object-cover"
                   />
                 ) : (
                   <Image className="w-12 h-12 text-muted-foreground/30" />
