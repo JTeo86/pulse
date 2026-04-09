@@ -29,6 +29,7 @@ export default function AutopilotPage() {
   const latestRunSummary = latestRun
     ? `${latestRun.saved_count ?? latestRun.items_saved ?? 0} saved of ${latestRun.generated_count ?? latestRun.items_generated ?? 0} generated`
     : 'No runs yet.';
+  const latestRunDiagnostic = latestRun ? buildRunDiagnosticSummary(latestRun) : null;
   const lastRunAttention = !latestRun
     ? 'Run Pulse Now to generate your first batch of content.'
     : latestRun.status === 'failed'
@@ -128,6 +129,19 @@ export default function AutopilotPage() {
                 <p className="font-medium mt-1">{lastRunAttention}</p>
               </div>
             </div>
+            {latestRunDiagnostic && (
+              <div className="rounded-md border border-accent/30 bg-accent/5 p-3 space-y-1">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Autopilot diagnostics</p>
+                <p className="text-sm font-medium">{latestRunDiagnostic.primaryMessage}</p>
+                {latestRunDiagnostic.recommendedActions.length > 0 && (
+                  <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+                    {latestRunDiagnostic.recommendedActions.map((action) => (
+                      <li key={action}>{action}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <Button onClick={runPulseNow} disabled={trigger.isPending} className="gap-2 w-full sm:w-auto">
               {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}Run Pulse Now
@@ -287,6 +301,22 @@ export default function AutopilotPage() {
                     </div>
 
                     {run.error_message && <p className="text-xs text-destructive">{run.error_message}</p>}
+                    {(() => {
+                      const diagnostics = buildRunDiagnosticSummary(run);
+                      if (!diagnostics.primaryMessage && diagnostics.recommendedActions.length === 0) return null;
+                      return (
+                        <div className="rounded-md border bg-background/80 px-3 py-2">
+                          {diagnostics.primaryMessage && (
+                            <p className="text-xs text-muted-foreground">{diagnostics.primaryMessage}</p>
+                          )}
+                          {diagnostics.recommendedActions.length > 0 && (
+                            <ul className="mt-1 list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+                              {diagnostics.recommendedActions.map((action) => <li key={action}>{action}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {!hasSavedItems && <p className="text-xs text-muted-foreground">Open generated items unavailable: {openDisabledReason}</p>}
 
                     <div className="flex gap-2">
@@ -359,4 +389,33 @@ function RunStatusIcon({ status }: { status: string }) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return <div className="rounded-md border border-border/60 bg-background px-2 py-1.5"><p className="text-muted-foreground">{label}</p><p className="text-sm font-semibold">{value}</p></div>;
+}
+
+function buildRunDiagnosticSummary(run: any) {
+  const summary = (run.output_summary || {}) as Record<string, any>;
+  const sourceSummary = (summary.source_summary || {}) as Record<string, number>;
+  const p1 = Number(sourceSummary.priority_1 || 0);
+  const p2 = Number(sourceSummary.priority_2 || 0);
+  const p3 = Number(sourceSummary.priority_3 || 0);
+  const p4 = Number(sourceSummary.priority_4 || 0);
+  const p5 = Number(sourceSummary.priority_5 || 0);
+  const sourceLine = `Assets found — reusable pool: ${p1}, planner-linked: ${p2}, approved library: ${p3}, recent uploads: ${p4}, approved guest photos: ${p5}.`;
+  const copyOnly = Boolean(summary.copy_only_fallback_used);
+  const blocked = Boolean(summary.asset_blocked);
+  const recommendedActions = Array.isArray(summary.recommended_next_asset_actions)
+    ? summary.recommended_next_asset_actions.map((x: any) => String(x))
+    : [];
+
+  let primaryMessage = sourceLine;
+  if (blocked) {
+    primaryMessage = `Run blocked by asset coverage. ${sourceLine}`;
+  } else if (copyOnly) {
+    primaryMessage = `Pulse generated copy-only drafts because no eligible photos were found. ${sourceLine}`;
+  }
+
+  if (summary.diagnostic_message) {
+    primaryMessage = `${primaryMessage} ${String(summary.diagnostic_message)}`;
+  }
+
+  return { primaryMessage, recommendedActions };
 }

@@ -30,6 +30,10 @@ interface TodayOverview {
     createdAt: string;
     itemsSaved: number;
     itemsFailed: number;
+    copyOnlyFallbackUsed?: boolean;
+    assetBlocked?: boolean;
+    recommendedActions?: string[];
+    sourceSummary?: Record<string, number>;
   } | null;
 }
 
@@ -83,7 +87,7 @@ export default function Home() {
           .lt('scheduled_for', twoWeeksOut.toISOString()),
         supabase
           .from('autopilot_runs')
-          .select('id, status, run_status, created_at, items_saved, items_failed, saved_count, failed_count')
+          .select('id, status, run_status, created_at, items_saved, items_failed, saved_count, failed_count, output_summary')
           .eq('venue_id', currentVenue.id)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -114,6 +118,12 @@ export default function Home() {
               createdAt: run.created_at,
               itemsSaved: run.saved_count ?? run.items_saved ?? 0,
               itemsFailed: run.failed_count ?? run.items_failed ?? 0,
+              copyOnlyFallbackUsed: Boolean((run.output_summary as any)?.copy_only_fallback_used),
+              assetBlocked: Boolean((run.output_summary as any)?.asset_blocked),
+              recommendedActions: Array.isArray((run.output_summary as any)?.recommended_next_asset_actions)
+                ? ((run.output_summary as any).recommended_next_asset_actions as any[]).map((action) => String(action))
+                : [],
+              sourceSummary: ((run.output_summary as any)?.source_summary || {}) as Record<string, number>,
             }
           : null,
       };
@@ -221,8 +231,8 @@ export default function Home() {
               {!overview?.lastAutopilotRun ? (
                 <p className="text-sm text-muted-foreground">No runs yet. Enable Autopilot in Setup to start preparing content each week.</p>
               ) : (
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="space-y-1">
+                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                  <div className="space-y-1.5">
                     <p className="text-sm font-medium">
                       Status: <span className="capitalize">{overview.lastAutopilotRun.status.replace('_', ' ')}</span>
                     </p>
@@ -230,6 +240,23 @@ export default function Home() {
                       Ran {formatRunTime(overview.lastAutopilotRun.createdAt)} • Saved {overview.lastAutopilotRun.itemsSaved} item{overview.lastAutopilotRun.itemsSaved === 1 ? '' : 's'}
                       {overview.lastAutopilotRun.itemsFailed > 0 ? ` • ${overview.lastAutopilotRun.itemsFailed} failed` : ''}
                     </p>
+                    {overview.lastAutopilotRun.assetBlocked && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        No reusable weekend-ready assets found. Add more photos to improve Autopilot output.
+                      </p>
+                    )}
+                    {overview.lastAutopilotRun.copyOnlyFallbackUsed && !overview.lastAutopilotRun.assetBlocked && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Pulse can generate better content if you add 2 more approved dish photos.
+                      </p>
+                    )}
+                    {overview.lastAutopilotRun.recommendedActions?.length ? (
+                      <ul className="text-xs text-muted-foreground list-disc list-inside">
+                        {overview.lastAutopilotRun.recommendedActions.slice(0, 2).map((action) => (
+                          <li key={action}>{action}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                   <Button variant="outline" asChild>
                     <Link to="/autopilot">Open Autopilot</Link>

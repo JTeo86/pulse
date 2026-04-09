@@ -35,6 +35,32 @@ type SaveErrorDetail = {
   hint?: string;
 };
 
+type AssetCandidate = {
+  source_priority: number;
+  source: string;
+  source_asset_id: string;
+  source_asset_title: string;
+  asset_url: string | null;
+  storage_path: string | null;
+};
+
+type AssetSelectionResult = {
+  assets: AssetCandidate[];
+  totalEligible: number;
+  usedCopyOnlyFallback: boolean;
+  isAssetBlocked: boolean;
+  summary: {
+    priority_1: number;
+    priority_2: number;
+    priority_3: number;
+    priority_4: number;
+    priority_5: number;
+    eligible_total: number;
+  };
+  diagnosticMessage: string;
+  recommendedNextActions: string[];
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -184,17 +210,23 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     const ctx = await buildVenueContext(supabase, venueId);
     const volume = settings?.content_volume || "medium";
     const contentCount = volume === "low" ? 1 : volume === "high" ? 3 : 2;
-    const sourceSelection = await selectAssetSources(supabase, venueId, contentCount);
+    const sourceSelection = await selectAssetSources(
+      supabase,
+      venueId,
+      contentCount,
+      settings?.allow_copy_only_fallback ?? false,
+    );
     const requireAsset = settings?.require_asset_for_runs ?? true;
     const allowCopyOnlyFallback = settings?.allow_copy_only_fallback ?? false;
 
     if (sourceSelection.totalEligible === 0 && requireAsset && !allowCopyOnlyFallback) {
-      const skippedReason = "No eligible image sources available";
+      const blockedReason = sourceSelection.diagnosticMessage || "No eligible image sources available";
+      await createNeedsAssetTaskRecommendation(supabase, venueId, sourceSelection.recommendedNextActions);
       await supabase.from("autopilot_runs").update({
-        status: "completed",
+        status: "partial",
         completed_at: new Date().toISOString(),
-        run_status: "completed",
-        error_message: skippedReason,
+        run_status: "partial",
+        error_message: blockedReason,
         items_generated: 0,
         items_saved: 0,
         items_failed: 0,
@@ -203,14 +235,18 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         failed_count: 0,
         output_summary: {
           run_type: runType,
-          skipped: true,
-          skipped_reason: skippedReason,
+          skipped: false,
+          copy_only_fallback_used: false,
+          asset_blocked: true,
+          blocked_reason: blockedReason,
+          diagnostic_message: blockedReason,
+          recommended_next_asset_actions: sourceSelection.recommendedNextActions,
           source_summary: sourceSelection.summary,
         },
       }).eq("id", runId);
 
       return {
-        status: "completed",
+        status: "partial",
         run_id: runId,
         items_generated: 0,
         items_saved: 0,
@@ -220,7 +256,12 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         failed_count: 0,
         content_item_ids: [],
         saved_library_item_ids: [],
-        error_message: skippedReason,
+        error_message: blockedReason,
+        output_summary: {
+          copy_only_fallback_used: false,
+          asset_blocked: true,
+          recommended_next_asset_actions: sourceSelection.recommendedNextActions,
+        },
       };
     }
 
@@ -354,6 +395,10 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         run_type: runType,
         source_summary: sourceSelection.summary,
         source_priority_used: sourceSelection.assets[0]?.source_priority || null,
+        copy_only_fallback_used: sourceSelection.usedCopyOnlyFallback,
+        asset_blocked: sourceSelection.isAssetBlocked,
+        diagnostic_message: sourceSelection.diagnosticMessage,
+        recommended_next_asset_actions: sourceSelection.recommendedNextActions,
         parse_error: parseError,
         save_error_details: combinedSaveErrorDetails,
         saved_library_item_ids: contentItemIds,
@@ -376,6 +421,11 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
       saved_library_item_ids: contentItemIds,
       error_message: errorMessage,
       save_error_details: combinedSaveErrorDetails,
+      output_summary: {
+        copy_only_fallback_used: sourceSelection.usedCopyOnlyFallback,
+        asset_blocked: sourceSelection.isAssetBlocked,
+        recommended_next_asset_actions: sourceSelection.recommendedNextActions,
+      },
     };
   } catch (err: any) {
     await supabase.from("autopilot_runs").update({
@@ -489,7 +539,12 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
   };
 }
 
-async function selectAssetSources(supabase: any, venueId: string, requestedCount: number) {
+async function selectAssetSources(
+  supabase: any,
+  venueId: string,
+  requestedCount: number,
+  allowCopyOnlyFallback: boolean,
+): Promise<AssetSelectionResult> {
   const reusableAssetsRes = await supabase
     .from("content_assets")
     .select("id, title, public_url, storage_path, metadata, status")
@@ -544,7 +599,29 @@ async function selectAssetSources(supabase: any, venueId: string, requestedCount
     Array.isArray(item.badges) && item.badges.includes("Reusable"),
   );
 
-  const mapped = [
+  const recentVenueUploadsRes = await supabase
+    .from("content_assets")
+    .select("id, title, public_url, storage_path, source_type, status")
+    .eq("venue_id", venueId)
+    .eq("asset_type", "image")
+    .in("status", ["approved", "draft", "scheduled", "published"])
+    .order("created_at", { ascending: false })
+    .limit(120);
+
+  const recentVenueUploads = (recentVenueUploadsRes.data || []).filter((asset: any) =>
+    asset?.source_type === "upload" || asset?.source_type === "guest_upload" || asset?.source_type === "manual",
+  );
+
+  const guestSubmissionsRes = await supabase
+    .from("guest_submissions")
+    .select("id, image_url, guest_name, created_at, status")
+    .eq("venue_id", venueId)
+    .eq("status", "approved")
+    .order("created_at", { ascending: false })
+    .limit(120);
+  const guestSubmissionAssets = (guestSubmissionsRes.data || []).filter((item: any) => !!item.image_url);
+
+  const mappedRaw: AssetCandidate[] = [
     ...reusableAssets.map((a: any) => ({
       source_priority: 1,
       source: "autopilot_asset_pool",
@@ -569,24 +646,115 @@ async function selectAssetSources(supabase: any, venueId: string, requestedCount
       asset_url: i.media_master_url,
       storage_path: i.storage_path,
     })),
+    ...recentVenueUploads.map((a: any) => ({
+      source_priority: 4,
+      source: "recent_venue_upload",
+      source_asset_id: a.id,
+      source_asset_title: a.title || "Recent venue upload",
+      asset_url: a.public_url,
+      storage_path: a.storage_path,
+    })),
+    ...guestSubmissionAssets.map((g: any) => ({
+      source_priority: 5,
+      source: "approved_guest_submission",
+      source_asset_id: g.id,
+      source_asset_title: g.guest_name ? `Guest submission by ${g.guest_name}` : "Approved guest submission",
+      asset_url: g.image_url,
+      storage_path: null,
+    })),
   ].filter((item) => !!item.asset_url || !!item.storage_path);
+
+  const deduped = new Map<string, AssetCandidate>();
+  for (const item of mappedRaw) {
+    const key = item.storage_path || item.asset_url || item.source_asset_id;
+    const existing = deduped.get(key);
+    if (!existing || item.source_priority < existing.source_priority) {
+      deduped.set(key, item);
+    }
+  }
+  const mapped = Array.from(deduped.values()).sort((a, b) => a.source_priority - b.source_priority);
+
+  const summary = {
+    priority_1: reusableAssets.length,
+    priority_2: plannerAssets.length,
+    priority_3: approvedLibraryAssets.length,
+    priority_4: recentVenueUploads.length,
+    priority_5: guestSubmissionAssets.length,
+    eligible_total: mapped.length,
+  };
+
+  const recommendedNextActions = buildAssetRecommendations(summary);
+  const usedCopyOnlyFallback = mapped.length === 0 && allowCopyOnlyFallback;
+  const isAssetBlocked = mapped.length === 0 && !allowCopyOnlyFallback;
+  const diagnosticMessage = buildAssetDiagnosticMessage(summary, usedCopyOnlyFallback, isAssetBlocked);
 
   return {
     assets: mapped.slice(0, Math.max(requestedCount, 1)),
     totalEligible: mapped.length,
-    summary: {
-      priority_1: reusableAssets.length,
-      priority_2: plannerAssets.length,
-      priority_3: approvedLibraryAssets.length,
-      eligible_total: mapped.length,
-    },
+    usedCopyOnlyFallback,
+    isAssetBlocked,
+    summary,
+    diagnosticMessage,
+    recommendedNextActions,
   };
 }
 
+function buildAssetRecommendations(summary: {
+  priority_1: number;
+  priority_2: number;
+  priority_3: number;
+  priority_4: number;
+  priority_5: number;
+  eligible_total: number;
+}): string[] {
+  const actions: string[] = [];
+  if (summary.priority_1 === 0) actions.push("Mark at least 3 strong photos as reusable in the Autopilot asset pool");
+  if (summary.priority_4 < 2) actions.push("Upload 3 dish photos");
+  if (summary.priority_4 < 1) actions.push("Add 1 interior shot");
+  if (summary.priority_5 === 0) actions.push("Approve guest photos for reuse");
+  if (actions.length === 0 && summary.eligible_total < 3) actions.push("Add 2-3 more approved reusable assets for better variety");
+  return actions.slice(0, 3);
+}
+
+function buildAssetDiagnosticMessage(
+  summary: {
+    priority_1: number;
+    priority_2: number;
+    priority_3: number;
+    priority_4: number;
+    priority_5: number;
+    eligible_total: number;
+  },
+  usedCopyOnlyFallback: boolean,
+  isAssetBlocked: boolean,
+): string {
+  const totals = `Asset coverage by priority: P1 ${summary.priority_1}, P2 ${summary.priority_2}, P3 ${summary.priority_3}, P4 ${summary.priority_4}, P5 ${summary.priority_5}.`;
+  if (isAssetBlocked) return `${totals} No eligible assets found and copy-only fallback is disabled.`;
+  if (usedCopyOnlyFallback) return `${totals} No eligible assets found, so Pulse generated copy-only drafts.`;
+  return `${totals} Eligible assets found: ${summary.eligible_total}.`;
+}
+
+async function createNeedsAssetTaskRecommendation(supabase: any, venueId: string, recommendations: string[]) {
+  const topActions = recommendations.length > 0 ? recommendations : ["Upload 3 dish photos", "Add 1 interior shot"];
+  await supabase
+    .from("action_feed_items")
+    .upsert({
+      venue_id: venueId,
+      action_type: "autopilot_needs_assets",
+      priority: "medium",
+      title: "Autopilot needs more reusable visuals",
+      description: topActions.join(" • "),
+      cta_label: "Improve Asset Coverage",
+      cta_route: "/autopilot",
+      source_data: { recommendations: topActions },
+      status: "open",
+    }, { onConflict: "venue_id,action_type", ignoreDuplicates: false });
+}
+
 function buildAssetBrief(assets: any[]): string {
-  if (!assets.length) return "No image assets available. Return copy-only drafts.";
+  if (!assets.length) return "No image assets available. Generate copy-only drafts with strong visual briefs.";
   return assets
-    .map((asset, i) => `${i + 1}. ${asset.source_asset_title} [priority ${asset.source_priority}]`)
+    .map((asset, i) => `${i + 1}. ${asset.source_asset_title} [priority ${asset.source_priority}, ${asset.source}]`)
     .join("\n");
 }
 

@@ -126,8 +126,20 @@ export function useAutopilotTrigger() {
       queryClient.invalidateQueries({ queryKey: ['autopilot-runs', venueId] });
       const savedCount = result.saved_count ?? result.items_saved ?? 0;
       const generatedCount = result.generated_count ?? result.items_generated ?? 0;
+      const summary = (result.output_summary || {}) as Record<string, any>;
+      const actions = Array.isArray(summary.recommended_next_asset_actions)
+        ? summary.recommended_next_asset_actions.slice(0, 2).join(' • ')
+        : '';
       if (result.status === 'partial') {
-        toast.warning(`Autopilot saved ${savedCount}/${generatedCount} items to Library. Check run diagnostics for save errors.`);
+        const blocked = Boolean(summary.asset_blocked);
+        const base = blocked
+          ? 'Autopilot was blocked by weak asset coverage.'
+          : `Autopilot saved ${savedCount}/${generatedCount} items to Library.`;
+        toast.warning(`${base}${actions ? ` Next: ${actions}` : ' Check run diagnostics for save errors.'}`);
+        return;
+      }
+      if (summary.copy_only_fallback_used) {
+        toast.success(`Autopilot generated ${savedCount} copy-first draft${savedCount === 1 ? '' : 's'}. Add reusable photos for stronger visuals.`);
         return;
       }
       toast.success(`Autopilot generated ${savedCount} item${savedCount === 1 ? '' : 's'} in Library`);
