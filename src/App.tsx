@@ -45,6 +45,7 @@ import PartnerReferrals from "./pages/partner/PartnerReferrals";
 import PartnerEarnings from "./pages/partner/PartnerEarnings";
 import PartnerProfile from "./pages/partner/PartnerProfile";
 import { PartnerLayout } from "./components/partner/PartnerLayout";
+import { ReferralGuard } from "./components/referral/ReferralGuard";
 import GuestSubmissions from "./pages/GuestSubmissions";
 import GuestUploadPage from "./pages/GuestUploadPage";
 import Autopilot from "./pages/Autopilot";
@@ -167,10 +168,10 @@ function AppRoutes() {
         {/* Growth Section */}
         <Route path="/growth/performance" element={<BrandPerformance />} />
         <Route path="/growth/industry-insights" element={<IndustryInsights />} />
-        <Route path="/growth/referrals" element={<ReferralsPage />} />
-        <Route path="/growth/partners" element={<PartnersPage />} />
-        <Route path="/growth/payouts" element={<PayoutsPage />} />
-        <Route path="/growth/offers" element={<OffersPage />} />
+        <Route path="/growth/referrals" element={<ReferralGuard><ReferralsPage /></ReferralGuard>} />
+        <Route path="/growth/partners" element={<ReferralGuard><PartnersPage /></ReferralGuard>} />
+        <Route path="/growth/payouts" element={<ReferralGuard><PayoutsPage /></ReferralGuard>} />
+        <Route path="/growth/offers" element={<ReferralGuard><OffersPage /></ReferralGuard>} />
 
         {/* Venue Section */}
         <Route path="/venue/brand-basics" element={<Navigate to="/setup" replace />} />
