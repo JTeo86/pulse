@@ -54,6 +54,19 @@ interface TodayOverview {
   } | null;
 }
 
+interface WeeklyPulseBrief {
+  week_start: string;
+  week_end: string;
+  generated_at: string | null;
+  pulse_report: {
+    reputation_summary?: string;
+    content_summary?: string;
+    opportunities?: string[];
+    pulse_activity?: string[];
+    next_week_focus?: string[];
+  } | null;
+}
+
 const themeKeywords: Record<string, string[]> = {
   food: ['food', 'dish', 'menu', 'tasting', 'meal', 'flavor', 'taste', 'dessert', 'cocktail', 'wine', 'drinks', 'omakase'],
   service: ['service', 'staff', 'server', 'host', 'manager', 'wait', 'friendly', 'rude', 'attentive', 'slow'],
@@ -171,6 +184,25 @@ export default function Home() {
       };
     },
     enabled: !!currentVenue,
+  });
+
+  const { data: latestPulseReport, isLoading: pulseReportLoading } = useQuery({
+    queryKey: ['latest-pulse-report', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async (): Promise<WeeklyPulseBrief | null> => {
+      if (!currentVenue) return null;
+
+      const { data, error } = await (supabase.from('venue_weekly_briefs') as any)
+        .select('week_start, week_end, generated_at, pulse_report')
+        .eq('venue_id', currentVenue.id)
+        .not('generated_at', 'is', null)
+        .order('week_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      return (data || null) as WeeklyPulseBrief | null;
+    },
   });
 
   const approveReply = useMutation({
@@ -301,6 +333,47 @@ export default function Home() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Your latest Pulse report</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              {pulseReportLoading ? (
+                <Skeleton className="h-24 rounded-lg" />
+              ) : !latestPulseReport?.pulse_report ? (
+                <p className="text-sm text-muted-foreground">
+                  Your weekly report will appear here after the next Monday morning cycle.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Week of {latestPulseReport.week_start} to {latestPulseReport.week_end}
+                  </p>
+                  <p className="text-sm">{latestPulseReport.pulse_report.reputation_summary || 'No reputation summary yet.'}</p>
+                  <p className="text-sm text-muted-foreground">{latestPulseReport.pulse_report.content_summary || 'No content summary yet.'}</p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Top opportunities</p>
+                      <ul className="text-sm list-disc pl-5 space-y-1">
+                        {(latestPulseReport.pulse_report.opportunities || []).slice(0, 2).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Next week focus</p>
+                      <ul className="text-sm list-disc pl-5 space-y-1">
+                        {(latestPulseReport.pulse_report.next_week_focus || []).slice(0, 2).map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <Card>
