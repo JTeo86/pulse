@@ -25,7 +25,7 @@ const CATEGORY_META: Record<KeyCategory, { label: string; description: string }>
   Reviews:    { label: 'Reviews & Reputation',  description: 'Keys for ingesting Google, OpenTable and TripAdvisor reviews via SerpAPI.' },
   Editor:     { label: 'AI / Creative',          description: 'Gemini powers Pro Photo image generation.' },
   Video:      { label: 'Video / Reels',          description: 'Kling AI for video generation from images.' },
-  Publishing: { label: 'Publishing',             description: 'Buffer for future direct social media scheduling.' },
+  Publishing: { label: 'Publishing',             description: 'Internal publishing queue today; adapter-ready for future direct scheduler integrations.' },
   Other:      { label: 'Other',                  description: 'Miscellaneous platform credentials.' },
 };
 

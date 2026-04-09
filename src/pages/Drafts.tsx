@@ -85,7 +85,7 @@ export default function DraftsPage() {
       const { error: updateError } = await supabase
         .from('content_items')
         .update({ 
-          status: 'approved',
+          status: 'ready',
           caption_final: editedCaption,
         })
         .eq('id', selectedItem.id);
@@ -96,12 +96,12 @@ export default function DraftsPage() {
       await supabase.from('audit_log').insert({
         venue_id: currentVenue!.id,
         user_id: user.id,
-        action: 'approve',
+        action: 'approve_to_ready_queue',
         entity_type: 'content_item',
         entity_id: selectedItem.id,
       });
 
-      toast({ title: 'Content approved' });
+      toast({ title: 'Content ready for publishing queue' });
       setItems(prev => prev.filter(i => i.id !== selectedItem.id));
       setSelectedItem(null);
     } catch (error: any) {
