@@ -278,7 +278,7 @@ async function callGoogle(request: AiRequest): Promise<AiNormalizedResponse> {
         const errorText = await response.text().catch(() => "");
         throw new AiClientError(
           response.status,
-          errorText || "Google AI request failed without response body",
+          errorText || "AI request failed without response body",
         );
       }
 
@@ -309,8 +309,8 @@ async function callGoogle(request: AiRequest): Promise<AiNormalizedResponse> {
     throw lastError;
   }
 
-  const message = lastError instanceof Error ? lastError.message : "Unknown Google AI error";
-  throw new Error(`Google AI request failed: ${message}`);
+  const message = lastError instanceof Error ? lastError.message : "Unknown AI service error";
+  throw new Error(`AI request failed: ${message}`);
 }
 
 /**

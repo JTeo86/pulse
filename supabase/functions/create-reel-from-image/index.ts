@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
         job_id: job.id,
         provider_configured: false,
         status: 'provider_not_configured',
-        message: 'Reel job queued. Video provider not yet configured — configure Kling in Platform Admin to process.',
+        message: 'Reel job queued. Video generation service not yet configured — configure it in Platform Admin to process.',
       });
     }
 

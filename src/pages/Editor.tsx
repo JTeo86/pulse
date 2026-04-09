@@ -542,7 +542,7 @@ export default function EditorPage() {
                         <span className="text-xs font-semibold text-muted-foreground">Cinematic AI Reel</span>
                         <Badge variant="outline" className="text-[10px]">Coming soon</Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground">Powered by Kling. Premium credit-based feature.</p>
+                      <p className="text-xs text-muted-foreground">Powered by AI video generation. Premium credit-based feature.</p>
                     </div>
                   </div>
                 </div>
@@ -639,7 +639,7 @@ export default function EditorPage() {
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/30 border border-border">
                       <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                       <p className="text-sm text-muted-foreground">
-                        Pro Replate (AI polish) was skipped. {jobResult.replate_skip_reason || 'Google AI API key not found. Add GOOGLE_AI_API_KEY in Platform Admin → Integrations.'}
+                        Pro Replate (AI polish) was skipped. {jobResult.replate_skip_reason || 'AI service not configured. Contact your admin to enable AI generation in Platform Admin → Integrations.'}
                       </p>
                     </div>
                   )}

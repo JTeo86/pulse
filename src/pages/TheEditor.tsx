@@ -459,7 +459,7 @@ export default function TheEditorPage() {
             </div>
           </div>
           <p className="text-muted-foreground max-w-xl">
-            Upload a dish photo and generate a professional, on-brand marketing image powered by Gemini.
+            Upload a dish photo and generate a professional, on-brand marketing image powered by AI.
           </p>
         </div>
         {jobResult && (
@@ -605,7 +605,7 @@ export default function TheEditorPage() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Generated</p>
-                      <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">Gemini</Badge>
+                      <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">AI</Badge>
                     </div>
                     <img src={jobResult.final_image_url} alt="Pro Photo" className="w-full aspect-square object-cover rounded-lg border border-accent/20" />
                   </div>

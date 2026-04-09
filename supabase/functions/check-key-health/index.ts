@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
             method: 'POST', headers: { 'x-api-key': value }, body: fd,
           });
           if (r.status === 401 || r.status === 403) {
-            status = 'invalid'; message = `${r.status} Unauthorized — check PhotoRoom key`;
+            status = 'invalid'; message = `${r.status} Unauthorized — check AI image service key`;
           }
           await r.text();
         }
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
 
           if (!isImageCapable) {
             status = 'invalid';
-            message = `Model "${model}" is text-only. Pro Photo requires an image model (e.g. gemini-2.5-flash-image).`;
+            message = `Model "${model}" is text-only. Pro Photo requires an image-capable model.`;
           } else {
             const testEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${value}`;
             console.log(`[CHECK-KEY] Testing Gemini image model: ${model}`);
@@ -146,26 +146,26 @@ Deno.serve(async (req) => {
             const testStatus = testResp.status;
             if (testStatus === 404) {
               status = 'invalid';
-              message = `Gemini 404: model "${model}" not found.`;
+              message = `AI model not found (404): "${model}".`;
             } else if (testStatus === 400) {
               const errBody = await testResp.text().catch(() => '');
               if (errBody.includes('not supported') || errBody.includes('responseModalities')) {
                 status = 'invalid';
-                message = `Model "${model}" does not support image generation. Try gemini-2.5-flash-image.`;
+                message = `Model "${model}" does not support image generation.`;
               } else {
                 status = 'invalid';
-                message = `Gemini ${testStatus}: ${errBody.substring(0, 300)}`;
+                message = `AI service ${testStatus}: ${errBody.substring(0, 300)}`;
               }
             } else if (!testResp.ok) {
               const errBody = await testResp.text().catch(() => '');
               status = 'invalid';
-              message = `Gemini ${testStatus}: ${errBody.substring(0, 300)}`;
+              message = `AI service ${testStatus}: ${errBody.substring(0, 300)}`;
             } else {
               const respData = await testResp.json();
               const parts = respData.candidates?.[0]?.content?.parts || [];
               const hasImage = parts.some((p: any) => p.inlineData?.data);
               if (hasImage) {
-                message = `Google AI key validated ✓ — text + image OK (model=${model})`;
+                message = `AI service key validated ✓ — text + image OK (model=${model})`;
               } else {
                 message = `Key valid but model "${model}" returned no image data.`;
                 status = 'invalid';
@@ -191,9 +191,9 @@ Deno.serve(async (req) => {
           if (r.status === 400 || r.status === 401 || r.status === 403) {
             const j = await r.json().catch(() => ({}));
             status = 'invalid';
-            message = j?.error?.message ?? `HTTP ${r.status} — check Google AI API key`;
+            message = j?.error?.message ?? `HTTP ${r.status} — check AI service API key`;
           } else if (r.ok) {
-            message = 'Google AI API key validated — models endpoint OK';
+            message = 'AI service API key validated — models endpoint OK';
           } else {
             status = 'invalid';
             message = `HTTP ${r.status}`;
@@ -203,7 +203,7 @@ Deno.serve(async (req) => {
       } else if (key_name === 'KLING_API_KEY') {
         // Kling: validate key length as minimal check (no public ping endpoint)
         if (value.length < 20) {
-          status = 'invalid'; message = 'Key appears too short — check Kling API key';
+          status = 'invalid'; message = 'Key appears too short — check video generation service key';
         } else {
           message = 'Format check passed (live ping not available)';
         }
