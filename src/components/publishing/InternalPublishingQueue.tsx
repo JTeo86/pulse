@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ComponentType, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CalendarClock, CheckCircle2, CircleDashed, Download, ExternalLink, ImageOff, Loader2 } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, Download, ImageOff, Loader2, Pencil, Send, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaImage } from '@/components/ui/media-image';
 import { useToast } from '@/hooks/use-toast';
 import { buildInternalPublishingAdapter, normalizePublishingStatus, type PublishingAction } from '@/lib/publishing-adapters';
 
 interface ContentItem {
   id: string;
-  intent: string;
+  intent: string | null;
   caption_final: string | null;
   media_master_url: string | null;
+  media_variants: unknown;
   status: string;
   scheduled_for: string | null;
   created_at: string;
@@ -52,7 +53,80 @@ function downloadTextFile(content: string, fileName: string) {
   URL.revokeObjectURL(objectUrl);
 }
 
+function extractFirstHttpUrl(value: unknown, preferredKeys: string[] = []) {
+  if (!value) return null;
+  const queue: unknown[] = [value];
+  const preferred = new Set(preferredKeys.map((key) => key.toLowerCase()));
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    if (typeof current === 'string' && current.startsWith('http')) return current;
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    if (typeof current === 'object') {
+      const record = current as Record<string, unknown>;
+      const prioritized: unknown[] = [];
+      const normal: unknown[] = [];
+      for (const [key, val] of Object.entries(record)) {
+        if (preferred.has(key.toLowerCase())) prioritized.push(val);
+        else normal.push(val);
+      }
+      queue.push(...prioritized, ...normal);
+    }
+  }
+
+  return null;
+}
+
+function extractFirstStringByKeys(value: unknown, keys: string[]) {
+  if (!value || typeof value !== 'object') return null;
+  const queue: unknown[] = [value];
+  const keyset = new Set(keys.map((key) => key.toLowerCase()));
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || typeof current !== 'object') continue;
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    for (const [key, val] of Object.entries(current as Record<string, unknown>)) {
+      if (typeof val === 'string' && keyset.has(key.toLowerCase())) return val;
+      if (val && typeof val === 'object') queue.push(val);
+      if (Array.isArray(val)) queue.push(...val);
+    }
+  }
+
+  return null;
+}
+
+function formatChannelLabel(item: ContentItem) {
+  const variantChannel = extractFirstStringByKeys(item.media_variants, ['channel', 'platform']);
+
+  if (variantChannel) return variantChannel;
+  if (!item.intent) return null;
+
+  return item.intent
+    .split('_')
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(' ');
+}
+
+function resolveQueueImage(item: ContentItem) {
+  const lightweight = extractFirstHttpUrl(item.media_variants, ['thumbnail_url', 'thumbnail', 'preview_url', 'preview']);
+  return lightweight || item.media_master_url;
+}
+
 export function InternalPublishingQueue() {
+  const navigate = useNavigate();
   const { currentVenue, isAdmin } = useVenue();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -69,7 +143,7 @@ export function InternalPublishingQueue() {
       try {
         const { data, error } = await supabase
           .from('content_items')
-          .select('*')
+          .select('id, intent, caption_final, media_master_url, media_variants, status, scheduled_for, created_at')
           .eq('venue_id', currentVenue.id)
           .in('status', queueStatuses)
           .order('created_at', { ascending: false });
@@ -145,17 +219,63 @@ export function InternalPublishingQueue() {
     }
   };
 
+  const handleRemoveFromQueue = async (item: ContentItem) => {
+    if (!currentVenue || !user || !isAdmin) return;
+    setActingOnId(item.id);
+    try {
+      const updates = { status: 'ready', scheduled_for: null };
+      const { error } = await supabase.from('content_items').update(updates).eq('id', item.id);
+      if (error) throw error;
+
+      await supabase.from('audit_log').insert({
+        venue_id: currentVenue.id,
+        user_id: user.id,
+        action: 'publishing_remove_from_queue',
+        entity_type: 'content_item',
+        entity_id: item.id,
+        meta: {
+          removed_from_queue: true,
+          previous_status: item.status,
+          ...updates,
+        },
+      });
+
+      setScheduleValues((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      setItems((prev) => prev.map((existing) => (existing.id === item.id ? { ...existing, ...updates } : existing)));
+      toast({ title: 'Removed from queue' });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Could not remove item from queue',
+        description: error.message,
+      });
+    } finally {
+      setActingOnId(null);
+    }
+  };
+
   const handleExportPack = async (item: ContentItem) => {
     const safeSlug = `${item.intent || 'content'}-${item.id.slice(0, 8)}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const caption = item.caption_final || '';
     const scheduledAt = scheduleValues[item.id] || item.scheduled_for || '';
 
     const exportSummary = [
-      `Pulse Publish Pack`,
+      'Pulse Publish Pack',
       `Item ID: ${item.id}`,
       `Intent: ${item.intent || 'standard'}`,
-      `Status when exported: ${normalizePublishingStatus(item.status)}`,
+      `Queue Status: ${normalizePublishingStatus(item.status)}`,
       `Scheduled for: ${scheduledAt || 'Not scheduled'}`,
+      '',
+      'External Posting Checklist',
+      '--------------------------',
+      '1. Import/upload image asset in your scheduler or social app.',
+      '2. Paste caption from this pack.',
+      '3. Confirm channel-specific formatting and links.',
+      '4. Post externally, then return to Pulse and mark as published.',
       '',
       'Caption',
       '-------',
@@ -163,28 +283,78 @@ export function InternalPublishingQueue() {
     ].join('\n');
 
     downloadTextFile(exportSummary, `${safeSlug}-caption.txt`);
-    if (item.media_master_url) {
-      await downloadUrlToFile(item.media_master_url, `${safeSlug}-image`);
+    const imageUrl = resolveQueueImage(item);
+    if (imageUrl) {
+      await downloadUrlToFile(imageUrl, `${safeSlug}-image`);
     }
 
     await applyAction(item, 'mark_exported', {
       exported_at: new Date().toISOString(),
       export_files: {
         caption: `${safeSlug}-caption.txt`,
-        image_included: Boolean(item.media_master_url),
+        image_included: Boolean(imageUrl),
       },
     });
   };
 
-  const buckets = useMemo(() => ({
-    ready: items.filter((i) => normalizePublishingStatus(i.status) === 'ready'),
-    activeQueue: items.filter((i) => ['queued', 'scheduled', 'exported'].includes(normalizePublishingStatus(i.status))),
-    published: items.filter((i) => normalizePublishingStatus(i.status) === 'published'),
-    failed: items.filter((i) => normalizePublishingStatus(i.status) === 'failed'),
-  }), [items]);
+  const grouped = useMemo(() => {
+    const groups = {
+      needsScheduling: [] as ContentItem[],
+      scheduled: [] as ContentItem[],
+      readyForExport: [] as ContentItem[],
+      published: [] as ContentItem[],
+      failed: [] as ContentItem[],
+    };
+
+    items.forEach((item) => {
+      const uiStatus = normalizePublishingStatus(item.status);
+      if (uiStatus === 'published') {
+        groups.published.push(item);
+        return;
+      }
+      if (uiStatus === 'failed') {
+        groups.failed.push(item);
+        return;
+      }
+      if (uiStatus === 'exported') {
+        groups.readyForExport.push(item);
+        return;
+      }
+      if (item.scheduled_for) {
+        groups.scheduled.push(item);
+        return;
+      }
+      groups.needsScheduling.push(item);
+    });
+
+    return groups;
+  }, [items]);
+
+  const summary = useMemo(() => {
+    const now = new Date();
+    const weekAhead = new Date(now);
+    weekAhead.setDate(now.getDate() + 7);
+
+    const scheduledThisWeek = grouped.scheduled.filter((item) => {
+      if (!item.scheduled_for) return false;
+      const publishAt = new Date(item.scheduled_for);
+      return publishAt >= now && publishAt <= weekAhead;
+    }).length;
+
+    return {
+      readyItems: grouped.needsScheduling.length + grouped.scheduled.length + grouped.readyForExport.length,
+      scheduledItems: grouped.scheduled.length,
+      needTiming: grouped.needsScheduling.length,
+      scheduledThisWeek,
+      readyForExport: grouped.readyForExport.length,
+    };
+  }, [grouped]);
 
   const ContentCard = ({ item }: { item: ContentItem }) => {
     const uiStatus = normalizePublishingStatus(item.status);
+    const channel = formatChannelLabel(item);
+    const imageUrl = resolveQueueImage(item);
+    const isPublished = uiStatus === 'published';
 
     return (
       <motion.div
@@ -194,9 +364,9 @@ export function InternalPublishingQueue() {
       >
         <div className="flex gap-4">
           <div className="w-24 h-24 bg-muted rounded-lg flex-shrink-0 overflow-hidden">
-            {item.media_master_url ? (
+            {imageUrl ? (
               <MediaImage
-                src={item.media_master_url}
+                src={imageUrl}
                 alt=""
                 aspectClassName="w-full h-full"
                 className="object-cover"
@@ -209,34 +379,20 @@ export function InternalPublishingQueue() {
           </div>
 
           <div className="flex-1 min-w-0 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground capitalize">{item.intent || 'standard'}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {channel && <span className="text-xs text-muted-foreground">{channel}</span>}
               <StatusBadge status={uiStatus} />
+              <span className="text-xs text-muted-foreground">
+                {item.scheduled_for ? `Scheduled ${new Date(item.scheduled_for).toLocaleString()}` : 'Not scheduled'}
+              </span>
             </div>
 
             <p className="text-sm line-clamp-2">{item.caption_final || 'No caption yet'}</p>
 
-            {item.scheduled_for && (
-              <p className="text-xs text-muted-foreground">
-                Scheduled: {new Date(item.scheduled_for).toLocaleString()}
-              </p>
-            )}
-
             {isAdmin && (
-              <div className="space-y-2">
-                {(uiStatus === 'ready' || uiStatus === 'failed') && (
-                  <Button
-                    size="sm"
-                    onClick={() => applyAction(item, 'add_to_queue')}
-                    disabled={actingOnId === item.id}
-                    className="btn-primary-editorial"
-                  >
-                    {actingOnId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add to Queue'}
-                  </Button>
-                )}
-
-                {uiStatus !== 'published' && (
-                  <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-2">
+                {!isPublished && (
+                  <>
                     <input
                       type="datetime-local"
                       value={scheduleValues[item.id] || ''}
@@ -249,31 +405,65 @@ export function InternalPublishingQueue() {
                       onClick={() => applyAction(item, 'set_scheduled_time')}
                       disabled={actingOnId === item.id || !scheduleValues[item.id]}
                     >
-                      Set Scheduled Time
+                      Set time
                     </Button>
-                  </div>
+                  </>
                 )}
 
-                {uiStatus !== 'published' && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleExportPack(item)}
-                      disabled={actingOnId === item.id}
-                    >
-                      <Download className="w-3 h-3 mr-1" />
-                      Export Publish Pack
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => applyAction(item, 'mark_published')}
-                      disabled={actingOnId === item.id}
-                    >
-                      Mark Published
-                    </Button>
-                  </div>
+                {(uiStatus === 'ready' || uiStatus === 'failed') && (
+                  <Button
+                    size="sm"
+                    onClick={() => applyAction(item, 'add_to_queue')}
+                    disabled={actingOnId === item.id}
+                    className="btn-primary-editorial"
+                  >
+                    {actingOnId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add to Queue'}
+                  </Button>
+                )}
+
+                {!isPublished && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleExportPack(item)}
+                    disabled={actingOnId === item.id}
+                  >
+                    <Download className="w-3 h-3 mr-1" />
+                    Export
+                  </Button>
+                )}
+
+                {!isPublished && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => applyAction(item, 'mark_published')}
+                    disabled={actingOnId === item.id}
+                  >
+                    Mark Published
+                  </Button>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate('/content/library')}
+                  disabled={actingOnId === item.id}
+                >
+                  <Pencil className="w-3 h-3 mr-1" />
+                  Edit
+                </Button>
+
+                {!isPublished && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleRemoveFromQueue(item)}
+                    disabled={actingOnId === item.id}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    Remove from Queue
+                  </Button>
                 )}
               </div>
             )}
@@ -282,6 +472,36 @@ export function InternalPublishingQueue() {
       </motion.div>
     );
   };
+
+  const Section = ({
+    title,
+    description,
+    icon,
+    itemsInSection,
+  }: {
+    title: string;
+    description: string;
+    icon: ComponentType<{ className?: string }>;
+    itemsInSection: ContentItem[];
+  }) => (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold flex items-center gap-2">
+            {title}
+            <span className="text-muted-foreground">({itemsInSection.length})</span>
+          </h3>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
+
+      {itemsInSection.length === 0 ? (
+        <EmptyState icon={icon} title={`No ${title.toLowerCase()}`} description="You're all clear in this section." />
+      ) : (
+        <div className="space-y-4">{itemsInSection.map((item) => <ContentCard key={item.id} item={item} />)}</div>
+      )}
+    </section>
+  );
 
   if (loading) {
     return (
@@ -292,73 +512,61 @@ export function InternalPublishingQueue() {
   }
 
   return (
-    <Tabs defaultValue="ready" className="space-y-6">
-      <TabsList className="bg-muted/50">
-        <TabsTrigger value="ready" className="gap-2">
-          <CheckCircle2 className="w-4 h-4" />
-          Ready ({buckets.ready.length})
-        </TabsTrigger>
-        <TabsTrigger value="queue" className="gap-2">
-          <CircleDashed className="w-4 h-4" />
-          Queue ({buckets.activeQueue.length})
-        </TabsTrigger>
-        <TabsTrigger value="published" className="gap-2">
-          <ExternalLink className="w-4 h-4" />
-          Published ({buckets.published.length})
-        </TabsTrigger>
-        <TabsTrigger value="failed" className="gap-2">
-          <CalendarClock className="w-4 h-4" />
-          Failed ({buckets.failed.length})
-        </TabsTrigger>
-      </TabsList>
+    <div className="space-y-6">
+      <div className="card-elevated p-4">
+        <p className="text-sm uppercase tracking-wide text-muted-foreground mb-3">Ready to go live</p>
+        <div className="flex flex-wrap gap-2">
+          <div className="rounded-full bg-success/10 text-success px-3 py-1 text-sm font-medium">{summary.readyItems} ready</div>
+          <div className="rounded-full bg-accent/20 text-accent-foreground px-3 py-1 text-sm font-medium">{summary.scheduledItems} scheduled</div>
+          <div className="rounded-full bg-warning/10 text-warning px-3 py-1 text-sm font-medium">{summary.needTiming} need timing</div>
+        </div>
+      </div>
 
-      <TabsContent value="ready">
-        {buckets.ready.length === 0 ? (
-          <EmptyState
-            icon={CheckCircle2}
-            title="No items ready"
-            description="Approve drafts and they will show up here as ready for Pulse's internal publishing queue."
-          />
-        ) : (
-          <div className="space-y-4">{buckets.ready.map((item) => <ContentCard key={item.id} item={item} />)}</div>
-        )}
-      </TabsContent>
+      <div className="card-elevated p-4">
+        <h3 className="text-sm font-semibold mb-2">Publishing Status</h3>
+        <ul className="text-sm text-muted-foreground space-y-1">
+          <li>{summary.scheduledThisWeek} posts scheduled this week</li>
+          <li>{summary.readyForExport} ready for export</li>
+          <li>{summary.needTiming} missing a time slot</li>
+        </ul>
+      </div>
 
-      <TabsContent value="queue">
-        {buckets.activeQueue.length === 0 ? (
-          <EmptyState
-            icon={CircleDashed}
-            title="Queue is empty"
-            description="Add ready items to the internal queue, schedule them, and export publish packs from here."
-          />
-        ) : (
-          <div className="space-y-4">{buckets.activeQueue.map((item) => <ContentCard key={item.id} item={item} />)}</div>
-        )}
-      </TabsContent>
+      <Section
+        title="Needs Scheduling"
+        description="Approved or queued items without a publish time."
+        icon={Clock3}
+        itemsInSection={grouped.needsScheduling}
+      />
 
-      <TabsContent value="published">
-        {buckets.published.length === 0 ? (
-          <EmptyState
-            icon={ExternalLink}
-            title="No items marked published"
-            description="After posting from your social tool, mark items as published to close the loop in Pulse."
-          />
-        ) : (
-          <div className="space-y-4">{buckets.published.map((item) => <ContentCard key={item.id} item={item} />)}</div>
-        )}
-      </TabsContent>
+      <Section
+        title="Scheduled"
+        description="Items with an assigned publish time in Pulse queue."
+        icon={CalendarClock}
+        itemsInSection={grouped.scheduled}
+      />
 
-      <TabsContent value="failed">
-        {buckets.failed.length === 0 ? (
-          <EmptyState
-            icon={CalendarClock}
-            title="No failed items"
-            description="If a publish attempt fails externally, mark it failed and return it to queue when ready."
-          />
-        ) : (
-          <div className="space-y-4">{buckets.failed.map((item) => <ContentCard key={item.id} item={item} />)}</div>
-        )}
-      </TabsContent>
-    </Tabs>
+      <Section
+        title="Ready for Export"
+        description="Prepared for external publishing workflows and handoff."
+        icon={Send}
+        itemsInSection={grouped.readyForExport}
+      />
+
+      <Section
+        title="Published"
+        description="Completed items marked as posted."
+        icon={CheckCircle2}
+        itemsInSection={grouped.published}
+      />
+
+      {(grouped.failed.length > 0 || items.length > 0) && (
+        <Section
+          title="Failed / Needs Attention"
+          description="External publish issues that need review before retry."
+          icon={AlertTriangle}
+          itemsInSection={grouped.failed}
+        />
+      )}
+    </div>
   );
 }

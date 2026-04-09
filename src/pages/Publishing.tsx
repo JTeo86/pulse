@@ -8,8 +8,8 @@ export default function PublishingPage() {
     <AppLayout>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
         <PageHeader
-          title="Publishing Queue"
-          description="Run Pulse's internal publishing workflow: queue, schedule, export, and mark published."
+          title="Publishing"
+          description="Final execution layer for approved content: schedule it, export it, and close the loop when it is published."
         />
         <InternalPublishingQueue />
       </motion.div>
