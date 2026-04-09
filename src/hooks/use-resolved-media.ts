@@ -20,20 +20,37 @@ function isCacheValid(entry: { url: string; expiresAt: number }): boolean {
 /**
  * Resolve the best display URL for an asset.
  * Priority:
- *  1. stable public_url (non-signed)
- *  2. stable thumbnail_url (non-signed)
- *  3. cached signed URL from storage_path
- *  4. fresh signed URL from storage_path
- *  5. fallback to whatever URL is available
+ *  1. stable thumbnail_url (non-signed)
+ *  2. stable preview_url (non-signed)
+ *  3. stable public_url (non-signed)
+ *  4. provided signed URL / signed-like fallback
+ *  5. cached signed URL from storage_path
+ *  6. fallback to media_master_url
  */
 export function resolveAssetUrl(asset: {
-  public_url?: string | null;
   thumbnail_url?: string | null;
+  preview_url?: string | null;
+  public_url?: string | null;
+  signed_url?: string | null;
   storage_path?: string | null;
+  media_master_url?: string | null;
 }): string | null {
-  // Prefer stable (non-signed) URLs
-  if (asset.public_url && !isSignedUrl(asset.public_url)) return asset.public_url;
-  if (asset.thumbnail_url && !isSignedUrl(asset.thumbnail_url)) return asset.thumbnail_url;
+  const lightweightCandidates = [
+    asset.thumbnail_url,
+    asset.preview_url,
+    asset.public_url,
+  ];
+
+  // Prefer lightweight stable (non-signed) URLs first.
+  for (const candidate of lightweightCandidates) {
+    if (candidate && !isSignedUrl(candidate)) return candidate;
+  }
+
+  // Then allow already-generated signed-like URLs before generating new ones.
+  if (asset.signed_url) return asset.signed_url;
+  for (const candidate of lightweightCandidates) {
+    if (candidate) return candidate;
+  }
 
   // Check cache for storage_path
   if (asset.storage_path) {
@@ -41,8 +58,8 @@ export function resolveAssetUrl(asset: {
     if (cached && isCacheValid(cached)) return cached.url;
   }
 
-  // Return whatever we have as a weak fallback (may be stale signed URL)
-  return asset.public_url || asset.thumbnail_url || null;
+  // Last resort: heavy/original media URL.
+  return asset.media_master_url || null;
 }
 
 /**
@@ -55,8 +72,9 @@ export async function batchResolveSignedUrls(
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   const toResolve: string[] = [];
+  const uniquePaths = Array.from(new Set(storagePaths.filter(Boolean)));
 
-  for (const path of storagePaths) {
+  for (const path of uniquePaths) {
     const cached = signedUrlCache.get(path);
     if (cached && isCacheValid(cached)) {
       result.set(path, cached.url);
@@ -119,14 +137,22 @@ export async function resolveSignedUrl(storagePath: string, bucket: string = DEF
  * generating a signed URL if needed.
  */
 export async function resolveAssetMediaUrl(asset: {
-  public_url?: string | null;
   thumbnail_url?: string | null;
+  preview_url?: string | null;
+  public_url?: string | null;
+  signed_url?: string | null;
   storage_path?: string | null;
   storage_bucket?: string | null;
+  media_master_url?: string | null;
 }): Promise<string> {
-  // Try stable URL first
+  // Try lightweight URL first
   const stable = resolveAssetUrl(asset);
-  if (stable && !isSignedUrl(stable)) return stable;
+  if (stable) {
+    // If we already have any non-storage candidate, skip signing to avoid async overhead.
+    if (!isSignedUrl(stable) || stable === asset.signed_url || stable === asset.media_master_url) {
+      return stable;
+    }
+  }
 
   // Generate fresh signed URL from storage_path
   if (asset.storage_path) {

@@ -8,6 +8,7 @@ import {
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { MediaImage } from '@/components/ui/media-image';
 import { PlanPublishItem, PACK_STATUS_CONFIG, PUBLISH_CHANNELS } from '@/hooks/use-plan-publish';
 import { useToast } from '@/hooks/use-toast';
 
@@ -137,13 +138,13 @@ export function PostPackCard({
             <div className="w-20 h-20 rounded-lg overflow-hidden border border-border/50 shrink-0">
               {assetData.asset_type === 'reel' || assetData.asset_type === 'video' ? (
                 <div className="w-full h-full bg-muted flex items-center justify-center relative">
-                  <img src={assetData._resolvedUrl} alt="" className="w-full h-full object-cover" />
+                  <MediaImage src={assetData._resolvedUrl} alt="" aspectClassName="w-full h-full" className="object-cover" />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                     <Play className="w-6 h-6 text-white" />
                   </div>
                 </div>
               ) : (
-                <img src={assetData._resolvedUrl} alt="" className="w-full h-full object-cover" />
+                <MediaImage src={assetData._resolvedUrl} alt="" aspectClassName="w-full h-full" className="object-cover" />
               )}
             </div>
           ) : (

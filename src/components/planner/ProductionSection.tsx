@@ -12,6 +12,7 @@ import { useVenue } from '@/lib/venue-context';
 import { usePlanWorkspace, BRIEF_STATUS_LABELS, PlanAssetBrief, PlanAsset } from '@/hooks/use-plan-workspace';
 import { ContentAsset } from '@/hooks/use-content-assets';
 import { AssetPickerModal } from './AssetPickerModal';
+import { MediaImage } from '@/components/ui/media-image';
 
 interface ProductionSectionProps {
   planId: string;
@@ -62,10 +63,10 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
           const isSignedUrl = (url?: string | null) =>
             url?.includes('/object/sign/') || url?.includes('?token=');
           let resolvedUrl = '';
-          if (a.public_url && !isSignedUrl(a.public_url)) {
-            resolvedUrl = a.public_url;
-          } else if (a.thumbnail_url && !isSignedUrl(a.thumbnail_url)) {
+          if (a.thumbnail_url && !isSignedUrl(a.thumbnail_url)) {
             resolvedUrl = a.thumbnail_url;
+          } else if (a.public_url && !isSignedUrl(a.public_url)) {
+            resolvedUrl = a.public_url;
           }
           if (!resolvedUrl && a.storage_path) {
             const { data: signed } = await supabase.storage
@@ -180,7 +181,7 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
                 return (
                   <div key={pa.id} className="rounded-lg border border-border/50 bg-card/60 p-3 flex items-center gap-3">
                     {real?._resolvedUrl && (
-                      <img src={real._resolvedUrl} alt="" className="w-10 h-10 rounded object-cover" />
+                      <MediaImage src={real._resolvedUrl} alt="" aspectClassName="w-10 h-10" className="rounded object-cover" />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{real?.title || pa.asset_type}</p>
@@ -280,7 +281,12 @@ function BriefCard({
         <div className={`rounded-lg border p-3 space-y-2 ${isApproved ? 'border-success/30 bg-success/5' : 'border-border/50 bg-muted/20'}`}>
           <div className="flex items-center gap-3">
             {realAsset._resolvedUrl && (
-              <img src={realAsset._resolvedUrl} alt={realAsset.title || ''} className="w-14 h-14 rounded-lg object-cover border border-border/50" />
+              <MediaImage
+                src={realAsset._resolvedUrl}
+                alt={realAsset.title || ''}
+                aspectClassName="w-14 h-14"
+                className="rounded-lg object-cover border border-border/50"
+              />
             )}
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium truncate">{realAsset.title || `${realAsset.asset_type} asset`}</p>

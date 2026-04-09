@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Image, Film, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MediaImage } from '@/components/ui/media-image';
 
 export function TopPerformingContent() {
   const { currentVenue } = useVenue();
@@ -108,11 +109,11 @@ export function TopPerformingContent() {
           <Card key={item.id} className="group overflow-hidden hover:border-accent/30 transition-colors">
             <div className="aspect-[4/3] bg-muted relative overflow-hidden">
               {item.media_master_url ? (
-                <img
+                <MediaImage
                   src={item.media_master_url}
                   alt=""
-                  className="w-full h-full object-cover"
-                  loading="lazy"
+                  aspectClassName="w-full h-full"
+                  className="object-cover"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">

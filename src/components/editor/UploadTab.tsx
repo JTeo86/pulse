@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { MediaImage } from '@/components/ui/media-image';
 import {
   Select,
   SelectContent,
@@ -174,10 +175,11 @@ export default function UploadTab() {
         <div className="grid grid-cols-3 gap-4">
           {files.map((f, index) => (
             <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-border">
-              <img
+              <MediaImage
                 src={f.preview}
                 alt=""
-                className="w-full h-full object-cover"
+                aspectClassName="w-full h-full"
+                className="object-cover"
               />
               <button
                 onClick={() => removeFile(index)}

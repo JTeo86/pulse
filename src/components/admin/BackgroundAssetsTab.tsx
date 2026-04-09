@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, ShieldCheck, ShieldAlert, ShieldQuestion, Image as ImageIcon } from 'lucide-react';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
+import { MediaImage } from '@/components/ui/media-image';
 
 interface BackgroundAsset {
   id: string;
@@ -245,7 +246,7 @@ export default function BackgroundAssetsTab() {
               {formData.file_url && (
                 <div className="w-32">
                   <AspectRatio ratio={16/9} className="bg-muted rounded-lg overflow-hidden">
-                    <img src={formData.file_url} alt="Preview" className="w-full h-full object-cover" />
+                    <MediaImage src={formData.file_url} alt="Preview" aspectClassName="w-full h-full" className="object-cover" eager />
                   </AspectRatio>
                 </div>
               )}
@@ -360,7 +361,12 @@ export default function BackgroundAssetsTab() {
                   <TableCell>
                     <div className="w-16 h-10 rounded overflow-hidden bg-muted">
                       {asset.file_url ? (
-                        <img src={asset.file_url} alt={asset.name} className="w-full h-full object-cover" />
+                        <MediaImage
+                          src={asset.file_url}
+                          alt={asset.name}
+                          aspectClassName="w-full h-full"
+                          className="object-cover"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <ImageIcon className="w-4 h-4 text-muted-foreground" />
