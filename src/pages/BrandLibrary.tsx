@@ -72,6 +72,7 @@ interface SelectableVenueAsset {
 }
 
 type LibraryTab = 'all' | 'ready' | 'pulse_suggested' | 'scheduled' | 'archived';
+type TopLevelTab = 'queue' | 'suggestions' | 'library_uploads';
 type InventoryStateFilter = 'all' | 'ready_to_post' | 'needs_image' | 'needs_caption';
 type ReadinessState = 'ready_to_post' | 'needs_image' | 'needs_caption' | 'unformed';
 type ConversionResult = { ok: true; payload: Record<string, unknown> } | { ok: false; reason: string };
@@ -82,11 +83,12 @@ export default function BrandLibraryPage() {
   const { currentVenue } = useVenue();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'pulse_suggested' : 'all') as LibraryTab);
+  const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>((searchParams.get('tab') as TopLevelTab) || 'queue');
+  const [libraryTab, setLibraryTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'pulse_suggested' : 'all') as LibraryTab);
   const [inventoryFilter, setInventoryFilter] = useState<InventoryStateFilter>('all');
   const [view, setView] = useState<'card' | 'list'>('card');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -105,6 +107,21 @@ export default function BrandLibraryPage() {
   const [assetLightbox, setAssetLightbox] = useState<SelectableVenueAsset | null>(null);
 
   const autopilotRunIdFilter = searchParams.get('autopilotRunId');
+  const topLevelTabParam = searchParams.get('tab');
+  const resolvedTopLevelTab: TopLevelTab = topLevelTabParam === 'suggestions' || topLevelTabParam === 'library_uploads' ? topLevelTabParam : 'queue';
+  useEffect(() => {
+    setTopLevelTab(resolvedTopLevelTab);
+  }, [resolvedTopLevelTab]);
+
+  const handleTopLevelTabChange = (value: string) => {
+    const nextTab: TopLevelTab = value === 'suggestions' || value === 'library_uploads' ? value : 'queue';
+    setTopLevelTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextTab === 'queue') nextParams.delete('tab');
+    else nextParams.set('tab', nextTab);
+    setSearchParams(nextParams, { replace: true });
+  };
+
   const contentItemIdsFilter = useMemo(() => {
     const raw = searchParams.get('contentItemIds');
     if (!raw) return null;
@@ -307,25 +324,25 @@ export default function BrandLibraryPage() {
 
       const readiness = getReadinessState(item);
 
-      if (tab === 'archived') {
+      if (libraryTab === 'archived') {
         if (item.status !== 'archived') return false;
-      } else if (tab === 'scheduled') {
+      } else if (libraryTab === 'scheduled') {
         if (!['scheduled', 'published'].includes(item.status)) return false;
       } else {
         if (['scheduled', 'published'].includes(item.status)) return false;
         if (item.status === 'archived') return false;
-        if (tab === 'ready' && readiness !== 'ready_to_post') return false;
-        if (tab === 'pulse_suggested' && item.source !== 'autopilot') return false;
+        if (libraryTab === 'ready' && readiness !== 'ready_to_post') return false;
+        if (libraryTab === 'pulse_suggested' && item.source !== 'autopilot') return false;
       }
 
-      if (tab !== 'archived' && tab !== 'scheduled' && readiness === 'unformed') return false;
+      if (libraryTab !== 'archived' && libraryTab !== 'scheduled' && readiness === 'unformed') return false;
 
       if (inventoryFilter === 'ready_to_post' && readiness !== 'ready_to_post') return false;
       if (inventoryFilter === 'needs_image' && readiness !== 'needs_image') return false;
       if (inventoryFilter === 'needs_caption' && readiness !== 'needs_caption') return false;
       return true;
     });
-  }, [items, tab, inventoryFilter, autopilotRunIdFilter, contentItemIdsFilter]);
+  }, [items, libraryTab, inventoryFilter, autopilotRunIdFilter, contentItemIdsFilter]);
 
   const toggleSelect = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -662,151 +679,211 @@ export default function BrandLibraryPage() {
         </Button>
       )}
       <PageHeader title="Content Queue" description="Pulse prepared your week. Review, approve, and keep the next 7–14 days covered." />
+      <Tabs value={topLevelTab} onValueChange={handleTopLevelTabChange}>
+        <TabsList>
+          <TabsTrigger value="queue">Queue</TabsTrigger>
+          <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
+          <TabsTrigger value="library_uploads">Library & Uploads</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      <Card className="border-accent/30 bg-accent/5">
-        <CardContent className="p-4 space-y-2">
-          <p className="text-sm font-medium">Pulse prepared your week</p>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary" className="px-2 py-1">{headerSummary.readyCount} ready</Badge>
-            <Badge variant="outline" className="px-2 py-1 border-amber-500/40 text-amber-700 dark:text-amber-300">{headerSummary.needsApprovalCount} need approval</Badge>
-            <Badge variant="outline" className="px-2 py-1">{headerSummary.gapCount} gaps</Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4 space-y-2">
-          <p className="text-sm font-medium">Coverage: {coverageSummary.coveredDaysCount} / 7 days</p>
-          {coverageSummary.missingDayNames.length > 0 ? (
-            <p className="text-xs text-muted-foreground">Missing: {coverageSummary.missingDayNames.join(', ')}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">All 7 days have content lined up.</p>
-          )}
-          {coverageSummary.gaps.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {coverageSummary.gaps.map((gap) => (
-                <Badge key={gap} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
-                  {gap}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4">
-        {([
-          { key: 'needsApproval', title: 'Needs approval', entries: queueSections.needsApproval, tone: 'border-amber-400/40 bg-amber-50/50 dark:bg-amber-950/10' },
-          { key: 'readyScheduled', title: 'Scheduled / Ready', entries: queueSections.readyScheduled, tone: '' },
-          { key: 'ideas', title: 'Ideas (optional)', entries: queueSections.ideas, tone: '' },
-        ] as const).map((section) => (
-          <Card key={section.key} className={section.tone}>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">{section.title}</p>
-                <Badge variant="outline">{section.entries.length}</Badge>
+      {topLevelTab === 'queue' && (
+        <>
+          <Card className="border-accent/30 bg-accent/5">
+            <CardContent className="p-4 space-y-2">
+              <p className="text-sm font-medium">Pulse prepared your week</p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="px-2 py-1">{headerSummary.readyCount} ready</Badge>
+                <Badge variant="outline" className="px-2 py-1 border-amber-500/40 text-amber-700 dark:text-amber-300">{headerSummary.needsApprovalCount} need approval</Badge>
+                <Badge variant="outline" className="px-2 py-1">{headerSummary.gapCount} gaps</Badge>
               </div>
-              {section.entries.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nothing here right now.</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 space-y-2">
+              <p className="text-sm font-medium">Coverage: {coverageSummary.coveredDaysCount} / 7 days</p>
+              {coverageSummary.missingDayNames.length > 0 ? (
+                <p className="text-xs text-muted-foreground">Missing: {coverageSummary.missingDayNames.join(', ')}</p>
               ) : (
-                <div className="space-y-3">
-                  {section.entries.map(({ item, statusLabel, queueTime }) => {
-                    const displayImageUrl = getDisplayImageUrl(item);
-                    const sourceLabel = getSourceLabel(item);
-                    return (
-                      <div key={buildItemKey(item)} className="flex flex-col md:flex-row gap-3 rounded-lg border p-3">
-                        <MediaImage
-                          src={item.thumbnail_url || displayImageUrl}
-                          fallbackSrc={displayImageUrl}
-                          alt={item.title || 'Queue preview'}
-                          containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
-                          aspectClassName=""
-                          className="h-full w-full object-cover"
-                        />
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : statusLabel === 'Scheduled' ? 'default' : 'outline'}>{statusLabel}</Badge>
-                            <Badge variant="outline">{sourceLabel}</Badge>
-                            <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
-                          </div>
-                          <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled post'}</p>
-                          <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this post.'}</p>
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
-                            <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
-                            <Button size="sm" variant="outline" onClick={() => setScheduleTarget(item)}>Reschedule</Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <p className="text-xs text-muted-foreground">All 7 days have content lined up.</p>
+              )}
+              {coverageSummary.gaps.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {coverageSummary.gaps.map((gap) => (
+                    <Badge key={gap} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
+                      {gap}
+                    </Badge>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
-        ))}
-      </div>
 
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div>
-              <p className="text-sm font-medium">Library & uploads (secondary)</p>
-              <p className="text-xs text-muted-foreground">Use this only when you need to dig deeper into assets.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
-              <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
-            </div>
+          <div className="space-y-4">
+            {([
+              { key: 'needsApproval', title: 'Needs approval', entries: queueSections.needsApproval, tone: 'border-amber-400/40 bg-amber-50/50 dark:bg-amber-950/10' },
+              { key: 'readyScheduled', title: 'Scheduled / Ready', entries: queueSections.readyScheduled, tone: '' },
+            ] as const).map((section) => (
+              <Card key={section.key} className={section.tone}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">{section.title}</p>
+                    <Badge variant="outline">{section.entries.length}</Badge>
+                  </div>
+                  {section.entries.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nothing here right now.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {section.entries.map(({ item, statusLabel, queueTime }) => {
+                        const displayImageUrl = getDisplayImageUrl(item);
+                        const sourceLabel = getSourceLabel(item);
+                        return (
+                          <div key={buildItemKey(item)} className="flex flex-col md:flex-row gap-3 rounded-lg border p-3">
+                            <MediaImage
+                              src={item.thumbnail_url || displayImageUrl}
+                              fallbackSrc={displayImageUrl}
+                              alt={item.title || 'Queue preview'}
+                              containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
+                              aspectClassName=""
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : statusLabel === 'Scheduled' ? 'default' : 'outline'}>{statusLabel}</Badge>
+                                <Badge variant="outline">{sourceLabel}</Badge>
+                                <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
+                              </div>
+                              <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled post'}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this post.'}</p>
+                              <div className="flex flex-wrap gap-2">
+                                <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
+                                <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
+                                <Button size="sm" variant="outline" onClick={() => setScheduleTarget(item)}>Reschedule</Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
           </div>
-
-          <Tabs value={tab} onValueChange={(v) => setTab(v as LibraryTab)}>
-            <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="ready">Ready</TabsTrigger>
-              <TabsTrigger value="pulse_suggested">Pulse Suggested</TabsTrigger>
-              <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
-              <TabsTrigger value="archived">Archived</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {tab !== 'archived' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs text-muted-foreground mr-1">Inventory filter:</p>
-              {([
-                { value: 'all', label: 'All inventory' },
-                { value: 'ready_to_post', label: 'Ready to Post' },
-                { value: 'needs_image', label: 'Needs Image' },
-                { value: 'needs_caption', label: 'Needs Caption' },
-              ] as const).map((option) => (
-                <Button
-                  key={option.value}
-                  size="sm"
-                  variant={inventoryFilter === option.value ? 'default' : 'outline'}
-                  onClick={() => setInventoryFilter(option.value)}
-                  className="h-8"
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {selected.size > 0 && (
-        <div className="rounded-lg border p-3 flex flex-wrap items-center gap-2">
-          <p className="text-sm text-muted-foreground mr-2">{selected.size} selected</p>
-          <Button size="sm" variant="outline" onClick={() => updateMany(Array.from(selected), { status: 'archived' })}><Archive className="w-4 h-4 mr-1" />Archive</Button>
-          <Button size="sm" variant="destructive" onClick={() => Promise.all(Array.from(selected).map(handleDelete)).then(() => setSelected(new Set()))}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
-        </div>
+        </>
       )}
 
-      {loading ? (
-        <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
-      ) : visibleItems.length === 0 ? (
-        <EmptyState icon={Sparkles} title="No content items yet" description="Pulse will prepare suggestions as activity comes in. You can also upload photos to start the queue." />
-      ) : view === 'card' ? (
+      {topLevelTab === 'suggestions' && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Suggestions</p>
+              <Badge variant="outline">{queueSections.ideas.length}</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">Pulse recommendations that are not yet part of your active queue.</p>
+            {queueSections.ideas.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No suggestions right now.</p>
+            ) : (
+              <div className="space-y-3">
+                {queueSections.ideas.map(({ item, statusLabel, queueTime }) => {
+                  const displayImageUrl = getDisplayImageUrl(item);
+                  const sourceLabel = getSourceLabel(item);
+                  return (
+                    <div key={buildItemKey(item)} className="flex flex-col md:flex-row gap-3 rounded-lg border p-3">
+                      <MediaImage
+                        src={item.thumbnail_url || displayImageUrl}
+                        fallbackSrc={displayImageUrl}
+                        alt={item.title || 'Suggestion preview'}
+                        containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
+                        aspectClassName=""
+                        className="h-full w-full object-cover"
+                      />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : 'outline'}>{statusLabel}</Badge>
+                          <Badge variant="outline">{sourceLabel}</Badge>
+                          <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
+                        </div>
+                        <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled suggestion'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this suggestion.'}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
+                          <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
+                          <Button size="sm" variant="outline" onClick={() => setScheduleTarget(item)}>Schedule</Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {topLevelTab === 'library_uploads' && (
+        <>
+          <Card>
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium">Library & Uploads</p>
+                  <p className="text-xs text-muted-foreground">Browse assets, uploads, and historical content.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
+                  <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
+                </div>
+              </div>
+
+              <Tabs value={libraryTab} onValueChange={(v) => setLibraryTab(v as LibraryTab)}>
+                <TabsList>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                  <TabsTrigger value="ready">Ready</TabsTrigger>
+                  <TabsTrigger value="pulse_suggested">Pulse Suggested</TabsTrigger>
+                  <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+                  <TabsTrigger value="archived">Archived</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              {libraryTab !== 'archived' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs text-muted-foreground mr-1">Inventory filter:</p>
+                  {([
+                    { value: 'all', label: 'All inventory' },
+                    { value: 'ready_to_post', label: 'Ready to Post' },
+                    { value: 'needs_image', label: 'Needs Image' },
+                    { value: 'needs_caption', label: 'Needs Caption' },
+                  ] as const).map((option) => (
+                    <Button
+                      key={option.value}
+                      size="sm"
+                      variant={inventoryFilter === option.value ? 'default' : 'outline'}
+                      onClick={() => setInventoryFilter(option.value)}
+                      className="h-8"
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {selected.size > 0 && (
+            <div className="rounded-lg border p-3 flex flex-wrap items-center gap-2">
+              <p className="text-sm text-muted-foreground mr-2">{selected.size} selected</p>
+              <Button size="sm" variant="outline" onClick={() => updateMany(Array.from(selected), { status: 'archived' })}><Archive className="w-4 h-4 mr-1" />Archive</Button>
+              <Button size="sm" variant="destructive" onClick={() => Promise.all(Array.from(selected).map(handleDelete)).then(() => setSelected(new Set()))}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+          ) : visibleItems.length === 0 ? (
+            <EmptyState icon={Sparkles} title="No content items yet" description="Pulse will prepare suggestions as activity comes in. You can also upload photos to start the queue." />
+          ) : view === 'card' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {visibleItems.map((item) => {
             const displayImageUrl = getDisplayImageUrl(item);
@@ -991,7 +1068,7 @@ export default function BrandLibraryPage() {
             );
           })}
         </div>
-      ) : (
+          ) : (
         <div className="rounded-lg border overflow-hidden">
           <div className="grid grid-cols-[32px_1fr_1fr_140px_140px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
             <div />
@@ -1024,6 +1101,8 @@ export default function BrandLibraryPage() {
             );
           })}
         </div>
+          )}
+        </>
       )}
 
       <Dialog open={!!previewItem && !!(previewItem && getDisplayImageUrl(previewItem))} onOpenChange={(open) => !open && setPreviewItem(null)}>
