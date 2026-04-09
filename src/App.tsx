@@ -137,6 +137,9 @@ function AppRoutes() {
       <Route element={<ProtectedLayout />}>
         {/* Home - Default landing page */}
         <Route path="/home" element={<Home />} />
+        <Route path="/reviews" element={<Navigate to="/reputation/reviews" replace />} />
+        <Route path="/content" element={<Navigate to="/content/library" replace />} />
+        <Route path="/publishing" element={<Navigate to="/content/calendar" replace />} />
         
         {/* Studio Section - Creative workspace */}
         <Route path="/studio" element={<Studio />} />
@@ -221,7 +224,6 @@ function AppRoutes() {
         <Route path="/modules/editor" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/upload" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/drafts" element={<Navigate to="/studio/pro-photo" replace />} />
-        <Route path="/publishing" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/studio/planner" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/studio/email" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/studio/competitors" element={<Navigate to="/analytics/competitors" replace />} />

@@ -5,7 +5,7 @@ import {
   Home,
   Zap,
   FolderOpen,
-  Calendar,
+  CalendarCheck2,
   MessageSquareText,
   Settings,
   ChevronDown,
@@ -53,11 +53,11 @@ interface AppLayoutProps {
 
 const primaryNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
-  { name: 'Autopilot', href: '/autopilot', icon: Zap },
-  { name: 'Content', href: '/content/library', icon: FolderOpen },
-  { name: 'Calendar', href: '/content/calendar', icon: Calendar },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
+  { name: 'Content', href: '/content/library', icon: FolderOpen },
   { name: 'Setup', href: '/setup', icon: Settings },
+  { name: 'Autopilot', href: '/autopilot', icon: Zap },
+  { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
 ];
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
@@ -72,7 +72,7 @@ const quickActions = [
   },
   {
     name: 'Enhance Photo',
-    description: 'Improve and restyle a photo with Pro Photo',
+    description: 'Improve and prepare a photo for publishing',
     href: '/studio/pro-photo',
     icon: Camera,
   },
@@ -305,7 +305,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" className="gap-2">
                     <Plus className="w-4 h-4" />
-                    Add Content
+                    Add
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -387,7 +387,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="gap-2">
                   <Plus className="w-4 h-4" />
-                  Add Content
+                  Add
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
