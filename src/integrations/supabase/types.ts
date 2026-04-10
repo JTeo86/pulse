@@ -1961,6 +1961,44 @@ export type Database = {
           },
         ]
       }
+      referral_rollout_audit_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          event_payload: Json
+          event_scope: string
+          event_type: string
+          id: string
+          venue_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_payload?: Json
+          event_scope: string
+          event_type: string
+          id?: string
+          venue_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_payload?: Json
+          event_scope?: string
+          event_type?: string
+          id?: string
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_rollout_audit_events_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referral_beta_access: {
         Row: {
           access_type: string
@@ -3499,6 +3537,9 @@ export type Database = {
           owner_user_id: string | null
           plan: string | null
           referral_enabled: boolean
+          referral_beta_access: boolean
+          referral_rollout_changed_at: string | null
+          referral_rollout_changed_by: string | null
           referral_stage_override: number | null
           timezone: string
           website_url: string | null
@@ -3516,6 +3557,9 @@ export type Database = {
           owner_user_id?: string | null
           plan?: string | null
           referral_enabled?: boolean
+          referral_beta_access?: boolean
+          referral_rollout_changed_at?: string | null
+          referral_rollout_changed_by?: string | null
           referral_stage_override?: number | null
           timezone?: string
           website_url?: string | null
@@ -3533,6 +3577,9 @@ export type Database = {
           owner_user_id?: string | null
           plan?: string | null
           referral_enabled?: boolean
+          referral_beta_access?: boolean
+          referral_rollout_changed_at?: string | null
+          referral_rollout_changed_by?: string | null
           referral_stage_override?: number | null
           timezone?: string
           website_url?: string | null

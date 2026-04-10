@@ -66,7 +66,7 @@ export default function PlatformAdmin() {
           </TabsTrigger>
           <TabsTrigger value="referral" className="gap-2">
             <Network className="w-4 h-4" />
-            Referral Network
+            Referral Release Control
           </TabsTrigger>
         </TabsList>
 
