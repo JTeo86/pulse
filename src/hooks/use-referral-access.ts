@@ -7,6 +7,7 @@ interface ReferralSettings {
   enabled: boolean;
   globalStage: number;
   stripeEnabled: boolean;
+  betaMode: boolean;
 }
 
 interface ReferralAccess {
@@ -51,7 +52,7 @@ export function useReferralAccess(): ReferralAccess {
       const { data, error } = await supabase
         .from('platform_settings')
         .select('key, value')
-        .in('key', ['referral_system_enabled', 'referral_stage', 'referral_stripe_enabled']);
+        .in('key', ['referral_system_enabled', 'referral_stage', 'referral_stripe_enabled', 'referral_beta_mode']);
 
       if (error) throw error;
       return data ?? [];
@@ -65,13 +66,15 @@ export function useReferralAccess(): ReferralAccess {
       enabled: parseBool(map.get('referral_system_enabled'), false),
       globalStage: parseStage(map.get('referral_stage'), 1),
       stripeEnabled: parseBool(map.get('referral_stripe_enabled'), false),
+      betaMode: parseBool(map.get('referral_beta_mode'), true),
     };
   }, [settingsRows]);
 
   const venueEnabled = Boolean(currentVenue?.referral_enabled);
+  const venueBetaAccess = Boolean(currentVenue?.referral_beta_access);
   const stage = currentVenue?.referral_stage_override ?? settings.globalStage;
 
-  const hasAccess = settings.enabled && venueEnabled;
+  const hasAccess = settings.enabled && venueEnabled && (!settings.betaMode || venueBetaAccess);
   const canUseNetwork = hasAccess && stage >= 2;
   const canUseMarketplace = hasAccess && stage >= 3;
 
@@ -84,10 +87,10 @@ export function useReferralAccess(): ReferralAccess {
     canAccessReferral: hasAccess,
     venueHasAccess: hasAccess,
     adminHasAccess: settings.enabled && isAdmin,
-    isBetaVenue: hasAccess && stage === 1,
+    isBetaVenue: hasAccess && settings.betaMode && venueBetaAccess,
     flags: {
       moduleEnabled: settings.enabled,
-      privateBeta: settings.enabled && stage === 1,
+      privateBeta: settings.enabled && settings.betaMode,
       publicLaunch: settings.enabled && stage >= 3,
       stripeEnabled: settings.stripeEnabled,
     },

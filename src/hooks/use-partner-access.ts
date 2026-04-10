@@ -16,6 +16,7 @@ interface PartnerAccess {
     venue_id: string | null;
     venue_referral_enabled: boolean;
     venue_referral_stage_override: number | null;
+    venue_referral_beta_access: boolean;
   } | null;
   stage: number;
 }
@@ -40,7 +41,7 @@ export function usePartnerAccess(): PartnerAccess {
       const { data, error } = await supabase
         .from('platform_settings')
         .select('key, value')
-        .in('key', ['referral_system_enabled', 'referral_stage']);
+        .in('key', ['referral_system_enabled', 'referral_stage', 'referral_beta_mode']);
       if (error) throw error;
       return data ?? [];
     },
@@ -64,7 +65,7 @@ export function usePartnerAccess(): PartnerAccess {
 
       const { data: venue, error: venueError } = await supabase
         .from('venues')
-        .select('referral_enabled, referral_stage_override')
+.select('referral_enabled, referral_stage_override, referral_beta_access')
         .eq('id', data.venue_id)
         .maybeSingle();
 
@@ -74,6 +75,7 @@ export function usePartnerAccess(): PartnerAccess {
         ...data,
         venue_referral_enabled: venue?.referral_enabled ?? false,
         venue_referral_stage_override: venue?.referral_stage_override ?? null,
+        venue_referral_beta_access: venue?.referral_beta_access ?? false,
       };
     },
     enabled: !!user?.email,
@@ -85,6 +87,7 @@ export function usePartnerAccess(): PartnerAccess {
     return {
       enabled: parseBool(map.get('referral_system_enabled'), false),
       stage: parseStage(map.get('referral_stage'), 1),
+      betaMode: parseBool(map.get('referral_beta_mode'), true),
     };
   }, [settingsRows]);
 
@@ -93,6 +96,7 @@ export function usePartnerAccess(): PartnerAccess {
     platform.enabled &&
     referrer &&
     referrer.venue_referral_enabled &&
+    (!platform.betaMode || referrer.venue_referral_beta_access) &&
     stage >= 2
   );
 

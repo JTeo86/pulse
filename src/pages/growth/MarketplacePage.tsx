@@ -8,6 +8,17 @@ import { Input } from '@/components/ui/input';
 import { Compass, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+function parseBool(value: string | undefined, fallback = false) {
+  if (value == null) return fallback;
+  return value.toLowerCase() === 'true';
+}
+
+function parseStage(value: string | undefined, fallback = 1) {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(3, Math.trunc(parsed)));
+}
+
 export default function MarketplacePage() {
   const { currentVenue } = useVenue();
   const [query, setQuery] = useState('');
@@ -15,14 +26,34 @@ export default function MarketplacePage() {
   const { data: venues, isLoading } = useQuery({
     queryKey: ['referral-marketplace-venues', currentVenue?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('venues')
-        .select('id, name, city, country_code')
-        .eq('referral_enabled', true)
-        .order('name');
+      const [{ data: settingsRows, error: settingsError }, { data, error }] = await Promise.all([
+        supabase
+          .from('platform_settings')
+          .select('key, value')
+          .in('key', ['referral_system_enabled', 'referral_stage', 'referral_beta_mode']),
+        supabase
+          .from('venues')
+          .select('id, name, city, country_code, referral_enabled, referral_beta_access, referral_stage_override')
+          .eq('referral_enabled', true)
+          .order('name'),
+      ]);
 
+      if (settingsError) throw settingsError;
       if (error) throw error;
-      return (data ?? []).filter((venue) => venue.id !== currentVenue?.id);
+
+      const map = new Map((settingsRows ?? []).map((row) => [row.key, row.value ?? '']));
+      const globalEnabled = parseBool(map.get('referral_system_enabled'), false);
+      const globalStage = parseStage(map.get('referral_stage'), 1);
+      const betaMode = parseBool(map.get('referral_beta_mode'), true);
+
+      if (!globalEnabled) return [];
+
+      return (data ?? []).filter((venue) => {
+        if (venue.id === currentVenue?.id) return false;
+        if (betaMode && !venue.referral_beta_access) return false;
+        const effectiveStage = venue.referral_stage_override ?? globalStage;
+        return effectiveStage >= 3;
+      });
     },
     enabled: !!currentVenue,
   });

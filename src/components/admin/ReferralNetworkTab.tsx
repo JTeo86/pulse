@@ -10,24 +10,61 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Building2, Network, Search, Shield } from 'lucide-react';
+import { Building2, Network, Search, Shield, Rocket } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 type SettingsMap = Record<string, string>;
+type StageValue = 1 | 2 | 3;
+
+type VenueRolloutRow = {
+  id: string;
+  name: string;
+  city: string | null;
+  referral_enabled: boolean;
+  referral_beta_access: boolean;
+  referral_stage_override: number | null;
+  referral_rollout_changed_at: string | null;
+  referral_rollout_changed_by: string | null;
+};
+
+type ConfirmState = {
+  title: string;
+  description: string;
+  actionLabel: string;
+  onConfirm: () => void;
+} | null;
 
 function parseBool(value: string | undefined, fallback = false) {
   if (value == null) return fallback;
   return value.toLowerCase() === 'true';
 }
 
-function parseStage(value: string | undefined, fallback = 1) {
+function parseStage(value: string | undefined, fallback = 1): StageValue {
   const parsed = Number(value ?? fallback);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(1, Math.min(3, Math.trunc(parsed)));
+  if (!Number.isFinite(parsed)) return fallback as StageValue;
+  return Math.max(1, Math.min(3, Math.trunc(parsed))) as StageValue;
+}
+
+function formatActor(actor: string | null) {
+  if (!actor) return '—';
+  return `${actor.slice(0, 8)}…`;
 }
 
 export default function ReferralNetworkTab() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [selectedVenueIds, setSelectedVenueIds] = useState<Set<string>>(new Set());
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
 
   const { data: settings, isLoading: settingsLoading } = useQuery<SettingsMap>({
     queryKey: ['referral-admin-platform-settings'],
@@ -35,7 +72,7 @@ export default function ReferralNetworkTab() {
       const { data, error } = await supabase
         .from('platform_settings')
         .select('key, value')
-        .in('key', ['referral_system_enabled', 'referral_stage', 'referral_stripe_enabled']);
+        .in('key', ['referral_system_enabled', 'referral_stage', 'referral_beta_mode', 'referral_stripe_enabled']);
       if (error) throw error;
 
       const map: SettingsMap = {};
@@ -46,17 +83,43 @@ export default function ReferralNetworkTab() {
     },
   });
 
-  const { data: venues, isLoading: venuesLoading } = useQuery({
+  const { data: venues, isLoading: venuesLoading } = useQuery<VenueRolloutRow[]>({
     queryKey: ['referral-admin-venues'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('venues')
-        .select('id, name, city, referral_enabled, referral_stage_override')
+        .select('id, name, city, referral_enabled, referral_beta_access, referral_stage_override, referral_rollout_changed_at, referral_rollout_changed_by')
         .order('name');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as VenueRolloutRow[];
     },
   });
+
+  const logAuditEvent = async ({
+    eventScope,
+    eventType,
+    venueId,
+    payload,
+  }: {
+    eventScope: 'global' | 'venue' | 'bulk';
+    eventType: string;
+    venueId?: string | null;
+    payload: Record<string, unknown>;
+  }) => {
+    const { data: authData } = await supabase.auth.getUser();
+    const actorUserId = authData.user?.id ?? null;
+
+    const { error } = await supabase.from('referral_rollout_audit_events').insert({
+      event_scope: eventScope,
+      event_type: eventType,
+      venue_id: venueId ?? null,
+      actor_user_id: actorUserId,
+      event_payload: payload,
+    });
+
+    if (error) throw error;
+    return actorUserId;
+  };
 
   const upsertSetting = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: string }) => {
@@ -64,12 +127,18 @@ export default function ReferralNetworkTab() {
         .from('platform_settings')
         .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
       if (error) throw error;
+
+      await logAuditEvent({
+        eventScope: 'global',
+        eventType: `global_setting_${key}`,
+        payload: { key, value },
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['referral-admin-platform-settings'] });
       qc.invalidateQueries({ queryKey: ['referral-platform-settings'] });
       qc.invalidateQueries({ queryKey: ['partner-referral-platform-settings'] });
-      toast.success('Referral rollout updated');
+      toast.success('Global referral rollout updated');
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -78,30 +147,107 @@ export default function ReferralNetworkTab() {
     mutationFn: async ({
       venueId,
       referralEnabled,
+      referralBetaAccess,
       referralStageOverride,
+      eventType,
     }: {
       venueId: string;
       referralEnabled?: boolean;
+      referralBetaAccess?: boolean;
       referralStageOverride?: number | null;
+      eventType: string;
     }) => {
-      const updates: Record<string, unknown> = {};
+      const actorUserId = (await supabase.auth.getUser()).data.user?.id ?? null;
+      const updates: Record<string, unknown> = {
+        referral_rollout_changed_at: new Date().toISOString(),
+        referral_rollout_changed_by: actorUserId,
+      };
       if (referralEnabled !== undefined) updates.referral_enabled = referralEnabled;
+      if (referralBetaAccess !== undefined) updates.referral_beta_access = referralBetaAccess;
       if (referralStageOverride !== undefined) updates.referral_stage_override = referralStageOverride;
 
       const { error } = await supabase.from('venues').update(updates).eq('id', venueId);
       if (error) throw error;
+
+      await logAuditEvent({
+        eventScope: 'venue',
+        eventType,
+        venueId,
+        payload: {
+          referral_enabled: referralEnabled,
+          referral_beta_access: referralBetaAccess,
+          referral_stage_override: referralStageOverride,
+        },
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['referral-admin-venues'] });
       qc.invalidateQueries({ queryKey: ['referral-platform-settings'] });
+      qc.invalidateQueries({ queryKey: ['partner-referral-platform-settings'] });
       toast.success('Venue rollout updated');
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const runBulkAction = useMutation({
+    mutationFn: async ({ action }: { action: 'enable-stage-1-beta' | 'move-beta-stage-2' | 'disable-global' }) => {
+      if (action === 'disable-global') {
+        const { error } = await supabase
+          .from('platform_settings')
+          .upsert({ key: 'referral_system_enabled', value: 'false', updated_at: new Date().toISOString() }, { onConflict: 'key' });
+        if (error) throw error;
+
+        await logAuditEvent({
+          eventScope: 'bulk',
+          eventType: 'bulk_disable_referral_system_globally',
+          payload: { action },
+        });
+        return;
+      }
+
+      const ids = Array.from(selectedVenueIds);
+      if (!ids.length) return;
+
+      const actorUserId = (await supabase.auth.getUser()).data.user?.id ?? null;
+      const nowIso = new Date().toISOString();
+      const updates = action === 'enable-stage-1-beta'
+        ? {
+            referral_enabled: true,
+            referral_beta_access: true,
+            referral_stage_override: 1,
+            referral_rollout_changed_at: nowIso,
+            referral_rollout_changed_by: actorUserId,
+          }
+        : {
+            referral_beta_access: true,
+            referral_stage_override: 2,
+            referral_rollout_changed_at: nowIso,
+            referral_rollout_changed_by: actorUserId,
+          };
+
+      const { error } = await supabase.from('venues').update(updates).in('id', ids);
+      if (error) throw error;
+
+      await logAuditEvent({
+        eventScope: 'bulk',
+        eventType: action,
+        payload: { action, venue_ids: ids, count: ids.length },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['referral-admin-venues'] });
+      qc.invalidateQueries({ queryKey: ['referral-admin-platform-settings'] });
+      qc.invalidateQueries({ queryKey: ['referral-platform-settings'] });
+      qc.invalidateQueries({ queryKey: ['partner-referral-platform-settings'] });
+      setSelectedVenueIds(new Set());
+      toast.success('Rollout action completed');
     },
     onError: (e) => toast.error((e as Error).message),
   });
 
   const referralEnabled = parseBool(settings?.referral_system_enabled, false);
   const referralStage = parseStage(settings?.referral_stage, 1);
-  const stripeEnabled = parseBool(settings?.referral_stripe_enabled, false);
+  const betaMode = parseBool(settings?.referral_beta_mode, true);
 
   const filteredVenues = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -113,70 +259,111 @@ export default function ReferralNetworkTab() {
     });
   }, [search, venues]);
 
-  return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="p-4 rounded-lg border border-accent/20 bg-accent/5">
-        <div className="flex items-start gap-3">
-          <Network className="w-5 h-5 text-accent mt-0.5" />
-          <div>
-            <h4 className="font-medium text-sm">Referral rollout controls</h4>
-            <p className="text-sm text-muted-foreground mt-1">
-              Control global launch, stage progression, and per-venue access. Keep rollout private while testing.
-            </p>
-          </div>
-        </div>
-      </div>
+  const venuesWithAccessCount = useMemo(() => {
+    return (venues ?? []).filter((venue) => {
+      const eligibleByBeta = !betaMode || venue.referral_beta_access;
+      return referralEnabled && venue.referral_enabled && eligibleByBeta;
+    }).length;
+  }, [venues, referralEnabled, betaMode]);
 
+  const stageText = (stage: number) => ({
+    1: 'Private referrals',
+    2: 'Network expansion',
+    3: 'Marketplace',
+  }[stage] ?? 'Private referrals');
+
+  const handleSelectAll = (checked: boolean) => {
+    if (!checked) {
+      setSelectedVenueIds(new Set());
+      return;
+    }
+    setSelectedVenueIds(new Set(filteredVenues.map((venue) => venue.id)));
+  };
+
+  return (
+    <div className="space-y-6 max-w-6xl">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-4 h-4" />
-            Global Controls
+            Global Release Status
           </CardTitle>
-          <CardDescription>Turn referrals on or off for the platform and set the active rollout stage.</CardDescription>
+          <CardDescription>
+            Control global availability and staged rollout behavior for referrals.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {settingsLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : (
             <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Referral system</p>
+                  <p className="font-medium mt-1">{referralEnabled ? 'On' : 'Off'}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Global stage</p>
+                  <p className="font-medium mt-1">{referralStage} · {stageText(referralStage)}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Beta mode</p>
+                  <p className="font-medium mt-1">{betaMode ? 'On' : 'Off'}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Venues with access</p>
+                  <p className="font-medium mt-1">{venuesWithAccessCount}</p>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between gap-3 p-3 rounded-lg border">
                 <div>
-                  <p className="text-sm font-medium">Referral system enabled</p>
-                  <p className="text-xs text-muted-foreground">Master kill switch for all referral surfaces.</p>
+                  <p className="text-sm font-medium">Master toggle</p>
+                  <p className="text-xs text-muted-foreground">If off, referral module is hidden for all non-admin users.</p>
                 </div>
                 <Switch
                   checked={referralEnabled}
-                  onCheckedChange={(checked) => upsertSetting.mutate({ key: 'referral_system_enabled', value: String(checked) })}
-                  disabled={upsertSetting.isPending}
+                  onCheckedChange={(checked) => {
+                    if (!checked) {
+                      setConfirmState({
+                        title: 'Disable referrals globally?',
+                        description: 'This immediately hides referrals for all venues and partner users.',
+                        actionLabel: 'Disable globally',
+                        onConfirm: () => upsertSetting.mutate({ key: 'referral_system_enabled', value: 'false' }),
+                      });
+                      return;
+                    }
+                    upsertSetting.mutate({ key: 'referral_system_enabled', value: 'true' });
+                  }}
+                  disabled={upsertSetting.isPending || runBulkAction.isPending}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Default referral stage</Label>
+                <Label>Global stage</Label>
                 <Select
                   value={String(referralStage)}
                   onValueChange={(value) => upsertSetting.mutate({ key: 'referral_stage', value })}
                 >
-                  <SelectTrigger className="w-64">
+                  <SelectTrigger className="w-72">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">Private referrals</SelectItem>
-                    <SelectItem value="2">Network expansion</SelectItem>
-                    <SelectItem value="3">Marketplace</SelectItem>
+                    <SelectItem value="1">Stage 1 · Private referrals</SelectItem>
+                    <SelectItem value="2">Stage 2 · Network expansion</SelectItem>
+                    <SelectItem value="3">Stage 3 · Marketplace</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="flex items-center justify-between gap-3 p-3 rounded-lg border">
                 <div>
-                  <p className="text-sm font-medium">Stripe payouts enabled</p>
-                  <p className="text-xs text-muted-foreground">Controls automated payout mode for referral commissions.</p>
+                  <p className="text-sm font-medium">Beta mode</p>
+                  <p className="text-xs text-muted-foreground">If on, only venues explicitly marked beta can access referrals.</p>
                 </div>
                 <Switch
-                  checked={stripeEnabled}
-                  onCheckedChange={(checked) => upsertSetting.mutate({ key: 'referral_stripe_enabled', value: String(checked) })}
+                  checked={betaMode}
+                  onCheckedChange={(checked) => upsertSetting.mutate({ key: 'referral_beta_mode', value: String(checked) })}
                   disabled={upsertSetting.isPending}
                 />
               </div>
@@ -188,11 +375,48 @@ export default function ReferralNetworkTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <Network className="w-4 h-4" />
+            Stage Definitions
+          </CardTitle>
+          <CardDescription>Read-only rollout definitions for admin clarity.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border p-3">
+              <p className="font-medium text-sm">Stage 1 · Private referrals</p>
+              <ul className="mt-2 text-xs text-muted-foreground list-disc list-inside space-y-1">
+                <li>Create offer</li>
+                <li>Generate referral link</li>
+                <li>Manual bill verification</li>
+                <li>Commission tracking</li>
+              </ul>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="font-medium text-sm">Stage 2 · Network expansion</p>
+              <ul className="mt-2 text-xs text-muted-foreground list-disc list-inside space-y-1">
+                <li>Invite partners</li>
+                <li>Manage referrers</li>
+                <li>Basic partner performance</li>
+              </ul>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="font-medium text-sm">Stage 3 · Marketplace</p>
+              <ul className="mt-2 text-xs text-muted-foreground list-disc list-inside space-y-1">
+                <li>Marketplace/discovery features</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Building2 className="w-4 h-4" />
-            Venue Access Overrides
+            Venue Access Control
           </CardTitle>
           <CardDescription>
-            Assign venues to beta rollout, enable referrals per venue, and optionally override stage.
+            Search venues, enable referral access, manage beta assignments, and apply stage overrides.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -213,52 +437,96 @@ export default function ReferralNetworkTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Venue</TableHead>
-                    <TableHead>Enabled</TableHead>
-                    <TableHead>Stage Override</TableHead>
-                    <TableHead>Effective Access</TableHead>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={filteredVenues.length > 0 && selectedVenueIds.size === filteredVenues.length}
+                        onCheckedChange={(v) => handleSelectAll(Boolean(v))}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
+                    <TableHead>Venue name</TableHead>
+                    <TableHead>Referral access</TableHead>
+                    <TableHead>Beta access</TableHead>
+                    <TableHead>Effective stage</TableHead>
+                    <TableHead>Override active</TableHead>
+                    <TableHead>Last changed at</TableHead>
+                    <TableHead>Last changed by</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredVenues.map((venue) => {
-                    const effectiveStage = venue.referral_stage_override ?? referralStage;
+                    const stage = venue.referral_stage_override ?? referralStage;
+                    const eligibleByBeta = !betaMode || venue.referral_beta_access;
+                    const hasAccess = referralEnabled && venue.referral_enabled && eligibleByBeta;
+
                     return (
                       <TableRow key={venue.id}>
                         <TableCell>
+                          <Checkbox
+                            checked={selectedVenueIds.has(venue.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedVenueIds);
+                              if (checked) next.add(venue.id);
+                              else next.delete(venue.id);
+                              setSelectedVenueIds(next);
+                            }}
+                            aria-label={`Select ${venue.name}`}
+                          />
+                        </TableCell>
+                        <TableCell>
                           <p className="font-medium">{venue.name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{venue.id}</p>
+                          <p className="text-xs text-muted-foreground">{venue.city ?? '—'}</p>
                         </TableCell>
                         <TableCell>
                           <Switch
                             checked={venue.referral_enabled}
-                            onCheckedChange={(checked) => updateVenue.mutate({ venueId: venue.id, referralEnabled: checked })}
+                            onCheckedChange={(checked) => updateVenue.mutate({
+                              venueId: venue.id,
+                              referralEnabled: checked,
+                              eventType: checked ? 'venue_referral_enabled' : 'venue_referral_disabled',
+                            })}
                             disabled={updateVenue.isPending}
                           />
                         </TableCell>
                         <TableCell>
-                          <Select
-                            value={venue.referral_stage_override ? String(venue.referral_stage_override) : 'default'}
-                            onValueChange={(value) => updateVenue.mutate({
+                          <Switch
+                            checked={venue.referral_beta_access}
+                            onCheckedChange={(checked) => updateVenue.mutate({
                               venueId: venue.id,
-                              referralStageOverride: value === 'default' ? null : Number(value),
+                              referralBetaAccess: checked,
+                              eventType: checked ? 'venue_beta_access_granted' : 'venue_beta_access_revoked',
                             })}
-                          >
-                            <SelectTrigger className="w-44">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="default">Use global ({referralStage})</SelectItem>
-                              <SelectItem value="1">Private referrals</SelectItem>
-                              <SelectItem value="2">Network expansion</SelectItem>
-                              <SelectItem value="3">Marketplace</SelectItem>
-                            </SelectContent>
-                          </Select>
+                            disabled={updateVenue.isPending}
+                          />
                         </TableCell>
                         <TableCell>
-                          <Badge variant={referralEnabled && venue.referral_enabled ? 'default' : 'secondary'}>
-                            {referralEnabled && venue.referral_enabled ? `Active (stage ${effectiveStage})` : 'Hidden'}
-                          </Badge>
+                          <div className="space-y-2">
+                            <Badge variant={hasAccess ? 'default' : 'secondary'}>
+                              {hasAccess ? `Stage ${stage}` : 'Hidden'}
+                            </Badge>
+                            <Select
+                              value={venue.referral_stage_override ? String(venue.referral_stage_override) : 'default'}
+                              onValueChange={(value) => updateVenue.mutate({
+                                venueId: venue.id,
+                                referralStageOverride: value === 'default' ? null : Number(value),
+                                eventType: value === 'default' ? 'venue_stage_override_removed' : 'venue_stage_override_set',
+                              })}
+                            >
+                              <SelectTrigger className="w-52">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="default">Use global ({referralStage})</SelectItem>
+                                <SelectItem value="1">Stage 1</SelectItem>
+                                <SelectItem value="2">Stage 2</SelectItem>
+                                <SelectItem value="3">Stage 3</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </TableCell>
+                        <TableCell>{venue.referral_stage_override ? 'Yes' : 'No'}</TableCell>
+                        <TableCell>{venue.referral_rollout_changed_at ? new Date(venue.referral_rollout_changed_at).toLocaleString() : '—'}</TableCell>
+                        <TableCell>{formatActor(venue.referral_rollout_changed_by)}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -268,6 +536,76 @@ export default function ReferralNetworkTab() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Rocket className="w-4 h-4" />
+            Safe Rollout Actions
+          </CardTitle>
+          <CardDescription>
+            Bulk actions are optional and include confirmation before execution.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Button
+            variant="outline"
+            disabled={!selectedVenueIds.size || runBulkAction.isPending}
+            onClick={() => setConfirmState({
+              title: 'Enable Stage 1 for selected beta venues?',
+              description: `This enables referrals, grants beta access, and sets stage override to 1 for ${selectedVenueIds.size} selected venues.`,
+              actionLabel: 'Enable Stage 1',
+              onConfirm: () => runBulkAction.mutate({ action: 'enable-stage-1-beta' }),
+            })}
+          >
+            Enable Stage 1 for selected beta venues
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!selectedVenueIds.size || runBulkAction.isPending}
+            onClick={() => setConfirmState({
+              title: 'Move selected beta venues to Stage 2?',
+              description: `This sets stage override to 2 for ${selectedVenueIds.size} selected venues and keeps beta access enabled.`,
+              actionLabel: 'Move to Stage 2',
+              onConfirm: () => runBulkAction.mutate({ action: 'move-beta-stage-2' }),
+            })}
+          >
+            Move beta venues to Stage 2
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={runBulkAction.isPending}
+            onClick={() => setConfirmState({
+              title: 'Disable referral system globally?',
+              description: 'This immediately hides all referral surfaces for non-admin users across the platform.',
+              actionLabel: 'Disable globally',
+              onConfirm: () => runBulkAction.mutate({ action: 'disable-global' }),
+            })}
+          >
+            Disable referral system globally
+          </Button>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={!!confirmState} onOpenChange={(open) => !open && setConfirmState(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmState?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmState?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                confirmState?.onConfirm();
+                setConfirmState(null);
+              }}
+            >
+              {confirmState?.actionLabel ?? 'Confirm'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

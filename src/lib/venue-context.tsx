@@ -14,6 +14,7 @@ interface Venue {
   website_url?: string | null;
   instagram_handle?: string | null;
   referral_enabled?: boolean;
+  referral_beta_access?: boolean;
   referral_stage_override?: number | null;
 }
 
