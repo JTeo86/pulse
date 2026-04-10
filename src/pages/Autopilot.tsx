@@ -8,19 +8,119 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Zap, Play, Clock, FileText, MessageSquareText,
   CheckCircle2, XCircle, Loader2, Calendar, Sparkles, ExternalLink, AlertTriangle
 } from 'lucide-react';
 import { useAutopilotSettings, useAutopilotRuns, useAutopilotTrigger } from '@/hooks/use-autopilot';
 import { formatDistanceToNow } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { useVenue } from '@/lib/venue-context';
+import { supabase } from '@/integrations/supabase/client';
+import { generateContentRequests, getContentRequestExamples } from '@/lib/content-requests';
 
 export default function AutopilotPage() {
+  const { currentVenue } = useVenue();
   const { settings, loading, upsertSettings } = useAutopilotSettings();
   const { data: runs, isLoading: runsLoading } = useAutopilotRuns();
   const trigger = useAutopilotTrigger();
   const navigate = useNavigate();
+  const { data: contentRequests = [], isLoading: contentRequestsLoading } = useQuery({
+    queryKey: ['autopilot-content-requests', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async () => {
+      if (!currentVenue) return [];
+
+      const now = new Date();
+      const twoWeeksBack = new Date(now);
+      twoWeeksBack.setDate(now.getDate() - 14);
+
+      const [scheduledContentRes, assetRes, usageRes, reviewsRes] = await Promise.all([
+        supabase
+          .from('content_items')
+          .select('scheduled_for, title, caption_draft')
+          .eq('venue_id', currentVenue.id)
+          .not('scheduled_for', 'is', null)
+          .gte('scheduled_for', twoWeeksBack.toISOString())
+          .order('scheduled_for', { ascending: false })
+          .limit(120),
+        supabase
+          .from('content_assets')
+          .select('id, title, metadata')
+          .eq('venue_id', currentVenue.id)
+          .eq('asset_type', 'image')
+          .in('source_type', ['upload', 'manual', 'guest_upload'])
+          .order('created_at', { ascending: false })
+          .limit(250),
+        supabase
+          .from('content_items')
+          .select('created_at, media_variants')
+          .eq('venue_id', currentVenue.id)
+          .eq('source', 'autopilot')
+          .order('created_at', { ascending: false })
+          .limit(500),
+        supabase
+          .from('review_response_tasks')
+          .select('review_text')
+          .eq('venue_id', currentVenue.id)
+          .order('created_at', { ascending: false })
+          .limit(80),
+      ]);
+
+      const scheduledContent = scheduledContentRes.data || [];
+      const assets = assetRes.data || [];
+      const usageItems = usageRes.data || [];
+      const reviewTexts = (reviewsRes.data || []).map((item: any) => String(item.review_text || '').toLowerCase());
+
+      const hasLunch = scheduledContent.some((item: any) => {
+        if (!item.scheduled_for) return false;
+        const hour = new Date(item.scheduled_for).getHours();
+        const text = `${item.title || ''} ${item.caption_draft || ''}`.toLowerCase();
+        return (hour >= 11 && hour <= 15) || text.includes('lunch');
+      });
+      const hasDinner = scheduledContent.some((item: any) => {
+        if (!item.scheduled_for) return false;
+        const hour = new Date(item.scheduled_for).getHours();
+        const text = `${item.title || ''} ${item.caption_draft || ''}`.toLowerCase();
+        return hour >= 17 || text.includes('dinner');
+      });
+      const hasWeekend = scheduledContent.some((item: any) => {
+        if (!item.scheduled_for) return false;
+        const day = new Date(item.scheduled_for).getDay();
+        return day === 0 || day === 6;
+      });
+
+      const usedAssetIds = new Set<string>();
+      for (const usage of usageItems) {
+        const mediaVariants = (usage as any).media_variants || {};
+        const sourceAssetId = mediaVariants?.source_asset_id;
+        if (sourceAssetId) usedAssetIds.add(String(sourceAssetId));
+      }
+      const unusedImageCount = assets.filter((asset: any) => !usedAssetIds.has(asset.id)).length;
+
+      const hasDrinks = assets.some((asset: any) => {
+        const text = `${asset.title || ''} ${JSON.stringify(asset.metadata || {})}`.toLowerCase();
+        return ['cocktail', 'drink', 'wine', 'beer', 'beverage', 'mocktail'].some((keyword) => text.includes(keyword));
+      });
+      const hasVenue = assets.some((asset: any) => {
+        const text = `${asset.title || ''} ${JSON.stringify(asset.metadata || {})}`.toLowerCase();
+        return ['interior', 'dining room', 'atmosphere', 'ambience', 'venue', 'patio', 'bar'].some((keyword) => text.includes(keyword));
+      });
+      const hasFood = assets.some((asset: any) => {
+        const text = `${asset.title || ''} ${JSON.stringify(asset.metadata || {})}`.toLowerCase();
+        return ['dish', 'food', 'menu', 'plate', 'dessert', 'meal'].some((keyword) => text.includes(keyword));
+      });
+
+      return generateContentRequests({
+        coverage: { hasLunch, hasDinner, hasWeekend },
+        assets: { unusedImageCount },
+        reviewSignals: { mentions: reviewTexts },
+        contentMix: { hasFood, hasDrinks, hasVenue },
+      });
+    },
+  });
+  const contentRequestExamples = getContentRequestExamples();
 
   const isEnabled = settings?.is_enabled ?? false;
   const latestRun = runs?.[0];
@@ -142,6 +242,41 @@ export default function AutopilotPage() {
                 )}
               </div>
             )}
+            <div className="rounded-lg border border-border/70 bg-background">
+              <div className="border-b px-4 py-3">
+                <p className="text-base font-semibold">Content Requests</p>
+                <p className="text-sm text-muted-foreground">What Pulse needs from you</p>
+              </div>
+              <div className="divide-y">
+                {contentRequestsLoading ? (
+                  <div className="p-4 space-y-2">
+                    <Skeleton className="h-5 w-1/2" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-8 w-24" />
+                  </div>
+                ) : contentRequests.length > 0 ? (
+                  contentRequests.map((request) => (
+                    <div key={request.id} className="p-4 flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold">{request.title}</p>
+                        {request.context && <p className="text-xs text-muted-foreground">{request.context}</p>}
+                      </div>
+                      <Button asChild size="sm" variant="outline" className="shrink-0">
+                        <Link to={request.ctaTo}>{request.ctaLabel}</Link>
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4">
+                    <p className="text-sm font-medium">Keep your momentum going</p>
+                    <p className="text-xs text-muted-foreground">Add fresh photos so Pulse keeps your feed varied and on-brand.</p>
+                    <Button asChild size="sm" variant="outline" className="mt-3">
+                      <Link to="/content/feed">Add Photos</Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <Button onClick={runPulseNow} disabled={trigger.isPending} className="gap-2 w-full sm:w-auto">
               {trigger.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}Run Pulse Now
@@ -164,6 +299,23 @@ export default function AutopilotPage() {
                     <Button variant="ghost" onClick={viewLastRunDetails} className="gap-2">
                       View Last Run Details <ExternalLink className="w-3.5 h-3.5" />
                     </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+            <Accordion type="single" collapsible className="w-full border rounded-md px-4">
+              <AccordionItem value="content-request-examples" className="border-0">
+                <AccordionTrigger className="text-sm">Request Engine Examples (3 scenarios)</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 py-1">
+                    {contentRequestExamples.map((example) => (
+                      <div key={example.name} className="rounded-md border bg-muted/20 p-3">
+                        <p className="text-xs font-medium">{example.name}</p>
+                        <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                          {example.output.map((item) => <li key={`${example.name}-${item.id}`} className="text-xs text-muted-foreground">{item.title}</li>)}
+                        </ul>
+                      </div>
+                    ))}
                   </div>
                 </AccordionContent>
               </AccordionItem>
