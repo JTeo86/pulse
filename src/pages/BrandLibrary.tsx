@@ -28,6 +28,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl, isSignedUrl } from '@/hooks/use-resolved-media';
 import { MediaImage } from '@/components/ui/media-image';
+import { generateExplanation } from '@/lib/explanations';
 
 interface LibraryItem {
   id: string;
@@ -756,6 +757,14 @@ export default function BrandLibraryPage() {
                               </div>
                               <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled post'}</p>
                               <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this post.'}</p>
+                              <div className="rounded-md bg-muted/30 px-2 py-1.5">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
+                                <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                                  {generateQueueExplanation(item, coverageSummary.gaps).map((point) => (
+                                    <li key={point} className="text-xs text-muted-foreground">{point}</li>
+                                  ))}
+                                </ul>
+                              </div>
                               <div className="flex flex-wrap gap-2">
                                 <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
                                 <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
@@ -807,6 +816,14 @@ export default function BrandLibraryPage() {
                         </div>
                         <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled suggestion'}</p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this suggestion.'}</p>
+                        <div className="rounded-md bg-muted/30 px-2 py-1.5">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
+                          <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                            {generateQueueExplanation(item, coverageSummary.gaps).map((point) => (
+                              <li key={point} className="text-xs text-muted-foreground">{point}</li>
+                            ))}
+                          </ul>
+                        </div>
                         <div className="flex flex-wrap gap-2">
                           <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
                           <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
@@ -1474,6 +1491,22 @@ function getSourceLabel(item: LibraryItem): string {
     runType.includes('image')
   ) return 'Pulse suggested';
   return item.source;
+}
+
+function generateQueueExplanation(item: LibraryItem, coverageGaps: string[]): string[] {
+  const reviewSignal = getSourceLabel(item) === 'Review-driven'
+    ? ['This theme is trending in recent reviews']
+    : [];
+  const timingDay = item.scheduled_for
+    ? new Date(item.scheduled_for).toLocaleDateString('en-US', { weekday: 'long' })
+    : null;
+
+  return generateExplanation({
+    content_gap: coverageGaps,
+    review_signal: reviewSignal,
+    timing: timingDay ? { day_of_week: timingDay } : undefined,
+    asset_usage: { reuse_frequency: item.source === 'autopilot' ? 'low' : 'balanced' },
+  });
 }
 
 function extractFirstUrl(value: unknown): string | null {

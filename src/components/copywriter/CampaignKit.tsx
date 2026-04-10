@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { optimiseTransformations } from './campaign-config';
+import { generateExplanation, type ExplanationContext } from '@/lib/explanations';
 
 export interface CampaignKitData {
   strategy: {
@@ -32,6 +33,7 @@ interface CampaignKitProps {
   kit: CampaignKitData;
   onOptimise: (transformation: string) => void;
   isOptimising: boolean;
+  explanationContext?: ExplanationContext;
 }
 
 const assetSections = [
@@ -162,8 +164,9 @@ function AssetBlock({
   );
 }
 
-export function CampaignKit({ kit, onOptimise, isOptimising }: CampaignKitProps) {
+export function CampaignKit({ kit, onOptimise, isOptimising, explanationContext }: CampaignKitProps) {
   const { toast } = useToast();
+  const whyThisWorks = generateExplanation(explanationContext || {});
 
   const handleExportAll = () => {
     const a = kit.assets;
@@ -262,14 +265,14 @@ export function CampaignKit({ kit, onOptimise, isOptimising }: CampaignKitProps)
       </div>
 
       {/* Performance Insight */}
-      {kit.performanceInsights.length > 0 && (
+      {(kit.performanceInsights.length > 0 || whyThisWorks.length > 0) && (
         <div className="rounded-xl border border-border/50 bg-muted/10 p-5 space-y-3">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-accent" />
-            <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground">Why This Campaign Works</p>
+            <p className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground">Why this works</p>
           </div>
           <ul className="space-y-1.5">
-            {kit.performanceInsights.map((insight, i) => (
+            {(kit.performanceInsights.length ? kit.performanceInsights : whyThisWorks).map((insight, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
                 <span className="text-accent mt-0.5">·</span>
                 {insight}

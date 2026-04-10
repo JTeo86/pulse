@@ -483,6 +483,15 @@ export function CampaignEngine({ onProjectSaved, onClose, existingProject }: Cam
                 kit={kit}
                 onOptimise={handleOptimise}
                 isOptimising={isOptimising}
+                explanationContext={{
+                  timing: {
+                    event: selectedOpportunity?.label || undefined,
+                    day_of_week: 'this week',
+                    seasonality: selectedOpportunity?.type === 'seasonal' ? 'the current season' : undefined,
+                  },
+                  content_gap: ['3-day content'],
+                  review_signal: ['Recent guest feedback supports this angle'],
+                }}
               />
             </motion.div>
           )}

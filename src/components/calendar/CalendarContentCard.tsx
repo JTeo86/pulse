@@ -10,7 +10,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
+import { generateExplanation } from '@/lib/explanations';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +57,7 @@ export function CalendarContentCard({
   const hasCaption = caption.length > 0;
   const isCampaignLinked = !!item.source_plan_publish_item_id || !!item.source_plan_title;
   const hasMedia = !!item.media_master_url;
+  const [showWhy, setShowWhy] = useState(false);
 
   const handleCopyCaption = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -248,6 +251,28 @@ export function CalendarContentCard({
         <p className="text-sm text-muted-foreground line-clamp-2">
           {hasCaption ? caption : 'No caption'}
         </p>
+
+        <Collapsible open={showWhy} onOpenChange={setShowWhy} className="rounded-md bg-muted/30 px-2 py-1.5">
+          <CollapsibleTrigger className="text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+            Why this post exists
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <ul className="mt-1 list-disc pl-4 space-y-0.5">
+              {generateExplanation({
+                content_gap: ['3-day content'],
+                timing: {
+                  day_of_week: item.scheduled_for
+                    ? new Date(item.scheduled_for).toLocaleDateString('en-US', { weekday: 'long' })
+                    : 'this week',
+                  event: item.source_plan_title || undefined,
+                },
+                asset_usage: { reuse_frequency: isCampaignLinked ? 'balanced' : 'low' },
+              }).map((point) => (
+                <li key={point} className="text-xs text-muted-foreground">{point}</li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
