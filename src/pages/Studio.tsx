@@ -90,7 +90,7 @@ export default function Studio() {
     >
       <PageHeader
         title="Studio"
-        description="Your creative workspace. Add photos, create reels, and train your brand's visual style."
+        description="Your creative workspace for editing and generation. Manage uploads in Content Feed, then process visuals here."
       />
 
       {/* Primary Creation Tools */}
@@ -148,9 +148,9 @@ export default function Studio() {
                 </p>
               </div>
             </div>
-            <Button onClick={() => navigate('/studio/pro-photo')} className="shrink-0">
-              <Camera className="w-4 h-4 mr-2" />
-              Add Photo
+            <Button onClick={() => navigate('/content/feed')} className="shrink-0" variant="outline">
+              <ImagePlus className="w-4 h-4 mr-2" />
+              Add Photos
             </Button>
           </div>
         </CardContent>

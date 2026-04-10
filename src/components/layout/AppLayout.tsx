@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home,
   FolderOpen,
+  Images,
   CalendarCheck2,
   MessageSquareText,
   Settings,
@@ -52,8 +53,9 @@ interface AppLayoutProps {
 const workflowNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
-  { name: 'Content', href: '/content/library', icon: FolderOpen },
+  { name: 'Content Feed', href: '/content/feed', icon: Images },
   { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
+  { name: 'Content', href: '/content/library', icon: FolderOpen },
 ];
 
 const setupNavigation: NavItem[] = [
@@ -66,8 +68,8 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 const quickActions = [
   {
     name: 'Add Photo',
-    description: 'Upload a photo and prepare it for content creation',
-    href: '/studio/pro-photo',
+    description: 'Add photos that fuel Autopilot content generation',
+    href: '/content/feed',
     icon: Upload,
   },
   {
