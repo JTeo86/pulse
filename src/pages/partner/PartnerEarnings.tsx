@@ -14,40 +14,37 @@ export default function PartnerEarnings() {
     queryKey: ['partner-earnings', referrer?.id],
     queryFn: async () => {
       if (!referrer?.id) return null;
-      const { data: bookings, error } = await supabase
-        .from('referrals')
-        .select('*')
+      const { data: commissions, error } = await supabase
+        .from('commissions')
+        .select('*, referrals(guest_name, booking_date)')
         .eq('partner_id', referrer.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
 
-      const all = bookings ?? [];
-      const estimated = all.reduce((s, b) => s + (Number(b.commission) || 0), 0);
-      const approved = all.filter(b => b.status === 'verified' || b.status === 'paid').reduce((s, b) => s + (Number(b.commission) || 0), 0);
-      const paid = all.filter(b => b.status === 'paid').reduce((s, b) => s + (Number(b.commission) || 0), 0);
-      const pendingVerification = all.filter(b => !['verified', 'paid'].includes(b.status)).length;
+      const all = commissions ?? [];
+      const pending = all.filter(c => ['pending', 'approved'].includes(c.status)).reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
+      const payable = all.filter(c => c.status === 'payable').reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
+      const paid = all.filter(c => c.status === 'paid').reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
 
-      return { estimated, approved, paid, pendingVerification, bookings: all };
+      return { pending, payable, paid, commissions: all };
     },
     enabled: !!referrer?.id,
   });
 
   const summaryCards = [
-    { label: 'Estimated Earnings', value: data?.estimated ?? 0 },
-    { label: 'Approved Earnings', value: data?.approved ?? 0 },
-    { label: 'Paid Earnings', value: data?.paid ?? 0 },
-    { label: 'Pending Verification', value: data?.pendingVerification ?? 0, isCurrency: false },
+    { label: 'Pending', value: data?.pending ?? 0 },
+    { label: 'Payable', value: data?.payable ?? 0 },
+    { label: 'Paid', value: data?.paid ?? 0 },
   ];
 
   return (
     <div className="space-y-8 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Earnings</h1>
-        <p className="text-muted-foreground mt-1">Your commission summary and payout history.</p>
+        <h1 className="text-2xl font-semibold text-foreground">Your Earnings</h1>
+        <p className="text-muted-foreground mt-1">Track each referral earning from review to payout confirmation.</p>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {summaryCards.map((card) => (
           <Card key={card.label}>
             <CardContent className="p-4">
@@ -57,9 +54,7 @@ export default function PartnerEarnings() {
                 <>
                   <span className="text-xs text-muted-foreground">{card.label}</span>
                   <p className="text-xl font-semibold text-foreground mt-1">
-                    {card.isCurrency === false
-                      ? card.value
-                      : `£${card.value.toLocaleString('en-GB', { minimumFractionDigits: 2 })}`}
+                    £{card.value.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
                   </p>
                 </>
               )}
@@ -68,30 +63,28 @@ export default function PartnerEarnings() {
         ))}
       </div>
 
-      {/* Manual payout notice */}
       <div className="flex items-start gap-3 rounded-lg bg-muted/50 border border-border p-4">
         <Info className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-medium text-foreground">Manual payout mode</p>
+          <p className="text-sm font-medium text-foreground">Manual payouts for now</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Payouts are currently reviewed and processed manually by the venue and platform. Automated payouts will be available soon.
+            Venues send payouts manually in v1. You can always see if an earning is pending review, payable, or already paid.
           </p>
         </div>
       </div>
 
-      {/* Earnings breakdown */}
       {isLoading ? (
         <Skeleton className="h-40" />
-      ) : !data?.bookings?.length ? (
+      ) : !data?.commissions?.length ? (
         <EmptyState
           icon={Wallet}
           title="No earnings yet"
-          description="Once bookings are verified, your estimated earnings will appear here."
+          description="Once a referral is verified, the commission will show up here automatically."
         />
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Payout History</CardTitle>
+            <CardTitle className="text-base">Per Booking Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -99,18 +92,20 @@ export default function PartnerEarnings() {
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
                     <th className="px-4 py-3 font-medium">Booking</th>
+                    <th className="px-4 py-3 font-medium text-right">Bill</th>
                     <th className="px-4 py-3 font-medium text-right">Commission</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.bookings.filter(b => b.commission != null).map((b) => (
-                    <tr key={b.id} className="border-b border-border last:border-0">
-                      <td className="px-4 py-3 text-foreground">{b.guest_name || 'Guest'}</td>
-                      <td className="px-4 py-3 text-right text-foreground">£{Number(b.commission).toFixed(2)}</td>
+                  {data.commissions.map((c) => (
+                    <tr key={c.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 text-foreground">{(c.referrals as any)?.guest_name || 'Guest booking'}</td>
+                      <td className="px-4 py-3 text-right text-foreground">£{Number(c.bill_amount || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-foreground">£{Number(c.commission_value || 0).toFixed(2)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={b.status === 'paid' ? 'default' : 'secondary'} className="text-xs capitalize">
-                          {b.status}
+                        <Badge variant={c.status === 'paid' ? 'default' : 'secondary'} className="text-xs capitalize">
+                          {c.status}
                         </Badge>
                       </td>
                     </tr>
