@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Building2, Network, Search, Shield, Rocket } from 'lucide-react';
+import { Building2, Network, Search, Shield, Rocket, Users } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
@@ -35,6 +35,19 @@ type VenueRolloutRow = {
   referral_stage_override: number | null;
   referral_rollout_changed_at: string | null;
   referral_rollout_changed_by: string | null;
+};
+
+type PartnerRolloutRow = {
+  id: string;
+  full_name: string;
+  email: string;
+  status: string;
+  partner_referral_enabled: boolean;
+  partner_beta_access: boolean;
+  partner_stage_override: number | null;
+  partner_rollout_changed_at: string | null;
+  partner_rollout_changed_by: string | null;
+  linked_venues_count: number;
 };
 
 type ConfirmState = {
@@ -63,6 +76,7 @@ function formatActor(actor: string | null) {
 export default function ReferralNetworkTab() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [partnerSearch, setPartnerSearch] = useState('');
   const [selectedVenueIds, setSelectedVenueIds] = useState<Set<string>>(new Set());
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
 
@@ -95,15 +109,51 @@ export default function ReferralNetworkTab() {
     },
   });
 
+  const { data: partners, isLoading: partnersLoading } = useQuery<PartnerRolloutRow[]>({
+    queryKey: ['referral-admin-partners'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('referrers')
+        .select('id, full_name, email, status, partner_referral_enabled, partner_beta_access, partner_stage_override, partner_rollout_changed_at, partner_rollout_changed_by')
+        .eq('status', 'active')
+        .order('full_name');
+      if (error) throw error;
+
+      const rows = (data ?? []) as Omit<PartnerRolloutRow, 'linked_venues_count'>[];
+      if (!rows.length) return [];
+
+      const referrerIds = rows.map((row) => row.id);
+      const { data: links, error: linksError } = await supabase
+        .from('referral_links')
+        .select('referrer_id, venue_id')
+        .in('referrer_id', referrerIds);
+      if (linksError) throw linksError;
+
+      const linkedVenueMap = new Map<string, Set<string>>();
+      (links ?? []).forEach((link) => {
+        if (!link.referrer_id || !link.venue_id) return;
+        if (!linkedVenueMap.has(link.referrer_id)) linkedVenueMap.set(link.referrer_id, new Set());
+        linkedVenueMap.get(link.referrer_id)?.add(link.venue_id);
+      });
+
+      return rows.map((row) => ({
+        ...row,
+        linked_venues_count: linkedVenueMap.get(row.id)?.size ?? 0,
+      }));
+    },
+  });
+
   const logAuditEvent = async ({
     eventScope,
     eventType,
     venueId,
+    partnerId,
     payload,
   }: {
-    eventScope: 'global' | 'venue' | 'bulk';
+    eventScope: 'global' | 'venue' | 'partner' | 'bulk';
     eventType: string;
     venueId?: string | null;
+    partnerId?: string | null;
     payload: Record<string, unknown>;
   }) => {
     const { data: authData } = await supabase.auth.getUser();
@@ -113,6 +163,7 @@ export default function ReferralNetworkTab() {
       event_scope: eventScope,
       event_type: eventType,
       venue_id: venueId ?? null,
+      partner_id: partnerId ?? null,
       actor_user_id: actorUserId,
       event_payload: payload,
     });
@@ -189,6 +240,51 @@ export default function ReferralNetworkTab() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const updatePartner = useMutation({
+    mutationFn: async ({
+      partnerId,
+      partnerReferralEnabled,
+      partnerBetaAccess,
+      partnerStageOverride,
+      eventType,
+    }: {
+      partnerId: string;
+      partnerReferralEnabled?: boolean;
+      partnerBetaAccess?: boolean;
+      partnerStageOverride?: number | null;
+      eventType: string;
+    }) => {
+      const actorUserId = (await supabase.auth.getUser()).data.user?.id ?? null;
+      const updates: Record<string, unknown> = {
+        partner_rollout_changed_at: new Date().toISOString(),
+        partner_rollout_changed_by: actorUserId,
+      };
+      if (partnerReferralEnabled !== undefined) updates.partner_referral_enabled = partnerReferralEnabled;
+      if (partnerBetaAccess !== undefined) updates.partner_beta_access = partnerBetaAccess;
+      if (partnerStageOverride !== undefined) updates.partner_stage_override = partnerStageOverride;
+
+      const { error } = await supabase.from('referrers').update(updates).eq('id', partnerId);
+      if (error) throw error;
+
+      await logAuditEvent({
+        eventScope: 'partner',
+        eventType,
+        partnerId,
+        payload: {
+          partner_referral_enabled: partnerReferralEnabled,
+          partner_beta_access: partnerBetaAccess,
+          partner_stage_override: partnerStageOverride,
+        },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['referral-admin-partners'] });
+      qc.invalidateQueries({ queryKey: ['partner-referrer-profile'] });
+      toast.success('Partner rollout updated');
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const runBulkAction = useMutation({
     mutationFn: async ({ action }: { action: 'enable-stage-1-beta' | 'move-beta-stage-2' | 'disable-global' }) => {
       if (action === 'disable-global') {
@@ -258,6 +354,15 @@ export default function ReferralNetworkTab() {
       return venue.name.toLowerCase().includes(needle) || city.includes(needle);
     });
   }, [search, venues]);
+
+  const filteredPartners = useMemo(() => {
+    const needle = partnerSearch.trim().toLowerCase();
+    if (!needle) return partners ?? [];
+    return (partners ?? []).filter((partner) =>
+      partner.full_name.toLowerCase().includes(needle) ||
+      partner.email.toLowerCase().includes(needle)
+    );
+  }, [partnerSearch, partners]);
 
   const venuesWithAccessCount = useMemo(() => {
     return (venues ?? []).filter((venue) => {
@@ -368,6 +473,117 @@ export default function ReferralNetworkTab() {
                 />
               </div>
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            Partner Access Control
+          </CardTitle>
+          <CardDescription>
+            Manage partner portal access, beta assignments, and stage overrides.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="relative max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={partnerSearch}
+              onChange={(e) => setPartnerSearch(e.target.value)}
+              className="pl-9"
+              placeholder="Search partners"
+            />
+          </div>
+
+          {partnersLoading ? (
+            <p className="text-sm text-muted-foreground">Loading partners…</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Partner name</TableHead>
+                    <TableHead>Partner access</TableHead>
+                    <TableHead>Beta access</TableHead>
+                    <TableHead>Effective stage</TableHead>
+                    <TableHead>Override active</TableHead>
+                    <TableHead>Linked venues</TableHead>
+                    <TableHead>Last changed at</TableHead>
+                    <TableHead>Last changed by</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredPartners.map((partner) => {
+                    const stage = partner.partner_stage_override ?? referralStage;
+                    const eligibleByBeta = !betaMode || partner.partner_beta_access;
+                    const hasAccess = referralEnabled && partner.partner_referral_enabled && eligibleByBeta;
+
+                    return (
+                      <TableRow key={partner.id}>
+                        <TableCell>
+                          <p className="font-medium">{partner.full_name}</p>
+                          <p className="text-xs text-muted-foreground">{partner.email}</p>
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={partner.partner_referral_enabled}
+                            onCheckedChange={(checked) => updatePartner.mutate({
+                              partnerId: partner.id,
+                              partnerReferralEnabled: checked,
+                              eventType: checked ? 'partner_referral_enabled' : 'partner_referral_disabled',
+                            })}
+                            disabled={updatePartner.isPending}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={partner.partner_beta_access}
+                            onCheckedChange={(checked) => updatePartner.mutate({
+                              partnerId: partner.id,
+                              partnerBetaAccess: checked,
+                              eventType: checked ? 'partner_beta_access_granted' : 'partner_beta_access_revoked',
+                            })}
+                            disabled={updatePartner.isPending}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <Badge variant={hasAccess ? 'default' : 'secondary'}>
+                              {hasAccess ? `Stage ${stage}` : 'Hidden'}
+                            </Badge>
+                            <Select
+                              value={partner.partner_stage_override ? String(partner.partner_stage_override) : 'default'}
+                              onValueChange={(value) => updatePartner.mutate({
+                                partnerId: partner.id,
+                                partnerStageOverride: value === 'default' ? null : Number(value),
+                                eventType: value === 'default' ? 'partner_stage_override_removed' : 'partner_stage_override_set',
+                              })}
+                            >
+                              <SelectTrigger className="w-52">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="default">Use global ({referralStage})</SelectItem>
+                                <SelectItem value="1">Stage 1</SelectItem>
+                                <SelectItem value="2">Stage 2</SelectItem>
+                                <SelectItem value="3">Stage 3</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+                        <TableCell>{partner.partner_stage_override ? 'Yes' : 'No'}</TableCell>
+                        <TableCell>{partner.linked_venues_count}</TableCell>
+                        <TableCell>{partner.partner_rollout_changed_at ? new Date(partner.partner_rollout_changed_at).toLocaleString() : '—'}</TableCell>
+                        <TableCell>{formatActor(partner.partner_rollout_changed_by)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -1969,6 +1969,7 @@ export type Database = {
           event_scope: string
           event_type: string
           id: string
+          partner_id: string | null
           venue_id: string | null
         }
         Insert: {
@@ -1978,6 +1979,7 @@ export type Database = {
           event_scope: string
           event_type: string
           id?: string
+          partner_id?: string | null
           venue_id?: string | null
         }
         Update: {
@@ -1987,9 +1989,17 @@ export type Database = {
           event_scope?: string
           event_type?: string
           id?: string
+          partner_id?: string | null
           venue_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "referral_rollout_audit_events_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "referral_rollout_audit_events_venue_id_fkey"
             columns: ["venue_id"]
@@ -2254,6 +2264,11 @@ export type Database = {
           id: string
           instagram_handle: string | null
           notes: string | null
+          partner_beta_access: boolean
+          partner_referral_enabled: boolean
+          partner_rollout_changed_at: string | null
+          partner_rollout_changed_by: string | null
+          partner_stage_override: number | null
           role_type: string
           status: string
           venue_id: string | null
@@ -2265,6 +2280,11 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           notes?: string | null
+          partner_beta_access?: boolean
+          partner_referral_enabled?: boolean
+          partner_rollout_changed_at?: string | null
+          partner_rollout_changed_by?: string | null
+          partner_stage_override?: number | null
           role_type?: string
           status?: string
           venue_id?: string | null
@@ -2276,6 +2296,11 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           notes?: string | null
+          partner_beta_access?: boolean
+          partner_referral_enabled?: boolean
+          partner_rollout_changed_at?: string | null
+          partner_rollout_changed_by?: string | null
+          partner_stage_override?: number | null
           role_type?: string
           status?: string
           venue_id?: string | null

@@ -47,8 +47,8 @@ export default function PartnerReferrals() {
   return (
     <div className="space-y-8 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Referrals</h1>
-        <p className="text-muted-foreground mt-1">Track your referral activity, bookings, and commission status.</p>
+        <h1 className="text-2xl font-semibold text-foreground">Bookings</h1>
+        <p className="text-muted-foreground mt-1">Track your booking activity and commission status.</p>
       </div>
 
       {/* Filters */}

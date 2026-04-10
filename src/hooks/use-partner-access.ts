@@ -3,22 +3,30 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 
-interface PartnerAccess {
+interface PartnerProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  instagram_handle: string | null;
+  role_type: string;
+  status: string;
+  venue_id: string | null;
+  partner_referral_enabled: boolean;
+  partner_beta_access: boolean;
+  partner_stage_override: number | null;
+  partner_rollout_changed_at: string | null;
+  partner_rollout_changed_by: string | null;
+}
+
+interface PartnerReferralAccess {
   isLoading: boolean;
+  enabled: boolean;
   hasAccess: boolean;
-  referrer: {
-    id: string;
-    full_name: string;
-    email: string;
-    instagram_handle: string | null;
-    role_type: string;
-    status: string;
-    venue_id: string | null;
-    venue_referral_enabled: boolean;
-    venue_referral_stage_override: number | null;
-    venue_referral_beta_access: boolean;
-  } | null;
   stage: number;
+  canViewInvites: boolean;
+  canViewMultipleVenues: boolean;
+  canBrowseMarketplace: boolean;
+  referrer: PartnerProfile | null;
 }
 
 function parseBool(value: string | undefined, fallback = false) {
@@ -32,7 +40,7 @@ function parseStage(value: string | undefined, fallback = 1) {
   return Math.max(1, Math.min(3, Math.trunc(parsed)));
 }
 
-export function usePartnerAccess(): PartnerAccess {
+export function usePartnerReferralAccess(): PartnerReferralAccess {
   const { user } = useAuth();
 
   const { data: settingsRows, isLoading: settingsLoading } = useQuery({
@@ -55,27 +63,21 @@ export function usePartnerAccess(): PartnerAccess {
 
       const { data, error } = await supabase
         .from('referrers')
-        .select('id, full_name, email, instagram_handle, role_type, status, venue_id')
+        .select('id, full_name, email, instagram_handle, role_type, status, venue_id, partner_referral_enabled, partner_beta_access, partner_stage_override, partner_rollout_changed_at, partner_rollout_changed_by')
         .eq('email', user.email)
         .eq('status', 'active')
         .maybeSingle();
 
       if (error) throw error;
-      if (!data?.venue_id) return null;
-
-      const { data: venue, error: venueError } = await supabase
-        .from('venues')
-.select('referral_enabled, referral_stage_override, referral_beta_access')
-        .eq('id', data.venue_id)
-        .maybeSingle();
-
-      if (venueError) throw venueError;
+      if (!data) return null;
 
       return {
         ...data,
-        venue_referral_enabled: venue?.referral_enabled ?? false,
-        venue_referral_stage_override: venue?.referral_stage_override ?? null,
-        venue_referral_beta_access: venue?.referral_beta_access ?? false,
+        partner_referral_enabled: data.partner_referral_enabled ?? false,
+        partner_beta_access: data.partner_beta_access ?? false,
+        partner_stage_override: data.partner_stage_override ?? null,
+        partner_rollout_changed_at: data.partner_rollout_changed_at ?? null,
+        partner_rollout_changed_by: data.partner_rollout_changed_by ?? null,
       };
     },
     enabled: !!user?.email,
@@ -91,19 +93,26 @@ export function usePartnerAccess(): PartnerAccess {
     };
   }, [settingsRows]);
 
-  const stage = referrer?.venue_referral_stage_override ?? platform.stage;
+  const enabled = platform.enabled;
+  const stage = referrer?.partner_stage_override ?? platform.stage;
   const hasAccess = Boolean(
-    platform.enabled &&
+    enabled &&
     referrer &&
-    referrer.venue_referral_enabled &&
-    (!platform.betaMode || referrer.venue_referral_beta_access) &&
-    stage >= 2
+    referrer.partner_referral_enabled &&
+    (!platform.betaMode || referrer.partner_beta_access)
   );
 
   return {
     isLoading: settingsLoading || referrerLoading,
+    enabled,
     hasAccess,
-    referrer,
     stage,
+    canViewInvites: hasAccess && stage >= 2,
+    canViewMultipleVenues: hasAccess && stage >= 2,
+    canBrowseMarketplace: hasAccess && stage >= 3,
+    referrer,
   };
 }
+
+// Backwards-compatible alias for existing imports.
+export const usePartnerAccess = usePartnerReferralAccess;

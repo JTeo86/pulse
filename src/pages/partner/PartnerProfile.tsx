@@ -1,4 +1,5 @@
 import { usePartnerAccess } from '@/hooks/use-partner-access';
+import { Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function PartnerProfile() {
-  const { referrer } = usePartnerAccess();
+  const { referrer, canViewMultipleVenues } = usePartnerAccess();
   const queryClient = useQueryClient();
 
   const [fullName, setFullName] = useState(referrer?.full_name ?? '');
@@ -39,6 +40,8 @@ export default function PartnerProfile() {
     planner: 'Event Planner',
     other: 'Other',
   };
+
+  if (!canViewMultipleVenues) return <Navigate to="/partner" replace />;
 
   return (
     <div className="space-y-8 max-w-2xl">
