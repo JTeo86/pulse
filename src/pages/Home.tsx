@@ -329,7 +329,7 @@ export default function Home() {
                       <span>{marketOpportunities.length} opportunities detected</span>
                     </div>
                   </div>
-                  <Button asChild>
+                  <Button variant="outline" asChild>
                     <Link to="/reputation/reviews?tab=respond">Review now</Link>
                   </Button>
                 </div>
@@ -475,7 +475,7 @@ export default function Home() {
                     <Link to="/home?tab=opportunities">View more</Link>
                   </Button>
                   <Button size="sm" asChild>
-                    <Link to="/plans">Generate campaign</Link>
+                    <Link to="/plans">Generate Campaign</Link>
                   </Button>
                 </div>
               </CardContent>

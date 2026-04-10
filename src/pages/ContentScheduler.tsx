@@ -170,7 +170,7 @@ export default function ContentScheduler() {
         <div className="flex items-center gap-2 shrink-0">
           <Button size="sm" className="gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
             <Plus className="w-3.5 h-3.5" />
-            Add Post
+            Manual Post
           </Button>
         </div>
       </div>
@@ -216,12 +216,7 @@ export default function ContentScheduler() {
         <EmptyState
           icon={Calendar}
           title="No content on your calendar"
-          description="Create a one-off post or build Post Packs in Plans to populate your calendar."
-          action={
-            <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-              <Plus className="w-4 h-4" /> Create Post
-            </Button>
-          }
+          description="Use Manual Post to add a one-off post, or build Post Packs in Plans to populate your calendar."
         />
       ) : (
         <div className="space-y-8">
