@@ -29,6 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl, isSignedUrl } from '@/hooks/use-resolved-media';
 import { MediaImage } from '@/components/ui/media-image';
 import { generateExplanation } from '@/lib/explanations';
+import { getPostPerformanceLabel } from '@/lib/performance-feedback';
 
 interface LibraryItem {
   id: string;
@@ -344,6 +345,18 @@ export default function BrandLibraryPage() {
       return true;
     });
   }, [items, libraryTab, inventoryFilter, autopilotRunIdFilter, contentItemIdsFilter]);
+
+  const performanceInput = useMemo(() => ({
+    posts: visibleItems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      caption: item.caption_draft || item.caption_final,
+      scheduledFor: item.scheduled_for,
+      createdAt: item.created_at,
+      reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
+    })),
+    frequencyPerWeek: visibleItems.length,
+  }), [visibleItems]);
 
   const toggleSelect = (id: string, checked: boolean) => {
     setSelected((prev) => {
@@ -753,6 +766,21 @@ export default function BrandLibraryPage() {
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : statusLabel === 'Scheduled' ? 'default' : 'outline'}>{statusLabel}</Badge>
                                 <Badge variant="outline">{sourceLabel}</Badge>
+                                <Badge variant={getPerformanceFeedbackVariant(getPostPerformanceLabel({
+                                  id: item.id,
+                                  title: item.title,
+                                  caption: item.caption_draft || item.caption_final,
+                                  scheduledFor: item.scheduled_for,
+                                  reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
+                                }, performanceInput))}>
+                                  {getPostPerformanceLabel({
+                                    id: item.id,
+                                    title: item.title,
+                                    caption: item.caption_draft || item.caption_final,
+                                    scheduledFor: item.scheduled_for,
+                                    reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
+                                  }, performanceInput)}
+                                </Badge>
                                 <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
                               </div>
                               <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled post'}</p>
@@ -812,6 +840,21 @@ export default function BrandLibraryPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : 'outline'}>{statusLabel}</Badge>
                           <Badge variant="outline">{sourceLabel}</Badge>
+                          <Badge variant={getPerformanceFeedbackVariant(getPostPerformanceLabel({
+                            id: item.id,
+                            title: item.title,
+                            caption: item.caption_draft || item.caption_final,
+                            scheduledFor: item.scheduled_for,
+                            reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
+                          }, performanceInput))}>
+                            {getPostPerformanceLabel({
+                              id: item.id,
+                              title: item.title,
+                              caption: item.caption_draft || item.caption_final,
+                              scheduledFor: item.scheduled_for,
+                              reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
+                            }, performanceInput)}
+                          </Badge>
                           <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
                         </div>
                         <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled suggestion'}</p>
@@ -949,6 +992,21 @@ export default function BrandLibraryPage() {
                   <div className="flex flex-wrap gap-1">
                     <Badge variant={readinessBadge.variant}>{readinessBadge.label}</Badge>
                     <Badge variant="outline">{getSourceLabel(item)}</Badge>
+                    <Badge variant={getPerformanceFeedbackVariant(getPostPerformanceLabel({
+                      id: item.id,
+                      title: item.title,
+                      caption: item.caption_draft || item.caption_final,
+                      scheduledFor: item.scheduled_for,
+                      reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
+                    }, performanceInput))}>
+                      {getPostPerformanceLabel({
+                        id: item.id,
+                        title: item.title,
+                        caption: item.caption_draft || item.caption_final,
+                        scheduledFor: item.scheduled_for,
+                        reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
+                      }, performanceInput)}
+                    </Badge>
                     {item.source === 'autopilot' && <Badge variant="secondary">Needs approval</Badge>}
                     {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
                     {item.origin === 'content_asset' && <Badge variant="outline">Asset</Badge>}
@@ -1507,6 +1565,12 @@ function generateQueueExplanation(item: LibraryItem, coverageGaps: string[]): st
     timing: timingDay ? { day_of_week: timingDay } : undefined,
     asset_usage: { reuse_frequency: item.source === 'autopilot' ? 'low' : 'balanced' },
   });
+}
+
+function getPerformanceFeedbackVariant(label: 'Performing well' | 'Average' | 'Needs improvement'): 'default' | 'secondary' | 'destructive' {
+  if (label === 'Performing well') return 'default';
+  if (label === 'Needs improvement') return 'destructive';
+  return 'secondary';
 }
 
 function extractFirstUrl(value: unknown): string | null {
