@@ -2256,6 +2256,85 @@ export type Database = {
           },
         ]
       }
+      referrals: {
+        Row: {
+          attribution_confidence: string
+          bill_amount: number | null
+          booking_date: string | null
+          commission: number | null
+          created_at: string
+          guest_name: string | null
+          id: string
+          notes: string | null
+          partner_id: string
+          party_size: number | null
+          promo_code: string | null
+          referral_link_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          attribution_confidence: string
+          bill_amount?: number | null
+          booking_date?: string | null
+          commission?: number | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          notes?: string | null
+          partner_id: string
+          party_size?: number | null
+          promo_code?: string | null
+          referral_link_id?: string | null
+          source_type: string
+          status?: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          attribution_confidence?: string
+          bill_amount?: number | null
+          booking_date?: string | null
+          commission?: number | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          notes?: string | null
+          partner_id?: string
+          party_size?: number | null
+          promo_code?: string | null
+          referral_link_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referral_link_id_fkey"
+            columns: ["referral_link_id"]
+            isOneToOne: false
+            referencedRelation: "referral_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referrers: {
         Row: {
           created_at: string
@@ -2269,6 +2348,7 @@ export type Database = {
           partner_rollout_changed_at: string | null
           partner_rollout_changed_by: string | null
           partner_stage_override: number | null
+          partner_type: string | null
           role_type: string
           status: string
           venue_id: string | null
@@ -2285,6 +2365,7 @@ export type Database = {
           partner_rollout_changed_at?: string | null
           partner_rollout_changed_by?: string | null
           partner_stage_override?: number | null
+          partner_type?: string | null
           role_type?: string
           status?: string
           venue_id?: string | null
@@ -2301,6 +2382,7 @@ export type Database = {
           partner_rollout_changed_at?: string | null
           partner_rollout_changed_by?: string | null
           partner_stage_override?: number | null
+          partner_type?: string | null
           role_type?: string
           status?: string
           venue_id?: string | null
@@ -3729,6 +3811,40 @@ export type Database = {
       transfer_venue_ownership: {
         Args: { p_new_owner_id: string; p_venue_id: string }
         Returns: undefined
+      }
+      upsert_referral_entry: {
+        Args: {
+          p_bill_amount?: number
+          p_booking_date?: string
+          p_commission?: number
+          p_guest_name?: string
+          p_notes?: string
+          p_partner_id: string
+          p_party_size?: number
+          p_promo_code?: string
+          p_referral_id?: string
+          p_referral_link_id?: string
+          p_source_type: string
+          p_venue_id: string
+        }
+        Returns: {
+          attribution_confidence: string
+          bill_amount: number | null
+          booking_date: string | null
+          commission: number | null
+          created_at: string
+          guest_name: string | null
+          id: string
+          notes: string | null
+          partner_id: string
+          party_size: number | null
+          promo_code: string | null
+          referral_link_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+          venue_id: string
+        }
       }
     }
     Enums: {
