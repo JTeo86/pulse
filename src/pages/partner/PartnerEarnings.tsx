@@ -5,10 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Wallet, Info } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 export default function PartnerEarnings() {
   const { referrer } = usePartnerAccess();
+  const [issueCommissionId, setIssueCommissionId] = useState('');
+  const [issueNote, setIssueNote] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['partner-earnings', referrer?.id],
@@ -22,9 +28,10 @@ export default function PartnerEarnings() {
       if (error) throw error;
 
       const all = commissions ?? [];
-      const pending = all.filter(c => ['pending', 'approved'].includes(c.status)).reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
-      const payable = all.filter(c => c.status === 'payable').reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
+      const pending = all.filter(c => ['pending', 'approved', 'locked', 'adjusted'].includes(c.status)).reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
+      const payable = all.filter(c => c.status === 'final').reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
       const paid = all.filter(c => c.status === 'paid').reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
+      const underReview = all.filter(c => ['locked', 'adjusted', 'disputed'].includes(c.status)).reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
       const monthlyMap = new Map<string, { month: string; total: number; paid: boolean; expectedDate?: string | null; paidAt?: string | null }>();
       all.forEach((c: any) => {
         const period = c.payout_periods;
@@ -42,14 +49,15 @@ export default function PartnerEarnings() {
       });
       const monthlyEarnings = Array.from(monthlyMap.values()).sort((a, b) => b.month.localeCompare(a.month));
 
-      return { pending, payable, paid, commissions: all, monthlyEarnings };
+      return { pending, payable, paid, underReview, commissions: all, monthlyEarnings };
     },
     enabled: !!referrer?.id,
   });
 
   const summaryCards = [
-    { label: 'Pending', value: data?.pending ?? 0 },
-    { label: 'Payable', value: data?.payable ?? 0 },
+    { label: 'Pending earnings', value: data?.pending ?? 0 },
+    { label: 'Final earnings', value: data?.payable ?? 0 },
+    { label: 'Under review', value: data?.underReview ?? 0 },
     { label: 'Paid', value: data?.paid ?? 0 },
   ];
 
@@ -60,7 +68,7 @@ export default function PartnerEarnings() {
         <p className="text-muted-foreground mt-1">Track each referral earning from review to payout confirmation.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {summaryCards.map((card) => (
           <Card key={card.label}>
             <CardContent className="p-4">
@@ -84,10 +92,40 @@ export default function PartnerEarnings() {
         <div>
           <p className="text-sm font-medium text-foreground">Manual payouts for now</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Venues send payouts manually in v1. You can always see if an earning is pending review, payable, or already paid.
+            Keep it simple: if something looks off, raise an issue with a short note during the monthly review window.
           </p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Raise issue</CardTitle>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-[1fr_2fr_auto] gap-3">
+          <Input value={issueCommissionId} onChange={(e) => setIssueCommissionId(e.target.value)} placeholder="Commission ID" />
+          <Input value={issueNote} onChange={(e) => setIssueNote(e.target.value)} placeholder="Add note" />
+          <Button
+            variant="outline"
+            onClick={async () => {
+              if (!issueCommissionId || !issueNote.trim()) return toast.error('Add a commission ID and note.');
+              const row = data?.commissions?.find((c: any) => c.id === issueCommissionId);
+              if (!row?.payout_period_id) return toast.error('Commission not found.');
+              const { error } = await (supabase as any).from('commission_disputes').insert({
+                commission_id: issueCommissionId,
+                payout_period_id: row.payout_period_id,
+                opened_by: referrer?.user_id ?? null,
+                dispute_type: 'partner_dispute',
+                reason: issueNote.trim(),
+              });
+              if (error) return toast.error(error.message);
+              setIssueNote('');
+              toast.success('Issue raised');
+            }}
+          >
+            Raise issue
+          </Button>
+        </CardContent>
+      </Card>
 
       {!!data?.monthlyEarnings?.length && (
         <Card>
@@ -150,8 +188,8 @@ export default function PartnerEarnings() {
                       <td className="px-4 py-3 text-right text-foreground">£{Number(c.bill_amount || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-foreground">£{Number(c.commission_value || 0).toFixed(2)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={c.status === 'paid' ? 'default' : 'secondary'} className="text-xs capitalize">
-                          {c.status}
+                        <Badge variant={c.status === 'paid' ? 'default' : 'secondary'} className="text-xs">
+                          {partnerStatusLabel(c.status)}
                         </Badge>
                       </td>
                     </tr>
@@ -164,4 +202,17 @@ export default function PartnerEarnings() {
       )}
     </div>
   );
+}
+
+function partnerStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    pending: 'Awaiting review',
+    approved: 'Awaiting review',
+    locked: 'Items under review',
+    adjusted: 'Items under review',
+    disputed: 'In dispute',
+    final: 'Finalised',
+    paid: 'Paid',
+  };
+  return labels[status] ?? status;
 }

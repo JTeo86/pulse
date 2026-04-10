@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { toast } from 'sonner';
-import { Wallet, CheckCircle2, DollarSign, Clock } from 'lucide-react';
+import { Wallet, CheckCircle2, DollarSign, Clock, AlertCircle } from 'lucide-react';
 
 export default function PayoutsPage() {
   return (
@@ -31,6 +31,12 @@ function PayoutsContent() {
   const [partnerId, setPartnerId] = useState<string>('');
   const [payoutMethod, setPayoutMethod] = useState('Bank transfer');
   const [referenceNote, setReferenceNote] = useState('');
+  const [selectedCommissionId, setSelectedCommissionId] = useState<string>('');
+  const [adjustmentAmount, setAdjustmentAmount] = useState('');
+  const [adjustmentType, setAdjustmentType] = useState('other');
+  const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [disputeType, setDisputeType] = useState('other');
+  const [disputeReason, setDisputeReason] = useState('');
 
   const { data: payoutPeriods } = useQuery({
     queryKey: ['venue-payout-periods', currentVenue?.id],
@@ -45,6 +51,26 @@ function PayoutsContent() {
       return data ?? [];
     },
     enabled: !!currentVenue,
+  });
+
+  const activePeriod = payoutPeriods?.[0];
+  const reviewWindowEndsLabel = activePeriod?.review_window_ends_at
+    ? new Date(activePeriod.review_window_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+
+  const { data: periodCommissions } = useQuery({
+    queryKey: ['period-commissions', activePeriod?.id],
+    queryFn: async () => {
+      if (!activePeriod?.id) return [];
+      const { data, error } = await (supabase as any)
+        .from('commissions')
+        .select('id, commission_value, locked_commission_value, status, referrals(guest_name), referrers(full_name)')
+        .eq('payout_period_id', activePeriod.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!activePeriod?.id,
   });
 
   const { data: payouts, isLoading } = useQuery({
@@ -70,7 +96,7 @@ function PayoutsContent() {
         .from('commissions')
         .select('id, partner_id, commission_value, referrers(full_name)')
         .eq('venue_id', currentVenue.id)
-        .eq('status', 'payable');
+        .eq('status', 'final');
       if (error) throw error;
 
       const commissionIds = (data ?? []).map((item) => item.id);
@@ -106,7 +132,7 @@ function PayoutsContent() {
     mutationFn: async () => {
       if (!currentVenue || !partnerId) throw new Error('Select a partner first.');
       const selected = (payableCommissions ?? []).filter((c) => c.partner_id === partnerId);
-      if (!selected.length) throw new Error('This partner has no payable commissions.');
+      if (!selected.length) throw new Error('This partner has no finalised commissions.');
 
       const totalAmount = selected.reduce((sum, c) => sum + (Number(c.commission_value) || 0), 0);
       const { data: payout, error } = await supabase
@@ -182,6 +208,58 @@ function PayoutsContent() {
   };
 
   const payablePeriod = (payoutPeriods ?? []).find((period: any) => ['final', 'overdue'].includes(period.status));
+
+  const createAdjustment = useMutation({
+    mutationFn: async () => {
+      if (!activePeriod?.id || activePeriod.status !== 'review_window') throw new Error('Adjustments are only available during review.');
+      if (!selectedCommissionId) throw new Error('Choose a commission first.');
+      const amount = Number(adjustmentAmount);
+      if (!Number.isFinite(amount) || amount < 0) throw new Error('Enter a valid amount.');
+      const selected = (periodCommissions ?? []).find((item: any) => item.id === selectedCommissionId);
+      if (!selected) throw new Error('Commission not found.');
+
+      const { error } = await (supabase as any).from('commission_adjustments').insert({
+        commission_id: selectedCommissionId,
+        payout_period_id: activePeriod.id,
+        previous_amount: Number(selected.locked_commission_value ?? selected.commission_value ?? 0),
+        new_amount: amount,
+        adjustment_type: adjustmentType,
+        reason: adjustmentReason || 'Adjusted during review window',
+        created_by: user?.id ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setAdjustmentAmount('');
+      setAdjustmentReason('');
+      qc.invalidateQueries({ queryKey: ['period-commissions'] });
+      qc.invalidateQueries({ queryKey: ['venue-payout-periods'] });
+      toast.success('Commission adjustment logged');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const openDispute = useMutation({
+    mutationFn: async () => {
+      if (!activePeriod?.id || activePeriod.status !== 'review_window') throw new Error('Disputes are only available during review.');
+      if (!selectedCommissionId) throw new Error('Choose a commission first.');
+      if (!disputeReason.trim()) throw new Error('Add a note for this dispute.');
+      const { error } = await (supabase as any).from('commission_disputes').insert({
+        commission_id: selectedCommissionId,
+        payout_period_id: activePeriod.id,
+        opened_by: user?.id ?? null,
+        dispute_type: disputeType,
+        reason: disputeReason,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setDisputeReason('');
+      qc.invalidateQueries({ queryKey: ['period-commissions'] });
+      toast.success('Dispute opened');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const createStripePayoutIntent = useMutation({
     mutationFn: async () => {
       if (!currentVenue || !payablePeriod) throw new Error('No final payout period ready for payment.');
@@ -233,9 +311,21 @@ function PayoutsContent() {
               <p className="text-xs text-muted-foreground">No final payout period is ready to pay yet.</p>
             )}
           </div>
+
+          {!!activePeriod && (
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{getPayoutPeriodLabel(activePeriod.status)}</Badge>
+                {reviewWindowEndsLabel && <span className="text-xs text-muted-foreground">Review window ends {reviewWindowEndsLabel}</span>}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Items in dispute are excluded from this month until resolved. Unresolved items never block the rest of the batch.
+              </p>
+            </div>
+          )}
           <div>
             <h3 className="font-semibold">Create Payout Batch</h3>
-            <p className="text-xs text-muted-foreground mt-1">Pick a partner with payable commissions, then create a batch you can send manually.</p>
+            <p className="text-xs text-muted-foreground mt-1">Pick a partner with finalised commissions, then create a batch you can send manually.</p>
           </div>
           <div className="grid md:grid-cols-4 gap-3">
             <Select value={partnerId} onValueChange={setPartnerId}>
@@ -255,6 +345,93 @@ function PayoutsContent() {
         </CardContent>
       </Card>
 
+      {!!activePeriod && (
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <div>
+              <h3 className="font-semibold">Monthly review items</h3>
+              <p className="text-xs text-muted-foreground mt-1">Use clear statuses to confirm what is included, under review, or finalised.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Booking</TableHead>
+                    <TableHead>Partner</TableHead>
+                    <TableHead className="text-right">Commission</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(periodCommissions ?? []).slice(0, 8).map((c: any) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-medium">{(c.referrals as any)?.guest_name || 'Booking'}</TableCell>
+                      <TableCell>{(c.referrers as any)?.full_name || 'Partner'}</TableCell>
+                      <TableCell className="text-right">£{Number(c.locked_commission_value ?? c.commission_value ?? 0).toFixed(2)}</TableCell>
+                      <TableCell><Badge variant="outline">{getCommissionLabel(c.status)}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {activePeriod.status === 'review_window' ? (
+              <div className="grid md:grid-cols-2 gap-4 rounded-md border border-border p-3">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Needs adjustment</p>
+                  <Select value={selectedCommissionId} onValueChange={setSelectedCommissionId}>
+                    <SelectTrigger><SelectValue placeholder="Choose item" /></SelectTrigger>
+                    <SelectContent>
+                      {(periodCommissions ?? []).map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {(c.referrals as any)?.guest_name || 'Booking'} • £{Number(c.locked_commission_value ?? c.commission_value ?? 0).toFixed(2)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input value={adjustmentAmount} onChange={(e) => setAdjustmentAmount(e.target.value)} placeholder="New amount" type="number" />
+                  <Select value={adjustmentType} onValueChange={setAdjustmentType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bill_corrected">Bill corrected</SelectItem>
+                      <SelectItem value="partial_refund">Partial refund</SelectItem>
+                      <SelectItem value="full_refund">Full refund</SelectItem>
+                      <SelectItem value="duplicate">Duplicate</SelectItem>
+                      <SelectItem value="attribution_corrected">Attribution corrected</SelectItem>
+                      <SelectItem value="invalid_referral">Invalid referral</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input value={adjustmentReason} onChange={(e) => setAdjustmentReason(e.target.value)} placeholder="Reason" />
+                  <Button size="sm" onClick={() => createAdjustment.mutate()} disabled={createAdjustment.isPending}>Save adjustment</Button>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">In dispute</p>
+                  <Select value={disputeType} onValueChange={setDisputeType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="venue_dispute">Venue dispute</SelectItem>
+                      <SelectItem value="partner_dispute">Partner dispute</SelectItem>
+                      <SelectItem value="attribution_dispute">Attribution dispute</SelectItem>
+                      <SelectItem value="booking_validity">Booking validity</SelectItem>
+                      <SelectItem value="amount_dispute">Amount dispute</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} placeholder="Add note for dispute" />
+                  <Button size="sm" variant="outline" onClick={() => openDispute.mutate()} disabled={openDispute.isPending || !selectedCommissionId}>Raise dispute</Button>
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <AlertCircle className="w-4 h-4 mt-0.5" />
+                    <span>Unresolved disputes are escalated and excluded from this month. Other final items still get paid.</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Adjustments and disputes are only available during the review window.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground text-sm">Loading payouts…</div>
       ) : !payouts?.length ? (
@@ -263,7 +440,7 @@ function PayoutsContent() {
             <EmptyState
               icon={Wallet}
               title="No payout batches yet"
-              description="Mark commissions as payable, then create your first manual payout batch."
+              description="Finalise commissions, then create your first manual payout batch."
             />
           </CardContent>
         </Card>
@@ -319,4 +496,29 @@ function PayoutStatusBadge({ status }: { status: string }) {
     confirmed: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
   };
   return <Badge variant="outline" className={`text-xs capitalize ${map[status] || ''}`}>{status}</Badge>;
+}
+
+function getPayoutPeriodLabel(status: string) {
+  const labels: Record<string, string> = {
+    open: 'Awaiting review',
+    locked: 'Included this month',
+    review_window: 'Needs review',
+    final: 'Finalised',
+    paid: 'Paid',
+    overdue: 'Finalised (Overdue)',
+  };
+  return labels[status] ?? status;
+}
+
+function getCommissionLabel(status: string) {
+  const labels: Record<string, string> = {
+    pending: 'Awaiting review',
+    approved: 'Awaiting review',
+    locked: 'Included this month',
+    adjusted: 'Needs adjustment',
+    disputed: 'In dispute',
+    final: 'Finalised',
+    paid: 'Paid',
+  };
+  return labels[status] ?? status;
 }

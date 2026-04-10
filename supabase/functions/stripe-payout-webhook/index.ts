@@ -25,7 +25,7 @@ serve(async (req) => {
       .from("commissions")
       .select("id, locked_commission_value, locked_platform_fee, referrers(stripe_connect_account_id)")
       .eq("payout_period_id", payoutPeriodId)
-      .neq("status", "paid");
+      .eq("status", "final");
 
     const grouped = new Map<string, number>();
     for (const row of commissions ?? []) {

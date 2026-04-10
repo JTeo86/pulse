@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Building2, Network, Search, Shield, Rocket, Users } from 'lucide-react';
+import { Building2, Network, Search, Shield, Rocket, Users, AlertTriangle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
@@ -141,6 +141,64 @@ export default function ReferralNetworkTab() {
         linked_venues_count: linkedVenueMap.get(row.id)?.size ?? 0,
       }));
     },
+  });
+
+  const { data: openDisputes } = useQuery({
+    queryKey: ['referral-admin-open-disputes'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('commission_disputes')
+        .select('id, dispute_type, reason, status, created_at, commissions(id, venue_id), payout_periods(month)')
+        .in('status', ['open', 'escalated'])
+        .order('created_at', { ascending: false })
+        .limit(12);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: adjustmentSignals } = useQuery({
+    queryKey: ['referral-admin-adjustment-signals'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('commission_adjustments')
+        .select('id, payout_period_id, adjustment_type, previous_amount, new_amount, commissions(venue_id)')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+
+      const venueMap = new Map<string, { downward: number; total: number }>();
+      (data ?? []).forEach((row: any) => {
+        const venueId = row?.commissions?.venue_id;
+        if (!venueId) return;
+        const entry = venueMap.get(venueId) ?? { downward: 0, total: 0 };
+        entry.total += 1;
+        if (Number(row.new_amount || 0) < Number(row.previous_amount || 0)) entry.downward += 1;
+        venueMap.set(venueId, entry);
+      });
+      return Array.from(venueMap.entries())
+        .map(([venueId, value]) => ({ venueId, ...value }))
+        .filter((row) => row.downward >= 3)
+        .sort((a, b) => b.downward - a.downward)
+        .slice(0, 10);
+    },
+  });
+
+  const resolveDispute = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: 'resolved' | 'rejected' | 'escalated' }) => {
+      const payload: any = { status };
+      if (status !== 'escalated') {
+        payload.resolved_at = new Date().toISOString();
+        payload.resolution_note = `Set to ${status} by admin`;
+      }
+      const { error } = await (supabase as any).from('commission_disputes').update(payload).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['referral-admin-open-disputes'] });
+      toast.success('Dispute updated');
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   const logAuditEvent = async ({
@@ -387,6 +445,49 @@ export default function ReferralNetworkTab() {
 
   return (
     <div className="space-y-6 max-w-6xl">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" />
+            Dispute & Adjustment Oversight
+          </CardTitle>
+          <CardDescription>
+            Watch open disputes, unresolved exclusions, and unusual downward-adjustment patterns.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Open/escalated disputes</p>
+              <p className="font-semibold mt-1">{openDisputes?.length ?? 0}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Venues with downward-adjustment signals</p>
+              <p className="font-semibold mt-1">{adjustmentSignals?.length ?? 0}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Unresolved items excluded from payout</p>
+              <p className="font-semibold mt-1">{(openDisputes ?? []).filter((d: any) => d.status !== 'resolved' && d.status !== 'rejected').length}</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {(openDisputes ?? []).slice(0, 6).map((d: any) => (
+              <div key={d.id} className="rounded-md border p-3 flex flex-wrap gap-2 items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium capitalize">{String(d.dispute_type || 'dispute').replaceAll('_', ' ')}</p>
+                  <p className="text-xs text-muted-foreground">{d.reason}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => resolveDispute.mutate({ id: d.id, status: 'resolved' })}>Resolve</Button>
+                  <Button size="sm" variant="outline" onClick={() => resolveDispute.mutate({ id: d.id, status: 'rejected' })}>Reject</Button>
+                  <Button size="sm" variant="outline" onClick={() => resolveDispute.mutate({ id: d.id, status: 'escalated' })}>Escalate</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
