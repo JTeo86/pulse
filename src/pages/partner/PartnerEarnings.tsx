@@ -16,7 +16,7 @@ export default function PartnerEarnings() {
       if (!referrer?.id) return null;
       const { data: commissions, error } = await supabase
         .from('commissions')
-        .select('*, referrals(guest_name, booking_date)')
+        .select('*, referrals(guest_name, booking_date), payout_periods(month, due_at, status, paid_at)')
         .eq('partner_id', referrer.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -25,8 +25,24 @@ export default function PartnerEarnings() {
       const pending = all.filter(c => ['pending', 'approved'].includes(c.status)).reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
       const payable = all.filter(c => c.status === 'payable').reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
       const paid = all.filter(c => c.status === 'paid').reduce((s, c) => s + (Number(c.commission_value) || 0), 0);
+      const monthlyMap = new Map<string, { month: string; total: number; paid: boolean; expectedDate?: string | null; paidAt?: string | null }>();
+      all.forEach((c: any) => {
+        const period = c.payout_periods;
+        const monthKey = period?.month ?? new Date(c.created_at).toISOString().slice(0, 7);
+        const entry = monthlyMap.get(monthKey) ?? {
+          month: monthKey,
+          total: 0,
+          paid: false,
+          expectedDate: period?.due_at ?? null,
+          paidAt: period?.paid_at ?? null,
+        };
+        entry.total += Number(c.locked_commission_value ?? c.commission_value ?? 0);
+        if (period?.status === 'paid') entry.paid = true;
+        monthlyMap.set(monthKey, entry);
+      });
+      const monthlyEarnings = Array.from(monthlyMap.values()).sort((a, b) => b.month.localeCompare(a.month));
 
-      return { pending, payable, paid, commissions: all };
+      return { pending, payable, paid, commissions: all, monthlyEarnings };
     },
     enabled: !!referrer?.id,
   });
@@ -72,6 +88,36 @@ export default function PartnerEarnings() {
           </p>
         </div>
       </div>
+
+      {!!data?.monthlyEarnings?.length && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Monthly earnings & payout timeline</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.monthlyEarnings.map((month: any) => (
+                <div key={month.month} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {new Date(`${month.month}-01`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {month.paid
+                        ? `Paid ${month.paidAt ? new Date(month.paidAt).toLocaleDateString('en-GB') : ''}`
+                        : `Expected payout ${month.expectedDate ? new Date(month.expectedDate).toLocaleDateString('en-GB') : 'pending finalization'}`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold">£{Number(month.total || 0).toFixed(2)}</p>
+                    <Badge variant={month.paid ? 'default' : 'secondary'}>{month.paid ? 'Paid' : 'Scheduled'}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <Skeleton className="h-40" />
