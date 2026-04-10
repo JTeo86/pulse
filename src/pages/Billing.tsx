@@ -10,11 +10,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 
+function isMissingBillingSchemaError(error: unknown): boolean {
+  const message = (error as { message?: string } | null)?.message?.toLowerCase() ?? '';
+  const code = (error as { code?: string } | null)?.code ?? '';
+  return code === '42P01' || code === 'PGRST205' || message.includes('does not exist') || message.includes('could not find the table');
+}
+
 export default function BillingPage() {
   const { currentVenue, isOwner } = useVenue();
   const { toast } = useToast();
 
-  const { data, refetch } = useQuery({
+  const { data, refetch, error } = useQuery({
     queryKey: ['billing-page', currentVenue?.id],
     enabled: !!currentVenue,
     queryFn: async () => {
@@ -30,6 +36,12 @@ export default function BillingPage() {
         supabase.from('venue_invites').select('id').eq('venue_id', venueId).is('accepted_at', null),
       ]);
       if (tiersRes.error) throw tiersRes.error;
+      if (subRes.error) throw subRes.error;
+      if (entitlementRes.error) throw entitlementRes.error;
+      if (usageRes.error) throw usageRes.error;
+      if (walletRes.error && !isMissingBillingSchemaError(walletRes.error)) throw walletRes.error;
+      if (membersRes.error) throw membersRes.error;
+      if (invitesRes.error) throw invitesRes.error;
       return {
         tiers: tiersRes.data ?? [],
         sub: subRes.data,
@@ -51,6 +63,9 @@ export default function BillingPage() {
   const handleCheckout = async (tierId: string) => {
     if (!currentVenue) return;
     const { data, error } = await supabase.functions.invoke('create-checkout-session', { body: { venue_id: currentVenue.id, subscription_tier_id: tierId } });
+    if (error?.message?.toLowerCase().includes('failed to send a request')) {
+      return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Checkout service is not deployed yet in this environment.' });
+    }
     if (error) return toast({ variant: 'destructive', title: 'Checkout failed', description: error.message });
     window.location.href = data.url;
   };
@@ -58,6 +73,9 @@ export default function BillingPage() {
   const handleTierChange = async (tierId: string) => {
     if (!currentVenue) return;
     const { error } = await supabase.functions.invoke('change-subscription-tier', { body: { venue_id: currentVenue.id, target_tier_id: tierId } });
+    if (error?.message?.toLowerCase().includes('failed to send a request')) {
+      return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Plan change service is not deployed yet in this environment.' });
+    }
     if (error) {
       toast({ variant: 'destructive', title: 'Plan change failed', description: error.message });
       return;
@@ -69,6 +87,9 @@ export default function BillingPage() {
   const openPortal = async () => {
     if (!currentVenue) return;
     const { data, error } = await supabase.functions.invoke('create-customer-portal-session', { body: { venue_id: currentVenue.id } });
+    if (error?.message?.toLowerCase().includes('failed to send a request')) {
+      return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Customer portal service is not deployed yet in this environment.' });
+    }
     if (error) return toast({ variant: 'destructive', title: 'Unable to open billing portal', description: error.message });
     window.location.href = data.url;
   };
@@ -88,10 +109,21 @@ export default function BillingPage() {
   }
 
   const currentTierId = data?.sub?.subscription_tier_id;
+  const missingSchema = isMissingBillingSchemaError(error);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <PageHeader title="Billing" description="Manage your plan, usage, and entitlements" />
+      {missingSchema && (
+        <Card className="border-warning/50">
+          <CardHeader>
+            <CardTitle>Billing setup pending</CardTitle>
+            <CardDescription>
+              Billing tables are not available in this environment yet. Apply the latest billing migration and deploy billing edge functions.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>

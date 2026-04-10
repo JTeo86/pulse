@@ -13,7 +13,7 @@ export default function SubscriptionTiersTab() {
     slug: '', name: '', stripe_price_id_monthly: '', monthly_image_quota: '0', monthly_storage_mb: '0', max_users_per_venue: '1', description: '',
   });
 
-  const { data: tiers } = useQuery({
+  const { data: tiers, error, isError } = useQuery({
     queryKey: ['subscription-tiers-admin'],
     queryFn: async () => {
       const { data, error } = await supabase.from('subscription_tiers').select('*').order('sort_order').order('name');
@@ -21,20 +21,38 @@ export default function SubscriptionTiersTab() {
       return data ?? [];
     },
   });
+  const schemaNotReady = ((error as { message?: string; code?: string } | null)?.code === '42P01')
+    || ((error as { message?: string; code?: string } | null)?.code === 'PGRST205')
+    || ((error as { message?: string } | null)?.message?.toLowerCase().includes('does not exist') ?? false);
+
+  if (isError && schemaNotReady) {
+    return (
+      <Card className="border-warning/50">
+        <CardHeader>
+          <CardTitle>Subscription tiers unavailable</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 text-sm text-muted-foreground">
+          Apply migration <code>20260410220000_billing_subscriptions_entitlements.sql</code> before using this tab.
+        </CardContent>
+      </Card>
+    );
+  }
 
   const saveTier = async (tier: any) => {
-    await supabase.from('subscription_tiers').upsert(tier, { onConflict: 'id' });
+    const { error } = await supabase.from('subscription_tiers').upsert(tier, { onConflict: 'id' });
+    if (error) throw error;
     queryClient.invalidateQueries({ queryKey: ['subscription-tiers-admin'] });
   };
 
   const createTier = async () => {
-    await supabase.from('subscription_tiers').insert({
+    const { error } = await supabase.from('subscription_tiers').insert({
       ...draft,
       monthly_image_quota: Number(draft.monthly_image_quota),
       monthly_storage_mb: Number(draft.monthly_storage_mb),
       max_users_per_venue: Number(draft.max_users_per_venue),
       feature_summary_json: [],
     });
+    if (error) throw error;
     setDraft({ slug: '', name: '', stripe_price_id_monthly: '', monthly_image_quota: '0', monthly_storage_mb: '0', max_users_per_venue: '1', description: '' });
     queryClient.invalidateQueries({ queryKey: ['subscription-tiers-admin'] });
   };

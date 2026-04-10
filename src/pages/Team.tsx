@@ -97,6 +97,12 @@ const inviteSchema = z.object({
 });
 type InviteFormData = z.infer<typeof inviteSchema>;
 
+function isMissingVenueEntitlementsError(error: unknown): boolean {
+  const message = (error as { message?: string } | null)?.message?.toLowerCase() ?? '';
+  const code = (error as { code?: string } | null)?.code ?? '';
+  return code === '42P01' || code === 'PGRST205' || message.includes('venue_entitlements') || message.includes('does not exist');
+}
+
 function canResend(invite: VenueInvite): boolean {
   const lastSent = invite.last_sent_at ?? invite.created_at;
   return Date.now() - new Date(lastSent).getTime() > 60_000;
@@ -151,6 +157,7 @@ export default function TeamPage() {
 
       if (membersRes.error) throw membersRes.error;
       if (invitesRes.error) throw invitesRes.error;
+      if (entitlementsRes.error && !isMissingVenueEntitlementsError(entitlementsRes.error)) throw entitlementsRes.error;
 
       const profileMap = new Map<string, UserProfile>();
       (profilesRes.data || []).forEach((p: UserProfile) => profileMap.set(p.user_id, p));
@@ -164,7 +171,11 @@ export default function TeamPage() {
       setInvites((invitesRes.data || []) as unknown as VenueInvite[]);
       setSeatLimit(entitlementsRes.data?.max_users_per_venue ?? 1);
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error loading team', description: error.message });
+      if (isMissingVenueEntitlementsError(error)) {
+        setSeatLimit(1);
+      } else {
+        toast({ variant: 'destructive', title: 'Error loading team', description: error.message });
+      }
     } finally {
       setLoading(false);
     }

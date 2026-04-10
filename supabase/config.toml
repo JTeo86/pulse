@@ -79,3 +79,15 @@ verify_jwt = false
 
 [functions.run-weekly-pulse-schedule]
 verify_jwt = false
+
+[functions.create-checkout-session]
+verify_jwt = false
+
+[functions.create-customer-portal-session]
+verify_jwt = false
+
+[functions.change-subscription-tier]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
