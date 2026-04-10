@@ -2,65 +2,60 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useReferralAccess } from '@/hooks/use-referral-access';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Users, Receipt, Wallet, DollarSign, TrendingUp, Camera } from 'lucide-react';
+import { ArrowRight, Users, Receipt, Wallet, TrendingUp, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function ReferralHomeCards() {
   const { currentVenue } = useVenue();
-  const { venueHasAccess } = useReferralAccess();
+  const { hasAccess, stage } = useReferralAccess();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['referral-home-stats', currentVenue?.id],
     queryFn: async () => {
       if (!currentVenue) return null;
-      const [pendingVerify, pendingPayout, activePartners, bookingsRes, guestUgc] = await Promise.all([
+      const [pendingVerify, pendingPayout, activePartners, bookingsRes] = await Promise.all([
         supabase.from('referral_bookings').select('*', { count: 'exact', head: true })
           .eq('venue_id', currentVenue.id).eq('spend_verified', false).in('booking_status', ['attended', 'confirmed']),
         supabase.from('payout_batches').select('*', { count: 'exact', head: true })
           .eq('venue_id', currentVenue.id).eq('status', 'pending_approval'),
         supabase.from('referrers').select('*', { count: 'exact', head: true })
           .eq('venue_id', currentVenue.id).eq('status', 'active'),
-        supabase.from('referral_bookings').select('verified_spend, commission_amount, spend_verified')
+        supabase.from('referral_bookings').select('verified_spend')
           .eq('venue_id', currentVenue.id).eq('spend_verified', true),
-        supabase.from('guest_submissions').select('*', { count: 'exact', head: true })
-          .eq('venue_id', currentVenue.id).eq('status', 'pending'),
       ]);
 
       const bookings = bookingsRes.data ?? [];
-      const totalRevenue = bookings.reduce((s, b) => s + (Number(b.verified_spend) || 0), 0);
-      const totalCommission = bookings.reduce((s, b) => s + (Number(b.commission_amount) || 0), 0);
+      const totalRevenue = bookings.reduce((sum, booking) => sum + (Number(booking.verified_spend) || 0), 0);
 
       return {
         pendingVerify: pendingVerify.count ?? 0,
         pendingPayout: pendingPayout.count ?? 0,
         activePartners: activePartners.count ?? 0,
         totalRevenue,
-        totalCommission,
-        pendingUGC: guestUgc.count ?? 0,
       };
     },
-    enabled: !!currentVenue && venueHasAccess,
+    enabled: !!currentVenue && hasAccess,
   });
 
-  if (!venueHasAccess) return null;
+  if (!hasAccess) return null;
 
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Referral Network</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Grow your bookings</h2>
         <Link to="/growth/referrals">
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
-            View All <ArrowRight className="w-3 h-3 ml-1" />
+            View referral activity <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
         </Link>
       </div>
 
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)}
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -70,19 +65,22 @@ export function ReferralHomeCards() {
             value={`£${(stats?.totalRevenue ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 0 })}`}
             href="/growth/referrals"
           />
-          <ReferralStatCard
-            icon={Users}
-            label="Active Partners"
-            value={String(stats?.activePartners ?? 0)}
-            href="/growth/partners"
-          />
-          <ReferralStatCard
-            icon={Receipt}
-            label="Pending Verifications"
-            value={String(stats?.pendingVerify ?? 0)}
-            href="/growth/referrals"
-            warn={!!stats?.pendingVerify}
-          />
+          {stage >= 2 ? (
+            <ReferralStatCard
+              icon={Users}
+              label="Reward Partners"
+              value={String(stats?.activePartners ?? 0)}
+              href="/growth/partners"
+            />
+          ) : (
+            <ReferralStatCard
+              icon={Receipt}
+              label="Pending Verifications"
+              value={String(stats?.pendingVerify ?? 0)}
+              href="/growth/referrals"
+              warn={!!stats?.pendingVerify}
+            />
+          )}
           <ReferralStatCard
             icon={Wallet}
             label="Pending Payouts"
@@ -90,24 +88,23 @@ export function ReferralHomeCards() {
             href="/growth/payouts"
             warn={!!stats?.pendingPayout}
           />
+          {stage >= 3 ? (
+            <ReferralStatCard
+              icon={Compass}
+              label="Discover Venues"
+              value="Explore"
+              href="/growth/marketplace"
+            />
+          ) : (
+            <ReferralStatCard
+              icon={Receipt}
+              label="Open Referrals"
+              value={String(stats?.pendingVerify ?? 0)}
+              href="/growth/referrals"
+            />
+          )}
         </div>
       )}
-
-      {/* Guest UGC card */}
-      {stats?.pendingUGC ? (
-        <Link to="/venue/guest-photos">
-          <Card className="border-accent/20 hover:border-accent/40 transition-colors cursor-pointer">
-            <CardContent className="p-4 flex items-center gap-3">
-              <Camera className="w-5 h-5 text-accent" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">{stats.pendingUGC} guest photo{stats.pendingUGC > 1 ? 's' : ''} to review</p>
-                <p className="text-xs text-muted-foreground">Guest submissions waiting for approval</p>
-              </div>
-              <ArrowRight className="w-4 h-4 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
-      ) : null}
     </section>
   );
 }

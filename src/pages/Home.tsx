@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
+import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
 
 type HomeTab = 'today' | 'opportunities' | 'plans';
 
@@ -294,6 +295,8 @@ export default function Home() {
         title={`Command Centre${currentVenue ? ` • ${currentVenue.name}` : ''}`}
         description="Pulse has prepared your week. Review, approve, and publish from this screen."
       />
+
+      <ReferralHomeCards />
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="bg-muted/30 border border-border/50">

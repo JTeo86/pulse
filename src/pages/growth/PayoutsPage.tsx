@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useReferralAccess } from '@/hooks/use-referral-access';
-import { ReferralGuard, BetaBadge } from '@/components/referral/ReferralGuard';
+import { ReferralGuard } from '@/components/referral/ReferralGuard';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { Wallet, DollarSign, CheckCircle2, Download, CreditCard, Clock } from 'l
 
 export default function PayoutsPage() {
   return (
-    <ReferralGuard>
+    <ReferralGuard minimumStage={1}>
       <PayoutsContent />
     </ReferralGuard>
   );
@@ -93,7 +93,6 @@ function PayoutsContent() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div>
         <PageHeader title="Payouts" description="Review and approve partner payouts based on verified bookings." />
-        <BetaBadge />
       </div>
 
       {/* Stripe Mode Banner */}

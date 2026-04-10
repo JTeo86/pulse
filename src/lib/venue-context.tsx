@@ -13,6 +13,8 @@ interface Venue {
   timezone?: string | null;
   website_url?: string | null;
   instagram_handle?: string | null;
+  referral_enabled?: boolean;
+  referral_stage_override?: number | null;
 }
 
 interface VenueMember {

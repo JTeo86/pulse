@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
-import { ReferralGuard, BetaBadge } from '@/components/referral/ReferralGuard';
+import { ReferralGuard } from '@/components/referral/ReferralGuard';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { Gift, Plus, Pause, Play, Copy, Archive, Users } from 'lucide-react';
 
 export default function OffersPage() {
   return (
-    <ReferralGuard>
+    <ReferralGuard minimumStage={1}>
       <OffersContent />
     </ReferralGuard>
   );
@@ -71,8 +71,7 @@ function OffersContent() {
             title="Offers"
             description="Create and manage referral offers for your partners. Define what partners earn when they bring guests."
           />
-          <BetaBadge />
-        </div>
+          </div>
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2"><Plus className="w-4 h-4" />Create Offer</Button>

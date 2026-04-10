@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
-import { ReferralGuard, BetaBadge } from '@/components/referral/ReferralGuard';
+import { ReferralGuard } from '@/components/referral/ReferralGuard';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function PartnersPage() {
   return (
-    <ReferralGuard>
+    <ReferralGuard minimumStage={2}>
       <PartnersContent />
     </ReferralGuard>
   );
@@ -135,8 +135,7 @@ function PartnersContent() {
             title="Partners"
             description="Manage influencers, concierges, agents, and other partners who drive guests to your venue."
           />
-          <BetaBadge />
-        </div>
+          </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-2">
             <Download className="w-4 h-4" />Export

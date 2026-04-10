@@ -1,84 +1,98 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 
-interface ReferralFlags {
-  moduleEnabled: boolean;
-  privateBeta: boolean;
-  publicLaunch: boolean;
+interface ReferralSettings {
+  enabled: boolean;
+  globalStage: number;
   stripeEnabled: boolean;
 }
 
 interface ReferralAccess {
-  flags: ReferralFlags;
+  enabled: boolean;
+  stage: number;
+  hasAccess: boolean;
+  isLoading: boolean;
+
+  // Backward-compatible aliases used across existing pages.
+  canAccessReferral: boolean;
   venueHasAccess: boolean;
   adminHasAccess: boolean;
-  canAccessReferral: boolean;
   isBetaVenue: boolean;
-  isLoading: boolean;
+  flags: {
+    moduleEnabled: boolean;
+    privateBeta: boolean;
+    publicLaunch: boolean;
+    stripeEnabled: boolean;
+  };
+
+  canUseNetwork: boolean;
+  canUseMarketplace: boolean;
+}
+
+function parseBool(value: string | undefined, fallback = false) {
+  if (value == null) return fallback;
+  return value.toLowerCase() === 'true';
+}
+
+function parseStage(value: string | undefined, fallback = 1) {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(3, Math.trunc(parsed)));
 }
 
 export function useReferralAccess(): ReferralAccess {
   const { currentVenue, isAdmin } = useVenue();
 
-  const { data: flagRows, isLoading: flagsLoading } = useQuery({
-    queryKey: ['referral-flags'],
+  const { data: settingsRows, isLoading: settingsLoading } = useQuery({
+    queryKey: ['referral-platform-settings'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_safe_feature_flags');
-      if (error) throw error;
-      return (data ?? []) as { flag_key: string; is_enabled: boolean }[];
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const { data: betaAccess, isLoading: betaLoading } = useQuery({
-    queryKey: ['referral-beta-access', currentVenue?.id],
-    queryFn: async () => {
-      if (!currentVenue) return null;
       const { data, error } = await supabase
-        .from('referral_beta_access')
-        .select('status')
-        .eq('venue_id', currentVenue.id)
-        .eq('access_type', 'venue')
-        .eq('status', 'active')
-        .maybeSingle();
+        .from('platform_settings')
+        .select('key, value')
+        .in('key', ['referral_system_enabled', 'referral_stage', 'referral_stripe_enabled']);
+
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
-    enabled: !!currentVenue,
     staleTime: 1000 * 60 * 5,
   });
 
-  const getFlag = (key: string) =>
-    flagRows?.find((f) => f.flag_key === key)?.is_enabled ?? false;
+  const settings = useMemo<ReferralSettings>(() => {
+    const map = new Map((settingsRows ?? []).map((row) => [row.key, row.value ?? '']));
+    return {
+      enabled: parseBool(map.get('referral_system_enabled'), false),
+      globalStage: parseStage(map.get('referral_stage'), 1),
+      stripeEnabled: parseBool(map.get('referral_stripe_enabled'), false),
+    };
+  }, [settingsRows]);
 
-  const flags: ReferralFlags = {
-    moduleEnabled: getFlag('feature.referral_network_enabled'),
-    privateBeta: getFlag('feature.referral_network_private_beta'),
-    publicLaunch: getFlag('feature.referral_network_public_launch'),
-    stripeEnabled: getFlag('feature.referral_network_stripe_enabled'),
-  };
+  const venueEnabled = Boolean(currentVenue?.referral_enabled);
+  const stage = currentVenue?.referral_stage_override ?? settings.globalStage;
 
-  const isBetaVenue = !!betaAccess;
-
-  let venueHasAccess = false;
-  if (flags.moduleEnabled) {
-    if (flags.publicLaunch) {
-      venueHasAccess = true;
-    } else if (flags.privateBeta && isBetaVenue) {
-      venueHasAccess = true;
-    }
-  }
-
-  const adminHasAccess = flags.moduleEnabled && isAdmin;
-  const canAccessReferral = venueHasAccess || adminHasAccess;
+  const hasAccess = settings.enabled && venueEnabled;
+  const canUseNetwork = hasAccess && stage >= 2;
+  const canUseMarketplace = hasAccess && stage >= 3;
 
   return {
-    flags,
-    venueHasAccess,
-    adminHasAccess,
-    canAccessReferral,
-    isBetaVenue,
-    isLoading: flagsLoading || betaLoading,
+    enabled: settings.enabled,
+    stage,
+    hasAccess,
+    isLoading: settingsLoading,
+
+    canAccessReferral: hasAccess,
+    venueHasAccess: hasAccess,
+    adminHasAccess: settings.enabled && isAdmin,
+    isBetaVenue: hasAccess && stage === 1,
+    flags: {
+      moduleEnabled: settings.enabled,
+      privateBeta: settings.enabled && stage === 1,
+      publicLaunch: settings.enabled && stage >= 3,
+      stripeEnabled: settings.stripeEnabled,
+    },
+
+    canUseNetwork,
+    canUseMarketplace,
   };
 }

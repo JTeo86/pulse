@@ -3498,6 +3498,8 @@ export type Database = {
           name: string
           owner_user_id: string | null
           plan: string | null
+          referral_enabled: boolean
+          referral_stage_override: number | null
           timezone: string
           website_url: string | null
         }
@@ -3513,6 +3515,8 @@ export type Database = {
           name: string
           owner_user_id?: string | null
           plan?: string | null
+          referral_enabled?: boolean
+          referral_stage_override?: number | null
           timezone?: string
           website_url?: string | null
         }
@@ -3528,6 +3532,8 @@ export type Database = {
           name?: string
           owner_user_id?: string | null
           plan?: string | null
+          referral_enabled?: boolean
+          referral_stage_override?: number | null
           timezone?: string
           website_url?: string | null
         }
