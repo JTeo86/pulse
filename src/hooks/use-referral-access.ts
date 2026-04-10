@@ -60,6 +60,20 @@ export function useReferralAccess(): ReferralAccess {
     staleTime: 1000 * 60 * 5,
   });
 
+  const { data: entitlementRow, isLoading: entitlementLoading } = useQuery({
+    queryKey: ['venue-marketplace-entitlement', currentVenue?.id],
+    enabled: !!currentVenue?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('venue_entitlements')
+        .select('marketplace_access_enabled')
+        .eq('venue_id', currentVenue!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const settings = useMemo<ReferralSettings>(() => {
     const map = new Map((settingsRows ?? []).map((row) => [row.key, row.value ?? '']));
     return {
@@ -74,7 +88,8 @@ export function useReferralAccess(): ReferralAccess {
   const venueBetaAccess = Boolean(currentVenue?.referral_beta_access);
   const stage = currentVenue?.referral_stage_override ?? settings.globalStage;
 
-  const hasAccess = settings.enabled && venueEnabled && (!settings.betaMode || venueBetaAccess);
+  const entitlementAllowsMarketplace = entitlementRow?.marketplace_access_enabled ?? false;
+  const hasAccess = settings.enabled && venueEnabled && (!settings.betaMode || venueBetaAccess) && entitlementAllowsMarketplace;
   const canUseNetwork = hasAccess && stage >= 2;
   const canUseMarketplace = hasAccess && stage >= 3;
 
@@ -82,7 +97,7 @@ export function useReferralAccess(): ReferralAccess {
     enabled: settings.enabled,
     stage,
     hasAccess,
-    isLoading: settingsLoading,
+    isLoading: settingsLoading || entitlementLoading,
 
     canAccessReferral: hasAccess,
     venueHasAccess: hasAccess,

@@ -119,6 +119,19 @@ function PlatformAdminRoute() {
   return <PlatformAdmin />;
 }
 
+function OwnerBillingRoute() {
+  const { isOwner, loading } = useVenue();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!isOwner) return <Navigate to="/home" replace />;
+  return <Billing />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -221,7 +234,7 @@ function AppRoutes() {
         <Route path="/settings/brand" element={<Navigate to="/venue/brand-basics" replace />} />
         <Route path="/settings/team" element={<Navigate to="/venue/team" replace />} />
         <Route path="/settings/integrations" element={<Navigate to="/venue/integrations" replace />} />
-        <Route path="/settings/billing" element={<Billing />} />
+        <Route path="/settings/billing" element={<OwnerBillingRoute />} />
 
         {/* Very old legacy redirects */}
         <Route path="/dashboard" element={<Navigate to="/home" replace />} />
