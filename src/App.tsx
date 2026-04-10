@@ -33,11 +33,11 @@ import { supabase } from "@/integrations/supabase/client";
 // EventsPlanner is now fully consolidated into Planner
 import EventPlanDetail from "./pages/EventPlanDetail";
 import ReviewsAnalytics from "./pages/ReviewsAnalytics";
-import ReferralDashboard from "./pages/growth/ReferralDashboard";
 import PartnersPage from "./pages/growth/PartnersPage";
 import OffersPage from "./pages/growth/OffersPage";
 import ReferralsPage from "./pages/growth/ReferralsPage";
 import PayoutsPage from "./pages/growth/PayoutsPage";
+import MarketplacePage from "./pages/growth/MarketplacePage";
 import PartnerDashboard from "./pages/partner/PartnerDashboard";
 import PartnerOffers from "./pages/partner/PartnerOffers";
 import PartnerLinks from "./pages/partner/PartnerLinks";
@@ -168,10 +168,11 @@ function AppRoutes() {
         {/* Growth Section */}
         <Route path="/growth/performance" element={<BrandPerformance />} />
         <Route path="/growth/industry-insights" element={<IndustryInsights />} />
-        <Route path="/growth/referrals" element={<ReferralGuard><ReferralsPage /></ReferralGuard>} />
-        <Route path="/growth/partners" element={<ReferralGuard><PartnersPage /></ReferralGuard>} />
-        <Route path="/growth/payouts" element={<ReferralGuard><PayoutsPage /></ReferralGuard>} />
-        <Route path="/growth/offers" element={<ReferralGuard><OffersPage /></ReferralGuard>} />
+        <Route path="/growth/referrals" element={<ReferralGuard minimumStage={1}><ReferralsPage /></ReferralGuard>} />
+        <Route path="/growth/marketplace" element={<ReferralGuard minimumStage={3}><MarketplacePage /></ReferralGuard>} />
+        <Route path="/growth/partners" element={<ReferralGuard minimumStage={2}><PartnersPage /></ReferralGuard>} />
+        <Route path="/growth/payouts" element={<ReferralGuard minimumStage={1}><PayoutsPage /></ReferralGuard>} />
+        <Route path="/growth/offers" element={<ReferralGuard minimumStage={1}><OffersPage /></ReferralGuard>} />
 
         {/* Venue Section */}
         <Route path="/venue/brand-basics" element={<Navigate to="/setup" replace />} />

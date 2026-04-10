@@ -2,7 +2,6 @@ import { ReactNode } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
 import { usePartnerAccess } from '@/hooks/use-partner-access';
 import { useAuth } from '@/lib/auth-context';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
@@ -25,7 +24,7 @@ const navItems = [
 ];
 
 export function PartnerLayout({ children }: { children: ReactNode }) {
-  const { hasAccess, isLoading, isBeta, flags, referrer } = usePartnerAccess();
+  const { hasAccess, isLoading, referrer } = usePartnerAccess();
   const { user, loading: authLoading, signOut } = useAuth();
   const location = useLocation();
 
@@ -67,9 +66,6 @@ export function PartnerLayout({ children }: { children: ReactNode }) {
             <span className="text-lg font-semibold text-foreground tracking-tight">Pulse</span>
             <span className="text-sm text-muted-foreground">Partner</span>
           </div>
-          {isBeta && !flags.publicLaunch && (
-            <Badge className="mt-2 bg-accent/15 text-accent border-accent/25 text-xs">Beta</Badge>
-          )}
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
@@ -109,9 +105,6 @@ export function PartnerLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-2">
             <span className="font-semibold text-foreground">Pulse</span>
             <span className="text-sm text-muted-foreground">Partner</span>
-            {isBeta && !flags.publicLaunch && (
-              <Badge className="bg-accent/15 text-accent border-accent/25 text-xs">Beta</Badge>
-            )}
           </div>
         </header>
 
@@ -136,15 +129,6 @@ export function PartnerLayout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-
-        {/* Beta banner */}
-        {isBeta && !flags.publicLaunch && (
-          <div className="bg-accent/5 border-b border-accent/10 px-4 py-2 text-center">
-            <span className="text-xs text-muted-foreground">
-              You are part of the Pulse Referral Network beta.
-            </span>
-          </div>
-        )}
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8 min-w-0 overflow-x-hidden">
           {children}

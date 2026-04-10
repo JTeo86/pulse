@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth-context';
@@ -5,7 +6,6 @@ import { useAuth } from '@/lib/auth-context';
 interface PartnerAccess {
   isLoading: boolean;
   hasAccess: boolean;
-  isBeta: boolean;
   referrer: {
     id: string;
     full_name: string;
@@ -14,23 +14,35 @@ interface PartnerAccess {
     role_type: string;
     status: string;
     venue_id: string | null;
+    venue_referral_enabled: boolean;
+    venue_referral_stage_override: number | null;
   } | null;
-  flags: {
-    moduleEnabled: boolean;
-    privateBeta: boolean;
-    publicLaunch: boolean;
-  };
+  stage: number;
+}
+
+function parseBool(value: string | undefined, fallback = false) {
+  if (value == null) return fallback;
+  return value.toLowerCase() === 'true';
+}
+
+function parseStage(value: string | undefined, fallback = 1) {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(3, Math.trunc(parsed)));
 }
 
 export function usePartnerAccess(): PartnerAccess {
   const { user } = useAuth();
 
-  const { data: flagRows, isLoading: flagsLoading } = useQuery({
-    queryKey: ['partner-referral-flags'],
+  const { data: settingsRows, isLoading: settingsLoading } = useQuery({
+    queryKey: ['partner-referral-platform-settings'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_safe_feature_flags');
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('key, value')
+        .in('key', ['referral_system_enabled', 'referral_stage']);
       if (error) throw error;
-      return (data ?? []) as { flag_key: string; is_enabled: boolean }[];
+      return data ?? [];
     },
     staleTime: 1000 * 60 * 5,
   });
@@ -39,63 +51,55 @@ export function usePartnerAccess(): PartnerAccess {
     queryKey: ['partner-referrer-profile', user?.email],
     queryFn: async () => {
       if (!user?.email) return null;
+
       const { data, error } = await supabase
         .from('referrers')
         .select('id, full_name, email, instagram_handle, role_type, status, venue_id')
         .eq('email', user.email)
         .eq('status', 'active')
         .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.email,
-    staleTime: 1000 * 60 * 5,
-  });
 
-  const { data: betaAccess, isLoading: betaLoading } = useQuery({
-    queryKey: ['partner-beta-access', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null;
-      const { data, error } = await supabase
-        .from('referral_beta_access')
-        .select('status')
-        .eq('email', user.email)
-        .eq('access_type', 'referrer')
-        .eq('status', 'active')
+      if (error) throw error;
+      if (!data?.venue_id) return null;
+
+      const { data: venue, error: venueError } = await supabase
+        .from('venues')
+        .select('referral_enabled, referral_stage_override')
+        .eq('id', data.venue_id)
         .maybeSingle();
-      if (error) throw error;
-      return data;
+
+      if (venueError) throw venueError;
+
+      return {
+        ...data,
+        venue_referral_enabled: venue?.referral_enabled ?? false,
+        venue_referral_stage_override: venue?.referral_stage_override ?? null,
+      };
     },
     enabled: !!user?.email,
     staleTime: 1000 * 60 * 5,
   });
 
-  const getFlag = (key: string) =>
-    flagRows?.find((f) => f.flag_key === key)?.is_enabled ?? false;
+  const platform = useMemo(() => {
+    const map = new Map((settingsRows ?? []).map((row) => [row.key, row.value ?? '']));
+    return {
+      enabled: parseBool(map.get('referral_system_enabled'), false),
+      stage: parseStage(map.get('referral_stage'), 1),
+    };
+  }, [settingsRows]);
 
-  const flags = {
-    moduleEnabled: getFlag('feature.referral_network_enabled'),
-    privateBeta: getFlag('feature.referral_network_private_beta'),
-    publicLaunch: getFlag('feature.referral_network_public_launch'),
-  };
-
-  const isBeta = !!betaAccess;
-  const isActiveReferrer = !!referrer;
-
-  let hasAccess = false;
-  if (flags.moduleEnabled && isActiveReferrer) {
-    if (flags.publicLaunch) {
-      hasAccess = true;
-    } else if (flags.privateBeta && isBeta) {
-      hasAccess = true;
-    }
-  }
+  const stage = referrer?.venue_referral_stage_override ?? platform.stage;
+  const hasAccess = Boolean(
+    platform.enabled &&
+    referrer &&
+    referrer.venue_referral_enabled &&
+    stage >= 2
+  );
 
   return {
-    isLoading: flagsLoading || referrerLoading || betaLoading,
+    isLoading: settingsLoading || referrerLoading,
     hasAccess,
-    isBeta,
     referrer,
-    flags,
+    stage,
   };
 }

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
-import { ReferralGuard, BetaBadge } from '@/components/referral/ReferralGuard';
+import { ReferralGuard } from '@/components/referral/ReferralGuard';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import {
 
 export default function ReferralsPage() {
   return (
-    <ReferralGuard>
+    <ReferralGuard minimumStage={1}>
       <ReferralsContent />
     </ReferralGuard>
   );
@@ -111,7 +111,6 @@ function ReferralsContent() {
           title="Referrals"
           description="Track clicks, bookings, verified spend, and commissions from your partners."
         />
-        <BetaBadge />
       </div>
 
       {/* Summary */}
