@@ -1,0 +1,253 @@
+import { useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ImagePlus, Loader2, Sparkles } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
+import { PageHeader } from '@/components/ui/page-header';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { useVenue } from '@/lib/venue-context';
+import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+
+type FeedAsset = {
+  id: string;
+  title: string | null;
+  public_url: string | null;
+  created_at: string;
+  metadata: Record<string, any> | null;
+};
+
+type AssetUsage = {
+  count: number;
+  lastUsedAt: string | null;
+};
+
+export default function ContentFeed() {
+  const { currentVenue } = useVenue();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const queryClient = useQueryClient();
+  const [isUploading, setIsUploading] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['content-feed-assets', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async () => {
+      if (!currentVenue) return { assets: [], usageMap: new Map<string, AssetUsage>() };
+
+      const [assetsRes, usageRes] = await Promise.all([
+        supabase
+          .from('content_assets')
+          .select('id, title, public_url, created_at, metadata, source_type')
+          .eq('venue_id', currentVenue.id)
+          .eq('asset_type', 'image')
+          .in('source_type', ['upload', 'manual', 'guest_upload'])
+          .order('created_at', { ascending: false })
+          .limit(300),
+        supabase
+          .from('content_items')
+          .select('created_at, media_variants')
+          .eq('venue_id', currentVenue.id)
+          .eq('source', 'autopilot')
+          .order('created_at', { ascending: false })
+          .limit(600),
+      ]);
+
+      if (assetsRes.error) throw assetsRes.error;
+      if (usageRes.error) throw usageRes.error;
+
+      const usageMap = new Map<string, AssetUsage>();
+      for (const item of usageRes.data || []) {
+        const variants = item.media_variants as Record<string, any> | null;
+        const sourceAssetId = variants?.source_asset_id;
+        if (!sourceAssetId) continue;
+
+        const existing = usageMap.get(sourceAssetId);
+        const nextCount = (existing?.count || 0) + 1;
+        const lastUsedAt = !existing?.lastUsedAt || new Date(item.created_at) > new Date(existing.lastUsedAt)
+          ? item.created_at
+          : existing.lastUsedAt;
+        usageMap.set(sourceAssetId, { count: nextCount, lastUsedAt });
+      }
+
+      return {
+        assets: (assetsRes.data || []) as FeedAsset[],
+        usageMap,
+      };
+    },
+  });
+
+  const assets = data?.assets || [];
+  const usageMap = data?.usageMap || new Map<string, AssetUsage>();
+
+  const handleAddPhotosClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleUploadFiles = async (fileList: FileList | null) => {
+    if (!fileList || !currentVenue || !user) return;
+
+    const files = Array.from(fileList).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) {
+      toast({ title: 'No images selected', description: 'Please choose one or more image files.', variant: 'destructive' });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      for (const file of files) {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const fileName = `${crypto.randomUUID()}.${ext}`;
+        const storagePath = `venues/${currentVenue.id}/uploads/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage.from('asset-pool').upload(storagePath, file);
+        if (uploadError) throw uploadError;
+
+        const { data: signedData } = await supabase.storage.from('asset-pool').createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+
+        const { error: insertAssetError } = await supabase.from('content_assets').insert({
+          venue_id: currentVenue.id,
+          asset_type: 'image',
+          source_type: 'upload',
+          status: 'approved',
+          title: file.name,
+          storage_path: storagePath,
+          storage_bucket: 'asset-pool',
+          pool: 'asset_pool',
+          public_url: signedData?.signedUrl || null,
+          metadata: {
+            autopilot_reusable: true,
+            content_feed: true,
+            upload_source: 'content_feed',
+            usage_count: 0,
+          },
+        });
+        if (insertAssetError) throw insertAssetError;
+
+        const { error: insertUploadError } = await supabase.from('uploads').insert({
+          venue_id: currentVenue.id,
+          uploaded_by: user.id,
+          storage_path: storagePath,
+          status: 'new',
+          notes: 'Uploaded from Content Feed',
+        });
+        if (insertUploadError) throw insertUploadError;
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['content-feed-assets', currentVenue.id] });
+      toast({ title: 'Photos added', description: `${files.length} photo${files.length > 1 ? 's' : ''} added to Content Feed.` });
+    } catch (error: any) {
+      toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const summary = useMemo(() => {
+    const unusedCount = assets.filter((asset) => !usageMap.get(asset.id)?.count).length;
+    const lastUploadDate = assets[0]?.created_at || null;
+    return { unusedCount, lastUploadDate };
+  }, [assets, usageMap]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Content Feed"
+        description="Photos Pulse uses to create your content"
+        action={
+          <Button onClick={handleAddPhotosClick} disabled={isUploading}>
+            {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImagePlus className="w-4 h-4 mr-2" />}
+            Add Photos
+          </Button>
+        }
+      />
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleUploadFiles(e.target.files)}
+      />
+
+      <Card className="border-accent/20 bg-accent/5">
+        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">{summary.unusedCount} unused photos ready for Autopilot</p>
+            <p className="text-xs text-muted-foreground">
+              {summary.lastUploadDate ? `Last upload ${formatDistanceToNow(new Date(summary.lastUploadDate), { addSuffix: true })}` : 'No uploads yet'}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/autopilot">Open Autopilot</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+      ) : assets.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center space-y-3">
+            <p className="text-lg font-medium">Add photos to power your content</p>
+            <Button onClick={handleAddPhotosClick} disabled={isUploading}>Add Photos</Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {assets.map((asset) => {
+            const usage = usageMap.get(asset.id) || { count: 0, lastUsedAt: null };
+            const badge = getUsageBadge(usage);
+
+            return (
+              <Card key={asset.id} className="overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full text-left"
+                  onClick={() => navigate('/studio/pro-photo')}
+                >
+                  <div className="aspect-square bg-muted">
+                    {asset.public_url ? (
+                      <img src={asset.public_url} alt={asset.title || 'Content feed item'} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No preview</div>
+                    )}
+                  </div>
+                  <div className="p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant={badge.variant}>{badge.label}</Badge>
+                      <span className="text-xs text-muted-foreground">{usage.count} uses</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{asset.title || 'Uploaded image'}</p>
+                    <p className="text-xs text-accent inline-flex items-center gap-1"><Sparkles className="w-3 h-3" />Edit in Studio</p>
+                  </div>
+                </button>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getUsageBadge(usage: AssetUsage): { label: 'unused' | 'used recently' | 'overused'; variant: 'secondary' | 'outline' | 'destructive' } {
+  if (usage.count === 0) return { label: 'unused', variant: 'secondary' };
+
+  const lastUsedDays = usage.lastUsedAt
+    ? (Date.now() - new Date(usage.lastUsedAt).getTime()) / (1000 * 60 * 60 * 24)
+    : Infinity;
+
+  if (usage.count >= 3 && lastUsedDays <= 30) {
+    return { label: 'overused', variant: 'destructive' };
+  }
+
+  return { label: 'used recently', variant: 'outline' };
+}

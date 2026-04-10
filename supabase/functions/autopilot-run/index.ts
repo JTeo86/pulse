@@ -293,11 +293,18 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
 
     const contentItemIds: string[] = [];
     const saveErrorDetails: SaveErrorDetail[] = [];
+    const sourceAssetUsageCounts = new Map<string, number>();
 
     for (const [index, item] of items.entries()) {
       const sourceAsset = sourceSelection.assets.length > 0
         ? sourceSelection.assets[index % sourceSelection.assets.length]
         : null;
+      if (sourceAsset?.source_asset_id) {
+        sourceAssetUsageCounts.set(
+          sourceAsset.source_asset_id,
+          (sourceAssetUsageCounts.get(sourceAsset.source_asset_id) || 0) + 1,
+        );
+      }
       const insertPayload: Record<string, unknown> = {
         venue_id: venueId,
         source: "autopilot",
@@ -341,6 +348,10 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
       } else {
         contentItemIds.push(ci.id);
       }
+    }
+
+    if (sourceAssetUsageCounts.size > 0) {
+      await markAssetsUsed(supabase, sourceAssetUsageCounts);
     }
 
     const generatedCount = parsedItems.length;
@@ -539,6 +550,47 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
   };
 }
 
+async function markAssetsUsed(
+  supabase: any,
+  usageCounts: Map<string, number>,
+): Promise<void> {
+  const ids = Array.from(usageCounts.keys()).filter(Boolean);
+  if (ids.length === 0) return;
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("content_assets")
+    .select("id, metadata")
+    .in("id", ids);
+
+  if (fetchError || !existing) {
+    console.error("Failed to fetch assets for autopilot usage tracking", fetchError);
+    return;
+  }
+
+  const now = new Date().toISOString();
+  for (const row of existing) {
+    const incrementBy = usageCounts.get(row.id) || 0;
+    if (incrementBy <= 0) continue;
+
+    const metadata = (row.metadata && typeof row.metadata === "object") ? row.metadata : {};
+    const currentCount = Number((metadata as any).autopilot_usage_count || 0);
+    const nextMetadata = {
+      ...(metadata as Record<string, unknown>),
+      autopilot_usage_count: currentCount + incrementBy,
+      autopilot_last_used_at: now,
+    };
+
+    const { error: updateError } = await supabase
+      .from("content_assets")
+      .update({ metadata: nextMetadata })
+      .eq("id", row.id);
+
+    if (updateError) {
+      console.error("Failed to update autopilot usage metadata", { assetId: row.id, updateError });
+    }
+  }
+}
+
 async function selectAssetSources(
   supabase: any,
   venueId: string,
@@ -601,16 +653,28 @@ async function selectAssetSources(
 
   const recentVenueUploadsRes = await supabase
     .from("content_assets")
-    .select("id, title, public_url, storage_path, source_type, status")
+    .select("id, title, public_url, storage_path, source_type, status, created_at, metadata")
     .eq("venue_id", venueId)
     .eq("asset_type", "image")
     .in("status", ["approved", "ready", "draft", "queued", "scheduled", "published"])
     .order("created_at", { ascending: false })
     .limit(120);
 
-  const recentVenueUploads = (recentVenueUploadsRes.data || []).filter((asset: any) =>
-    asset?.source_type === "upload" || asset?.source_type === "guest_upload" || asset?.source_type === "manual",
-  );
+  const recentVenueUploads = (recentVenueUploadsRes.data || [])
+    .filter((asset: any) =>
+      asset?.source_type === "upload" || asset?.source_type === "guest_upload" || asset?.source_type === "manual",
+    )
+    .sort((a: any, b: any) => {
+      const aCount = Number(a?.metadata?.autopilot_usage_count || 0);
+      const bCount = Number(b?.metadata?.autopilot_usage_count || 0);
+      if (aCount !== bCount) return aCount - bCount;
+
+      const aLast = a?.metadata?.autopilot_last_used_at ? new Date(a.metadata.autopilot_last_used_at).getTime() : 0;
+      const bLast = b?.metadata?.autopilot_last_used_at ? new Date(b.metadata.autopilot_last_used_at).getTime() : 0;
+      if (aLast !== bLast) return aLast - bLast;
+
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
   const guestSubmissionsRes = await supabase
     .from("guest_submissions")

@@ -55,6 +55,11 @@ interface TodayOverview {
   } | null;
 }
 
+interface ContentHealthSummary {
+  unusedCount: number;
+  lastUploadAt: string | null;
+}
+
 interface WeeklyPulseBrief {
   week_start: string;
   week_end: string;
@@ -185,6 +190,49 @@ export default function Home() {
       };
     },
     enabled: !!currentVenue,
+  });
+
+  const { data: contentHealth, isLoading: contentHealthLoading } = useQuery({
+    queryKey: ['content-health-summary', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async (): Promise<ContentHealthSummary> => {
+      if (!currentVenue) return { unusedCount: 0, lastUploadAt: null };
+
+      const [assetsRes, usageRes] = await Promise.all([
+        supabase
+          .from('content_assets')
+          .select('id, created_at')
+          .eq('venue_id', currentVenue.id)
+          .eq('asset_type', 'image')
+          .in('source_type', ['upload', 'manual', 'guest_upload'])
+          .order('created_at', { ascending: false })
+          .limit(300),
+        supabase
+          .from('content_items')
+          .select('media_variants')
+          .eq('venue_id', currentVenue.id)
+          .eq('source', 'autopilot')
+          .limit(600),
+      ]);
+
+      if (assetsRes.error) throw assetsRes.error;
+      if (usageRes.error) throw usageRes.error;
+
+      const usedIds = new Set<string>();
+      for (const row of usageRes.data || []) {
+        const variants = row.media_variants as Record<string, any> | null;
+        const sourceAssetId = variants?.source_asset_id;
+        if (sourceAssetId) usedIds.add(sourceAssetId);
+      }
+
+      const assets = assetsRes.data || [];
+      const unusedCount = assets.filter((asset) => !usedIds.has(asset.id)).length;
+
+      return {
+        unusedCount,
+        lastUploadAt: assets[0]?.created_at || null,
+      };
+    },
   });
 
   const { data: latestPulseReport, isLoading: pulseReportLoading } = useQuery({
@@ -448,6 +496,33 @@ export default function Home() {
                 </div>
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/content/calendar">Fill gaps</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Content Health</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                {contentHealthLoading ? (
+                  <Skeleton className="h-24 rounded-lg" />
+                ) : (
+                  <>
+                    <p className="text-sm font-medium">
+                      {(contentHealth?.unusedCount ?? 0) > 0
+                        ? `You have ${contentHealth?.unusedCount ?? 0} unused photos`
+                        : 'You're running low on content'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {contentHealth?.lastUploadAt
+                        ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}`
+                        : 'No photos uploaded yet'}
+                    </p>
+                  </>
+                )}
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/content/feed">Add Photos</Link>
                 </Button>
               </CardContent>
             </Card>

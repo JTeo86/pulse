@@ -21,6 +21,7 @@ import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
 import ReelCreator from "./pages/ReelCreator";
 import ContentScheduler from "./pages/ContentScheduler";
+import ContentFeed from "./pages/ContentFeed";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
 import IndustryInsights from "./pages/growth/IndustryInsights";
@@ -154,6 +155,7 @@ function AppRoutes() {
 
         {/* Content Section */}
         <Route path="/content/library" element={<BrandLibrary />} />
+        <Route path="/content/feed" element={<ContentFeed />} />
         <Route path="/content/planner" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
         <Route path="/content/calendar" element={<ContentScheduler />} />
@@ -224,7 +226,7 @@ function AppRoutes() {
         {/* Very old legacy redirects */}
         <Route path="/dashboard" element={<Navigate to="/home" replace />} />
         <Route path="/modules/editor" element={<Navigate to="/studio/pro-photo" replace />} />
-        <Route path="/upload" element={<Navigate to="/studio/pro-photo" replace />} />
+        <Route path="/upload" element={<Navigate to="/content/feed" replace />} />
         <Route path="/drafts" element={<Navigate to="/studio/pro-photo" replace />} />
         <Route path="/studio/planner" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/studio/email" element={<Navigate to="/home?tab=plans" replace />} />
