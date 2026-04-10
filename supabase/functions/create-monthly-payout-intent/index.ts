@@ -54,7 +54,7 @@ serve(async (req) => {
       .from("commissions")
       .select("id, partner_id, locked_commission_value, locked_platform_fee, referrers(stripe_connect_account_id)")
       .eq("payout_period_id", payout_period_id)
-      .neq("status", "paid");
+      .in("status", ["final", "paid"]);
     if (commissionError) throw commissionError;
 
     const transferBreakdown: Record<string, number> = {};
