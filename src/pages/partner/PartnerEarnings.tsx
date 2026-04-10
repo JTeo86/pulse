@@ -15,17 +15,17 @@ export default function PartnerEarnings() {
     queryFn: async () => {
       if (!referrer?.id) return null;
       const { data: bookings, error } = await supabase
-        .from('referral_bookings')
+        .from('referrals')
         .select('*')
-        .eq('referrer_id', referrer.id)
+        .eq('partner_id', referrer.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
 
       const all = bookings ?? [];
-      const estimated = all.reduce((s, b) => s + (Number(b.commission_amount) || 0), 0);
-      const approved = all.filter(b => b.commission_status === 'approved' || b.commission_status === 'paid').reduce((s, b) => s + (Number(b.commission_amount) || 0), 0);
-      const paid = all.filter(b => b.commission_status === 'paid').reduce((s, b) => s + (Number(b.commission_amount) || 0), 0);
-      const pendingVerification = all.filter(b => !b.spend_verified).length;
+      const estimated = all.reduce((s, b) => s + (Number(b.commission) || 0), 0);
+      const approved = all.filter(b => b.status === 'verified' || b.status === 'paid').reduce((s, b) => s + (Number(b.commission) || 0), 0);
+      const paid = all.filter(b => b.status === 'paid').reduce((s, b) => s + (Number(b.commission) || 0), 0);
+      const pendingVerification = all.filter(b => !['verified', 'paid'].includes(b.status)).length;
 
       return { estimated, approved, paid, pendingVerification, bookings: all };
     },
@@ -104,13 +104,13 @@ export default function PartnerEarnings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.bookings.filter(b => b.commission_amount).map((b) => (
+                  {data.bookings.filter(b => b.commission != null).map((b) => (
                     <tr key={b.id} className="border-b border-border last:border-0">
                       <td className="px-4 py-3 text-foreground">{b.guest_name || 'Guest'}</td>
-                      <td className="px-4 py-3 text-right text-foreground">£{Number(b.commission_amount).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-foreground">£{Number(b.commission).toFixed(2)}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={b.commission_status === 'paid' ? 'default' : 'secondary'} className="text-xs capitalize">
-                          {b.commission_status}
+                        <Badge variant={b.status === 'paid' ? 'default' : 'secondary'} className="text-xs capitalize">
+                          {b.status}
                         </Badge>
                       </td>
                     </tr>

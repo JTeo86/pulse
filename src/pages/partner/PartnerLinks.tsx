@@ -78,6 +78,12 @@ export default function PartnerLinks() {
                           {copiedId === link.id ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
                         </Button>
                       </div>
+                      <div className="mt-2">
+                        <p className="text-[11px] text-muted-foreground">Promo code</p>
+                        <code className="text-xs bg-muted px-2 py-1 rounded text-foreground inline-block mt-1">
+                          {link.code}
+                        </code>
+                      </div>
                     </div>
 
                     {link.qr_code_url && (

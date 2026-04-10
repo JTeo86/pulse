@@ -17,16 +17,16 @@ export default function PartnerDashboard() {
     queryFn: async () => {
       if (!referrer?.id) return null;
 
-      const [clicksRes, bookingsRes, linksRes] = await Promise.all([
-        supabase.from('referral_clicks').select('id', { count: 'exact', head: true }).eq('referrer_id', referrer.id),
-        supabase.from('referral_bookings').select('*').eq('referrer_id', referrer.id),
+      const [clicksRes, referralsRes, linksRes] = await Promise.all([
+        supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('partner_id', referrer.id).eq('source_type', 'link'),
+        supabase.from('referrals').select('*').eq('partner_id', referrer.id),
         supabase.from('referral_links').select('id', { count: 'exact', head: true }).eq('referrer_id', referrer.id).eq('status', 'active'),
       ]);
 
-      const bookings = bookingsRes.data ?? [];
-      const verifiedSpend = bookings.filter(b => b.spend_verified).reduce((s, b) => s + (Number(b.verified_spend) || 0), 0);
-      const estimatedEarnings = bookings.reduce((s, b) => s + (Number(b.commission_amount) || 0), 0);
-      const paidEarnings = bookings.filter(b => b.commission_status === 'paid').reduce((s, b) => s + (Number(b.commission_amount) || 0), 0);
+      const bookings = referralsRes.data ?? [];
+      const verifiedSpend = bookings.filter(b => ['verified', 'paid'].includes(b.status)).reduce((s, b) => s + (Number(b.bill_amount) || 0), 0);
+      const estimatedEarnings = bookings.reduce((s, b) => s + (Number(b.commission) || 0), 0);
+      const paidEarnings = bookings.filter(b => b.status === 'paid').reduce((s, b) => s + (Number(b.commission) || 0), 0);
 
       return {
         clicks: clicksRes.count ?? 0,
@@ -134,11 +134,11 @@ export default function PartnerDashboard() {
                     <p className="text-xs text-muted-foreground">{format(new Date(b.created_at), 'dd MMM yyyy')}</p>
                   </div>
                   <div className="text-right">
-                    <Badge variant={b.spend_verified ? 'default' : 'secondary'} className="text-xs">
-                      {b.spend_verified ? 'Verified' : b.booking_status}
+                    <Badge variant={['verified', 'paid'].includes(b.status) ? 'default' : 'secondary'} className="text-xs">
+                      {['verified', 'paid'].includes(b.status) ? 'Verified' : b.status}
                     </Badge>
-                    {b.commission_amount && (
-                      <p className="text-xs text-muted-foreground mt-1">£{Number(b.commission_amount).toFixed(2)}</p>
+                    {b.commission && (
+                      <p className="text-xs text-muted-foreground mt-1">£{Number(b.commission).toFixed(2)}</p>
                     )}
                   </div>
                 </div>
