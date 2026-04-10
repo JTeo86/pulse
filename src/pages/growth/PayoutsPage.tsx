@@ -32,6 +32,21 @@ function PayoutsContent() {
   const [payoutMethod, setPayoutMethod] = useState('Bank transfer');
   const [referenceNote, setReferenceNote] = useState('');
 
+  const { data: payoutPeriods } = useQuery({
+    queryKey: ['venue-payout-periods', currentVenue?.id],
+    queryFn: async () => {
+      if (!currentVenue) return [];
+      const { data, error } = await (supabase as any)
+        .from('payout_periods')
+        .select('*')
+        .eq('venue_id', currentVenue.id)
+        .order('month', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!currentVenue,
+  });
+
   const { data: payouts, isLoading } = useQuery({
     queryKey: ['manual-payouts', currentVenue?.id],
     queryFn: async () => {
@@ -166,6 +181,26 @@ function PayoutsContent() {
     total: payouts?.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0) ?? 0,
   };
 
+  const payablePeriod = (payoutPeriods ?? []).find((period: any) => ['final', 'overdue'].includes(period.status));
+  const createStripePayoutIntent = useMutation({
+    mutationFn: async () => {
+      if (!currentVenue || !payablePeriod) throw new Error('No final payout period ready for payment.');
+      const { data, error } = await supabase.functions.invoke('create-monthly-payout-intent', {
+        body: {
+          venue_id: currentVenue.id,
+          payout_period_id: payablePeriod.id,
+        },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['venue-payout-periods'] });
+      toast.success(`Stripe PaymentIntent created (${data?.payment_intent_id ?? 'pending'})`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <PageHeader title="Payouts" description="Create manual payout batches, send them off-platform, and confirm when money lands." />
@@ -179,6 +214,25 @@ function PayoutsContent() {
 
       <Card>
         <CardContent className="space-y-4 p-4">
+          <div className="rounded-md border border-border p-3 space-y-2">
+            <h3 className="font-semibold text-sm">Monthly Stripe batch payout</h3>
+            <p className="text-xs text-muted-foreground">
+              Commissions are locked monthly, held for dispute buffer, and paid in a single Stripe Connect batch.
+            </p>
+            {payablePeriod ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={payablePeriod.status === 'overdue' ? 'destructive' : 'secondary'} className="capitalize">{payablePeriod.status}</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(payablePeriod.month).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })} • £{Number(payablePeriod.total_commission || 0).toFixed(2)}
+                </span>
+                <Button size="sm" onClick={() => createStripePayoutIntent.mutate()} disabled={createStripePayoutIntent.isPending}>
+                  Pay with Stripe
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No final payout period is ready to pay yet.</p>
+            )}
+          </div>
           <div>
             <h3 className="font-semibold">Create Payout Batch</h3>
             <p className="text-xs text-muted-foreground mt-1">Pick a partner with payable commissions, then create a batch you can send manually.</p>
