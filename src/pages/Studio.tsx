@@ -90,7 +90,7 @@ export default function Studio() {
     >
       <PageHeader
         title="Studio"
-        description="Your creative workspace. Generate photos, create reels, and train your brand's visual style."
+        description="Your creative workspace. Add photos, create reels, and train your brand's visual style."
       />
 
       {/* Primary Creation Tools */}
@@ -123,7 +123,7 @@ export default function Studio() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center text-sm text-accent font-medium">
-                    {tool.primary ? 'Start Creating' : 'Open'}
+                    Open
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </div>
                 </CardContent>
@@ -142,15 +142,15 @@ export default function Studio() {
                 <ImagePlus className="w-7 h-7 text-accent" />
               </div>
               <div>
-                <h3 className="font-medium text-lg">Ready to create?</h3>
+                <h3 className="font-medium text-lg">Ready to build your next visual?</h3>
                 <p className="text-sm text-muted-foreground">
-                  Upload a dish photo and generate professional content in seconds
+                  Add a dish photo and generate professional content in seconds
                 </p>
               </div>
             </div>
             <Button onClick={() => navigate('/studio/pro-photo')} className="shrink-0">
               <Camera className="w-4 h-4 mr-2" />
-              Enhance Photo
+              Add Photo
             </Button>
           </div>
         </CardContent>
@@ -175,12 +175,6 @@ export default function Studio() {
             icon={FolderOpen}
             title="No creations yet"
             description="Your generated photos and reels will appear here"
-            action={
-              <Button onClick={() => navigate('/studio/pro-photo')} variant="outline" size="sm">
-                <Camera className="w-4 h-4 mr-2" />
-                Create Your First
-              </Button>
-            }
           />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

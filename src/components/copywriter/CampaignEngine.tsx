@@ -540,7 +540,7 @@ export function CampaignEngine({ onProjectSaved, onClose, existingProject }: Cam
                 className="bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
               >
                 <Sparkles className="h-4 w-4" />
-                Generate
+                Generate Campaign
               </Button>
             )}
           </div>
