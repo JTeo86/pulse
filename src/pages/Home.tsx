@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
 import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
 import { generateExplanation } from '@/lib/explanations';
+import { generatePerformanceInsights, generateWeeklyPulseReport, type WeeklyPulseReport } from '@/lib/performance-feedback';
 
 type HomeTab = 'today' | 'opportunities' | 'plans';
 
@@ -48,6 +49,8 @@ interface TodayOverview {
   coverageGaps: string[];
   pendingReplies: ReplyTask[];
   pendingContent: ContentApprovalItem[];
+  performanceInsights: string[];
+  weeklyPerformanceReport: WeeklyPulseReport;
   lastAutopilotRun: {
     status: string;
     createdAt: string;
@@ -119,6 +122,7 @@ export default function Home() {
         pendingReplies,
         contentDrafts,
         scheduledContent,
+        recentContentItems,
         recentReviews,
         latestAutopilotRun,
       ] = await Promise.all([
@@ -144,6 +148,12 @@ export default function Home() {
           .gte('scheduled_for', now.toISOString())
           .lt('scheduled_for', twoWeeksOut.toISOString()),
         supabase
+          .from('content_items')
+          .select('id, title, caption_draft, scheduled_for, created_at, badges')
+          .eq('venue_id', currentVenue.id)
+          .order('created_at', { ascending: false })
+          .limit(80),
+        supabase
           .from('review_response_tasks')
           .select('review_text, rating')
           .eq('venue_id', currentVenue.id)
@@ -161,6 +171,7 @@ export default function Home() {
       const pendingReplyRows = pendingReplies.data ?? [];
       const pendingContentRows = contentDrafts.data ?? [];
       const recentReviewsRows = recentReviews.data ?? [];
+      const recentContentRows = recentContentItems.data ?? [];
 
       const urgentReviewsCount = pendingReplyRows.filter((task) => (task.rating ?? 5) <= 2 || task.ai_priority === 'P1').length;
       const { positiveTheme, negativeTheme } = detectThemes(recentReviewsRows);
@@ -169,6 +180,20 @@ export default function Home() {
       const run = latestAutopilotRun.data;
       const generatedPosts = run?.saved_count ?? run?.items_saved ?? 0;
       const generatedReplies = pendingReplyRows.filter((row) => Boolean(row.draft_response?.trim())).length;
+      const performanceInput = {
+        posts: recentContentRows.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          caption: item.caption_draft,
+          scheduledFor: item.scheduled_for,
+          createdAt: item.created_at,
+          reused: (item.badges || []).some((badge: string) => badge.toLowerCase().includes('reuse')),
+        })),
+        reviewMentions: recentReviewsRows.map((review: any) => String(review.review_text || '')),
+        frequencyPerWeek: recentContentRows.length,
+      };
+      const performanceInsights = generatePerformanceInsights(performanceInput);
+      const weeklyPerformanceReport = generateWeeklyPulseReport(performanceInput);
 
       return {
         preparedContentCount: pendingContentRows.length,
@@ -180,6 +205,8 @@ export default function Home() {
         coverageGaps: coverage.gaps,
         pendingReplies: pendingReplyRows,
         pendingContent: pendingContentRows,
+        performanceInsights,
+        weeklyPerformanceReport,
         lastAutopilotRun: run
           ? {
               status: run.run_status || run.status || 'completed',
@@ -388,39 +415,43 @@ export default function Home() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Your latest Pulse report</CardTitle>
+              <CardTitle className="text-base">Your Weekly Pulse Report</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
               {pulseReportLoading ? (
                 <Skeleton className="h-24 rounded-lg" />
-              ) : !latestPulseReport?.pulse_report ? (
-                <p className="text-sm text-muted-foreground">
-                  Your weekly report will appear here after the next Monday morning cycle.
-                </p>
               ) : (
                 <>
-                  <p className="text-xs text-muted-foreground">
-                    Week of {latestPulseReport.week_start} to {latestPulseReport.week_end}
-                  </p>
-                  <p className="text-sm">{latestPulseReport.pulse_report.reputation_summary || 'No reputation summary yet.'}</p>
-                  <p className="text-sm text-muted-foreground">{latestPulseReport.pulse_report.content_summary || 'No content summary yet.'}</p>
+                  {latestPulseReport?.pulse_report && (
+                    <p className="text-xs text-muted-foreground">
+                      Week of {latestPulseReport.week_start} to {latestPulseReport.week_end}
+                    </p>
+                  )}
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Top opportunities</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">What worked</p>
                       <ul className="text-sm list-disc pl-5 space-y-1">
-                        {(latestPulseReport.pulse_report.opportunities || []).slice(0, 2).map((item) => (
+                        {(overview?.weeklyPerformanceReport.whatWorked || []).slice(0, 3).map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Next week focus</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">What to improve</p>
                       <ul className="text-sm list-disc pl-5 space-y-1">
-                        {(latestPulseReport.pulse_report.next_week_focus || []).slice(0, 2).map((item) => (
+                        {(overview?.weeklyPerformanceReport.whatToImprove || []).slice(0, 3).map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">What to do next</p>
+                    <ul className="text-sm list-disc pl-5 space-y-1">
+                      {(overview?.weeklyPerformanceReport.whatToDoNext || []).slice(0, 3).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
                   </div>
                 </>
               )}
@@ -480,6 +511,17 @@ export default function Home() {
                     )}
                   </>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">What&apos;s Working</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-0">
+                {(overview?.performanceInsights || []).slice(0, 5).map((insight) => (
+                  <p key={insight} className="text-sm">• {insight}</p>
+                ))}
               </CardContent>
             </Card>
 
