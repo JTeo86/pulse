@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
 import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
+import { generateExplanation } from '@/lib/explanations';
 
 type HomeTab = 'today' | 'opportunities' | 'plans';
 
@@ -444,6 +445,14 @@ export default function Home() {
                         onApprove={() => approveReply.mutate(task)}
                         onReject={() => rejectReply.mutate(task.id)}
                         editTo="/reputation/reviews?tab=respond"
+                        explanation={generateExplanation({
+                          review_signal: [
+                            task.rating && task.rating <= 2
+                              ? 'A low-rating review needed a fast response'
+                              : 'Keeps response time consistent for guest feedback',
+                          ],
+                          content_gap: overview?.coverageGaps ?? [],
+                        })}
                         disabled={!task.draft_response?.trim()}
                       />
                     ))}
@@ -456,6 +465,13 @@ export default function Home() {
                         onApprove={() => approveContent.mutate(item.id)}
                         onReject={() => rejectContent.mutate(item.id)}
                         editTo="/content/library"
+                        explanation={generateExplanation({
+                          content_gap: overview?.coverageGaps ?? ['3-day content'],
+                          timing: item.scheduled_for
+                            ? { day_of_week: new Date(item.scheduled_for).toLocaleDateString('en-US', { weekday: 'long' }) }
+                            : undefined,
+                          asset_usage: { reuse_frequency: 'low' },
+                        })}
                       />
                     ))}
 
@@ -542,6 +558,18 @@ export default function Home() {
                       <p className="text-sm font-medium">{item.title}</p>
                       <p className="text-xs text-muted-foreground">{item.description}</p>
                       <p className="text-xs mt-1">Action: {item.suggestedAction}</p>
+                      <div className="mt-2 rounded-md bg-muted/30 px-2 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
+                        <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                          {generateExplanation({
+                            content_gap: overview?.coverageGaps ?? [],
+                            review_signal: [item.title],
+                            timing: { day_of_week: 'this week' },
+                          }).map((point) => (
+                            <li key={point} className="text-xs text-muted-foreground">{point}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   ))
                 )}
@@ -596,6 +624,7 @@ function ApprovalRow({
   editTo,
   onApprove,
   onReject,
+  explanation,
   disabled,
 }: {
   title: string;
@@ -603,12 +632,21 @@ function ApprovalRow({
   editTo: string;
   onApprove: () => void;
   onReject: () => void;
+  explanation: string[];
   disabled?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-border p-3">
       <p className="text-sm font-medium">{title}</p>
       <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{subtitle}</p>
+      <div className="mt-2 rounded-md bg-muted/30 px-2 py-1.5">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
+        <ul className="mt-1 list-disc pl-4 space-y-0.5">
+          {explanation.map((point) => (
+            <li key={point} className="text-xs text-muted-foreground">{point}</li>
+          ))}
+        </ul>
+      </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <Button size="sm" className="h-7 text-xs gap-1" onClick={onApprove} disabled={disabled}>
           <CheckCircle2 className="w-3 h-3" /> Approve
