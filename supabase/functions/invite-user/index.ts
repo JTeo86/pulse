@@ -110,6 +110,24 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  // Seat limit enforcement (includes pending invites + owner seat)
+  const [{ data: entitlements }, { data: members }, { data: pendingInvites }] = await Promise.all([
+    callerClient.from('venue_entitlements').select('max_users_per_venue').eq('venue_id', venueId).maybeSingle(),
+    callerClient.from('venue_members').select('user_id').eq('venue_id', venueId),
+    callerClient.from('venue_invites').select('id').eq('venue_id', venueId).is('accepted_at', null),
+  ]);
+
+  const seatLimit = entitlements?.max_users_per_venue ?? 1;
+  const ownerInMembers = (members ?? []).some((m: any) => m.user_id === venue?.owner_user_id);
+  const seatsUsed = (members?.length ?? 0) + (ownerInMembers ? 0 : 1) + (pendingInvites?.length ?? 0);
+
+  if (seatsUsed >= seatLimit) {
+    return new Response(JSON.stringify({ error: `Seat limit reached (${seatsUsed}/${seatLimit}). Ask the venue owner to upgrade the subscription tier.` }), {
+      status: 409,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   // Admin client — uses service role to send invite email
   const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },

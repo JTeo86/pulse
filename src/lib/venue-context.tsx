@@ -16,6 +16,7 @@ interface Venue {
   referral_enabled?: boolean;
   referral_beta_access?: boolean;
   referral_stage_override?: number | null;
+  storage_used_mb?: number;
 }
 
 interface VenueMember {

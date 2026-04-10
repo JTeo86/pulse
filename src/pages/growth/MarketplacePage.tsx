@@ -26,7 +26,7 @@ export default function MarketplacePage() {
   const { data: venues, isLoading } = useQuery({
     queryKey: ['referral-marketplace-venues', currentVenue?.id],
     queryFn: async () => {
-      const [{ data: settingsRows, error: settingsError }, { data, error }] = await Promise.all([
+      const [{ data: settingsRows, error: settingsError }, { data, error }, { data: entitlementRows, error: entitlementError }] = await Promise.all([
         supabase
           .from('platform_settings')
           .select('key, value')
@@ -36,10 +36,15 @@ export default function MarketplacePage() {
           .select('id, name, city, country_code, referral_enabled, referral_beta_access, referral_stage_override')
           .eq('referral_enabled', true)
           .order('name'),
+        supabase
+          .from('venue_entitlements')
+          .select('venue_id')
+          .eq('marketplace_access_enabled', true),
       ]);
 
       if (settingsError) throw settingsError;
       if (error) throw error;
+      if (entitlementError) throw entitlementError;
 
       const map = new Map((settingsRows ?? []).map((row) => [row.key, row.value ?? '']));
       const globalEnabled = parseBool(map.get('referral_system_enabled'), false);
@@ -48,11 +53,13 @@ export default function MarketplacePage() {
 
       if (!globalEnabled) return [];
 
+      const entitledVenueIds = new Set((entitlementRows ?? []).map((row) => row.venue_id));
+
       return (data ?? []).filter((venue) => {
         if (venue.id === currentVenue?.id) return false;
         if (betaMode && !venue.referral_beta_access) return false;
         const effectiveStage = venue.referral_stage_override ?? globalStage;
-        return effectiveStage >= 3;
+        return effectiveStage >= 3 && entitledVenueIds.has(venue.id);
       });
     },
     enabled: !!currentVenue,

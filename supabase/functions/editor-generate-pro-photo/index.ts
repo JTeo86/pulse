@@ -379,6 +379,24 @@ Deno.serve(async (req) => {
       .from('venue_members').select('id').eq('venue_id', venue_id).eq('user_id', user.id).single();
     if (!membership) return jsonResp({ error: 'Access denied' }, 403);
 
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const [entitlementsRes, usageRes, enforcementRes] = await Promise.all([
+      supabase.from('venue_entitlements').select('monthly_image_quota').eq('venue_id', venue_id).maybeSingle(),
+      supabase.from('editor_usage').select('pro_photo_used').eq('venue_id', venue_id).eq('month', currentMonth).maybeSingle(),
+      supabase.from('platform_settings').select('value').eq('key', 'billing_enforcement_mode').maybeSingle(),
+    ]);
+    const quota = entitlementsRes.data?.monthly_image_quota ?? 0;
+    const used = usageRes.data?.pro_photo_used ?? 0;
+    const enforcementMode = (enforcementRes.data?.value ?? 'soft').toLowerCase();
+    const overQuota = quota > 0 && used >= quota;
+    let generationWarning: string | null = null;
+    if (overQuota && enforcementMode === 'hard') {
+      return jsonResp({ error: `Monthly image quota reached (${used}/${quota}). Upgrade your plan to continue.` }, 402);
+    }
+    if (overQuota) {
+      generationWarning = `Monthly image quota reached (${used}/${quota}). Soft enforcement mode allows generation.`;
+    }
+
     let aiConfig: Awaited<ReturnType<typeof resolveAiConfig>>;
     try {
       aiConfig = await resolveAiConfig();
@@ -639,7 +657,7 @@ Deno.serve(async (req) => {
       output_asset_id: outputAssetId,
       generation_mode: mode,
       generation_plan: plan,
-      generation_warning: null,
+      generation_warning: generationWarning,
     });
   } catch (err: unknown) {
     console.error('[PRO-PHOTO] ERROR:', err);

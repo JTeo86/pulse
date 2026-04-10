@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Plug, Settings2, Flag, Network, Film } from 'lucide-react';
+import { Shield, Plug, Settings2, Flag, Network, Film, CreditCard, Layers } from 'lucide-react';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
 import PlatformConfigTab from '@/components/admin/PlatformConfigTab';
 import ReferralNetworkTab from '@/components/admin/ReferralNetworkTab';
 import VideoProviderTab from '@/components/admin/VideoProviderTab';
+import BillingConfigTab from '@/components/admin/BillingConfigTab';
+import SubscriptionTiersTab from '@/components/admin/SubscriptionTiersTab';
 
 // Integrations & API Keys tab — lifted directly from AdminIntegrations page
 import AdminIntegrationsContent from '@/components/admin/AdminIntegrationsContent';
@@ -68,6 +70,14 @@ export default function PlatformAdmin() {
             <Network className="w-4 h-4" />
             Referral Release Control
           </TabsTrigger>
+          <TabsTrigger value="billing-config" className="gap-2">
+            <CreditCard className="w-4 h-4" />
+            Billing Config
+          </TabsTrigger>
+          <TabsTrigger value="subscription-tiers" className="gap-2">
+            <Layers className="w-4 h-4" />
+            Subscription Tiers
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="integrations" className="mt-6">
@@ -88,6 +98,14 @@ export default function PlatformAdmin() {
 
         <TabsContent value="referral" className="mt-6">
           <ReferralNetworkTab />
+        </TabsContent>
+
+        <TabsContent value="billing-config" className="mt-6">
+          <BillingConfigTab />
+        </TabsContent>
+
+        <TabsContent value="subscription-tiers" className="mt-6">
+          <SubscriptionTiersTab />
         </TabsContent>
       </Tabs>
     </motion.div>

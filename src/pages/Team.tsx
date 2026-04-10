@@ -126,6 +126,7 @@ export default function TeamPage() {
   const [transferTarget, setTransferTarget] = useState('');
   const [processing, setProcessing] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [seatLimit, setSeatLimit] = useState(1);
 
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<InviteFormData>({
     resolver: zodResolver(inviteSchema),
@@ -136,7 +137,7 @@ export default function TeamPage() {
   const fetchData = useCallback(async () => {
     if (!currentVenue) return;
     try {
-      const [membersRes, invitesRes, profilesRes] = await Promise.all([
+      const [membersRes, invitesRes, profilesRes, entitlementsRes] = await Promise.all([
         supabase.from('venue_members').select('*').eq('venue_id', currentVenue.id).order('created_at'),
         supabase
           .from('venue_invites')
@@ -145,6 +146,7 @@ export default function TeamPage() {
           .is('accepted_at', null)   // Only pending
           .order('created_at', { ascending: false }),
         supabase.from('user_profiles').select('user_id, email, full_name, avatar_url'),
+        supabase.from('venue_entitlements').select('max_users_per_venue').eq('venue_id', currentVenue.id).maybeSingle(),
       ]);
 
       if (membersRes.error) throw membersRes.error;
@@ -160,6 +162,7 @@ export default function TeamPage() {
 
       setMembers(membersWithProfiles);
       setInvites((invitesRes.data || []) as unknown as VenueInvite[]);
+      setSeatLimit(entitlementsRes.data?.max_users_per_venue ?? 1);
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error loading team', description: error.message });
     } finally {
@@ -314,6 +317,9 @@ export default function TeamPage() {
   }
 
   const pendingInvites = invites.filter((i) => !i.accepted_at);
+  const ownerCountedInMembers = members.some((m) => m.user_id === currentVenue?.owner_user_id);
+  const seatsUsed = members.length + (ownerCountedInMembers ? 0 : 1) + pendingInvites.length;
+  const isSeatLimitReached = seatsUsed >= seatLimit;
   const transferableMembers = members.filter(
     (m) => m.user_id !== user?.id && currentVenue?.owner_user_id !== m.user_id
   );
@@ -329,14 +335,14 @@ export default function TeamPage() {
         title="Team"
         description={
           pendingInvites.length > 0
-            ? `${members.length} member${members.length !== 1 ? 's' : ''} · ${pendingInvites.length} pending invite${pendingInvites.length !== 1 ? 's' : ''}`
+            ? `${members.length} member${members.length !== 1 ? 's' : ''} · ${pendingInvites.length} pending invite${pendingInvites.length !== 1 ? 's' : ''} · ${seatsUsed}/${seatLimit} seats used`
             : `Manage venue team members and their roles`
         }
         action={
           canInvite && (
             <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
               <DialogTrigger asChild>
-                <Button className="btn-primary-editorial">
+                <Button className="btn-primary-editorial" disabled={isSeatLimitReached}>
                   <UserPlus className="w-4 h-4 mr-2" />
                   Invite member
                 </Button>
@@ -376,7 +382,7 @@ export default function TeamPage() {
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
-                    <Button type="submit" className="btn-primary-editorial" disabled={processing}>
+                    <Button type="submit" className="btn-primary-editorial" disabled={processing || isSeatLimitReached}>
                       {processing ? 'Sending…' : 'Send invite'}
                     </Button>
                   </DialogFooter>
@@ -386,6 +392,11 @@ export default function TeamPage() {
           )
         }
       />
+      {isSeatLimitReached && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
+          Seat limit reached ({seatsUsed} of {seatLimit}). {isOwner ? 'Upgrade your plan in Billing to add more seats.' : 'Ask your venue owner to upgrade the billing tier.'}
+        </div>
+      )}
 
       {/* ── Members ── */}
       <section className="space-y-3">
