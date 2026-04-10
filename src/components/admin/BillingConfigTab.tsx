@@ -15,7 +15,7 @@ export default function BillingConfigTab() {
   const [webhookKey, setWebhookKey] = useState('');
   const [local, setLocal] = useState<Record<string, string>>({});
 
-  const { data } = useQuery({
+  const { data, error, isError } = useQuery({
     queryKey: ['billing-config-settings'],
     queryFn: async () => {
       const [{ data: settingsRows, error: settingsError }] = await Promise.all([
@@ -27,6 +27,20 @@ export default function BillingConfigTab() {
   });
 
   const merged = { ...(data ?? {}), ...local };
+  const schemaNotReady = ((error as { message?: string; code?: string } | null)?.code === '42P01')
+    || ((error as { message?: string; code?: string } | null)?.code === 'PGRST205')
+    || ((error as { message?: string } | null)?.message?.toLowerCase().includes('does not exist') ?? false);
+
+  if (isError && schemaNotReady) {
+    return (
+      <Card className="border-warning/50">
+        <CardHeader>
+          <CardTitle>Billing setup pending</CardTitle>
+          <CardDescription>Billing configuration is unavailable until the latest billing schema and edge functions are deployed.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   const setSetting = (key: string, value: string) => {
     setLocal((prev) => ({ ...prev, [key]: value }));
