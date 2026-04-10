@@ -13,7 +13,6 @@ import {
   X,
   Shield,
   Plus,
-  Camera,
   PenSquare,
   Upload
 } from 'lucide-react';
@@ -63,31 +62,25 @@ const setupNavigation: NavItem[] = [
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
 
-// Quick action items for Add Content dropdown
+// Quick manual entry actions for the global manual actions menu
 const quickActions = [
   {
-    name: 'Upload Photo',
-    description: 'Add an existing image to your content inventory',
+    name: 'Add Photo',
+    description: 'Upload a photo and prepare it for content creation',
     href: '/studio/pro-photo',
     icon: Upload,
   },
   {
-    name: 'Enhance Photo',
-    description: 'Improve and prepare a photo for publishing',
-    href: '/studio/pro-photo',
-    icon: Camera,
-  },
-  {
-    name: 'Create Post',
-    description: 'Write a post and add it to your calendar',
-    href: '/content/calendar',
+    name: 'New Campaign',
+    description: 'Create a new campaign or content push',
+    href: '/copywriter',
     icon: PenSquare,
   },
   {
-    name: 'Respond to Reviews',
-    description: 'Reply to customer reviews',
-    href: '/reputation/reviews',
-    icon: MessageSquareText,
+    name: 'Manual Post',
+    description: 'Create or schedule a one-off post manually',
+    href: '/content/calendar',
+    icon: CalendarCheck2,
   },
 ];
 
@@ -310,12 +303,12 @@ export function AppLayout({ children }: AppLayoutProps) {
               )}
             </Link>
             <div className="flex items-center gap-2">
-              {/* Add Content Button - Mobile */}
+              {/* Global manual actions menu - Mobile */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" className="gap-2">
                     <Plus className="w-4 h-4" />
-                    Add
+                    New
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -411,12 +404,12 @@ export function AppLayout({ children }: AppLayoutProps) {
         <main className="flex-1 pt-14 lg:pt-0 min-h-screen flex flex-col min-w-0">
           <div className="hidden lg:flex items-center justify-end h-12 px-4 border-b border-border">
             
-            {/* Add Content Button - Desktop */}
+            {/* Global manual actions menu - Desktop */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className="gap-2">
                   <Plus className="w-4 h-4" />
-                  Add
+                  New
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
