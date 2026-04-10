@@ -369,7 +369,7 @@ export default function Home() {
     >
       <PageHeader
         title={`Command Centre${currentVenue ? ` • ${currentVenue.name}` : ''}`}
-        description="Pulse has prepared your week. Review, approve, and publish from this screen."
+        description="Your week is ready."
       />
 
       <ReferralHomeCards />
@@ -395,18 +395,18 @@ export default function Home() {
               <CardContent className="p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Pulse prepared your week</p>
-                    <p className="text-2xl font-semibold">{(overview?.preparedContentCount ?? 0) + (overview?.pendingRepliesCount ?? 0)} items ready for your sign-off</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Your week is ready</p>
+                    <p className="text-2xl font-semibold">{(overview?.preparedContentCount ?? 0) + (overview?.pendingRepliesCount ?? 0)} items ready</p>
                     <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                      <span>{overview?.preparedContentCount ?? 0} content items ready</span>
+                      <span>{overview?.preparedContentCount ?? 0} ready posts</span>
                       <span>•</span>
-                      <span>{overview?.pendingRepliesCount ?? 0} replies drafted</span>
+                      <span>{overview?.pendingRepliesCount ?? 0} review replies</span>
                       <span>•</span>
-                      <span>{marketOpportunities.length} opportunities detected</span>
+                      <span>{marketOpportunities.length} open opportunities</span>
                     </div>
                   </div>
                   <Button variant="outline" asChild>
-                    <Link to="/reputation/reviews?tab=respond">Review now</Link>
+                    <Link to="/reputation/reviews?tab=respond">Review</Link>
                   </Button>
                 </div>
               </CardContent>
@@ -415,7 +415,7 @@ export default function Home() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Your Weekly Pulse Report</CardTitle>
+              <CardTitle className="text-base">What&apos;s working</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
               {pulseReportLoading ? (
@@ -429,7 +429,7 @@ export default function Home() {
                   )}
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">What worked</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Working now</p>
                       <ul className="text-sm list-disc pl-5 space-y-1">
                         {(overview?.weeklyPerformanceReport.whatWorked || []).slice(0, 3).map((item) => (
                           <li key={item}>{item}</li>
@@ -437,7 +437,7 @@ export default function Home() {
                       </ul>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">What to improve</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Needs work</p>
                       <ul className="text-sm list-disc pl-5 space-y-1">
                         {(overview?.weeklyPerformanceReport.whatToImprove || []).slice(0, 3).map((item) => (
                           <li key={item}>{item}</li>
@@ -446,7 +446,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">What to do next</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Next moves</p>
                     <ul className="text-sm list-disc pl-5 space-y-1">
                       {(overview?.weeklyPerformanceReport.whatToDoNext || []).slice(0, 3).map((item) => (
                         <li key={item}>{item}</li>
@@ -461,7 +461,7 @@ export default function Home() {
           <div className="grid gap-4 xl:grid-cols-2">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Approvals needed</CardTitle>
+                <CardTitle className="text-base">Needs attention</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
                 {overviewLoading ? (
@@ -507,7 +507,7 @@ export default function Home() {
                     ))}
 
                     {!overview?.pendingReplies.length && !overview?.pendingContent.length && (
-                      <p className="text-sm text-muted-foreground">No approvals waiting. Pulse queue is clear.</p>
+                      <p className="text-sm text-muted-foreground">Nothing needs attention right now.</p>
                     )}
                   </>
                 )}
@@ -516,7 +516,7 @@ export default function Home() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">What&apos;s Working</CardTitle>
+                <CardTitle className="text-base">What&apos;s working</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 pt-0">
                 {(overview?.performanceInsights || []).slice(0, 5).map((insight) => (
@@ -527,40 +527,40 @@ export default function Home() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Reputation snapshot</CardTitle>
+                <CardTitle className="text-base">Review queue</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
-                <SummaryLine label="Top positive theme" value={overview?.positiveTheme || 'Not enough review text yet'} tone="good" />
-                <SummaryLine label="Recurring negative theme" value={overview?.negativeTheme || 'No repeating complaints detected'} tone={overview?.negativeTheme ? 'warning' : 'neutral'} />
-                <SummaryLine label="Urgent reviews needing reply" value={`${overview?.urgentReviewsCount ?? 0} open`} tone={(overview?.urgentReviewsCount ?? 0) > 0 ? 'warning' : 'neutral'} />
+                <SummaryLine label="Top signal" value={overview?.positiveTheme || 'No clear signal yet'} tone="good" />
+                <SummaryLine label="Recurring issue" value={overview?.negativeTheme || 'No repeating issue detected'} tone={overview?.negativeTheme ? 'warning' : 'neutral'} />
+                <SummaryLine label="Urgent replies" value={`${overview?.urgentReviewsCount ?? 0} open`} tone={(overview?.urgentReviewsCount ?? 0) > 0 ? 'warning' : 'neutral'} />
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/reputation/reviews?tab=respond">Open review queue</Link>
+                  <Link to="/reputation/reviews?tab=respond">View queue</Link>
                 </Button>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Content coverage</CardTitle>
+                <CardTitle className="text-base">Days covered</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
-                <p className="text-lg font-semibold">You have {overview?.coveredDaysCount ?? 0} days covered</p>
+                <p className="text-lg font-semibold">{overview?.coveredDaysCount ?? 0} days covered</p>
                 <div className="flex flex-wrap gap-2">
-                  {(overview?.coverageGaps.length ? overview.coverageGaps : ['Coverage looks healthy']).map((gap) => (
+                  {(overview?.coverageGaps.length ? overview.coverageGaps : ['No action needed']).map((gap) => (
                     <Badge key={gap} variant="outline" className="text-xs">
                       {gap}
                     </Badge>
                   ))}
                 </div>
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/content/calendar">Fill gaps</Link>
+                  <Link to="/content/calendar">Review</Link>
                 </Button>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Content Health</CardTitle>
+                <CardTitle className="text-base">Content health</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
                 {contentHealthLoading ? (
@@ -569,8 +569,8 @@ export default function Home() {
                   <>
                     <p className="text-sm font-medium">
                       {(contentHealth?.unusedCount ?? 0) > 0
-                        ? `You have ${contentHealth?.unusedCount ?? 0} unused photos`
-                        : 'You're running low on content'}
+                        ? `${contentHealth?.unusedCount ?? 0} unused photos`
+                        : 'Coverage is running low'}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {contentHealth?.lastUploadAt
@@ -580,7 +580,7 @@ export default function Home() {
                   </>
                 )}
                 <Button variant="outline" size="sm" asChild>
-                  <Link to="/content/feed">Add Photos</Link>
+                  <Link to="/content/feed">Add photos</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -593,7 +593,7 @@ export default function Home() {
                 {opportunitiesLoading ? (
                   <Skeleton className="h-24 rounded-lg" />
                 ) : marketOpportunities.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No immediate opportunities detected.</p>
+                  <p className="text-sm text-muted-foreground">No new opportunities yet.</p>
                 ) : (
                   marketOpportunities.slice(0, 5).map((item) => (
                     <div key={`${item.title}-${item.suggestedAction}`} className="rounded-md border border-border/60 p-2">
@@ -601,7 +601,7 @@ export default function Home() {
                       <p className="text-xs text-muted-foreground">{item.description}</p>
                       <p className="text-xs mt-1">Action: {item.suggestedAction}</p>
                       <div className="mt-2 rounded-md bg-muted/30 px-2 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why this was created</p>
                         <ul className="mt-1 list-disc pl-4 space-y-0.5">
                           {generateExplanation({
                             content_gap: overview?.coverageGaps ?? [],
@@ -617,10 +617,10 @@ export default function Home() {
                 )}
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" asChild>
-                    <Link to="/home?tab=opportunities">View more</Link>
+                    <Link to="/home?tab=opportunities">View queue</Link>
                   </Button>
                   <Button size="sm" asChild>
-                    <Link to="/plans">Generate Campaign</Link>
+                    <Link to="/plans">Generate campaign</Link>
                   </Button>
                 </div>
               </CardContent>
@@ -631,17 +631,17 @@ export default function Home() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-accent" />
-                Pulse engine
+                Recent activity
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               {!overview?.lastAutopilotRun ? (
-                <p className="text-sm text-muted-foreground">Pulse is active. Run history will appear after the next automation cycle.</p>
+                <p className="text-sm text-muted-foreground">No activity yet.</p>
               ) : (
                 <div className="space-y-1 text-sm">
-                  <p className="font-medium">Pulse is active</p>
-                  <p>Last run: {formatLastRun(overview.lastAutopilotRun.createdAt)} ({overview.lastAutopilotRun.status.replace('_', ' ')})</p>
-                  <p className="text-muted-foreground">Generated {overview.lastAutopilotRun.generatedPosts} posts and {overview.lastAutopilotRun.generatedReplies} replies.</p>
+                  <p className="font-medium">Run complete</p>
+                  <p>Last run {formatLastRun(overview.lastAutopilotRun.createdAt)} · {overview.lastAutopilotRun.status.replace('_', ' ')}</p>
+                  <p className="text-muted-foreground">{overview.lastAutopilotRun.generatedPosts} posts prepared · {overview.lastAutopilotRun.generatedReplies} replies drafted</p>
                 </div>
               )}
             </CardContent>
@@ -682,7 +682,7 @@ function ApprovalRow({
       <p className="text-sm font-medium">{title}</p>
       <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{subtitle}</p>
       <div className="mt-2 rounded-md bg-muted/30 px-2 py-1.5">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why this was created</p>
         <ul className="mt-1 list-disc pl-4 space-y-0.5">
           {explanation.map((point) => (
             <li key={point} className="text-xs text-muted-foreground">{point}</li>
@@ -697,7 +697,7 @@ function ApprovalRow({
           <Link to={editTo}><Pencil className="w-3 h-3" /> Edit</Link>
         </Button>
         <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-destructive" onClick={onReject}>
-          <XCircle className="w-3 h-3" /> Reject
+          <XCircle className="w-3 h-3" /> Dismiss
         </Button>
       </div>
     </div>
@@ -747,9 +747,9 @@ function buildCoverageSummary(scheduledItems: Array<{ scheduled_for: string | nu
   }
 
   const gaps: string[] = [];
-  if (!coveredDays.has(5)) gaps.push('No Friday push');
+  if (!coveredDays.has(5)) gaps.push('No Friday visibility');
   if (!coveredDays.has(6) && !coveredDays.has(0)) gaps.push('No weekend visibility');
-  if (![1, 2, 3, 4].some((day) => coveredDays.has(day))) gaps.push('No lunch-week visibility');
+  if (![1, 2, 3, 4].some((day) => coveredDays.has(day))) gaps.push('No lunch visibility this week');
 
   return {
     coveredDaysCount: coveredDays.size,
