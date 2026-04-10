@@ -14,19 +14,20 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navItems = [
-  { label: 'Dashboard', path: '/partner', icon: LayoutDashboard },
-  { label: 'Offers', path: '/partner/offers', icon: Gift },
-  { label: 'Links', path: '/partner/links', icon: Link2 },
-  { label: 'Referrals', path: '/partner/referrals', icon: BarChart3 },
-  { label: 'Earnings', path: '/partner/earnings', icon: Wallet },
-  { label: 'Profile', path: '/partner/profile', icon: User },
-];
 
 export function PartnerLayout({ children }: { children: ReactNode }) {
-  const { hasAccess, isLoading, referrer } = usePartnerAccess();
+  const { hasAccess, enabled, isLoading, referrer, canViewMultipleVenues } = usePartnerAccess();
   const { user, loading: authLoading, signOut } = useAuth();
   const location = useLocation();
+
+  const navItems = [
+    { label: 'Dashboard', path: '/partner', icon: LayoutDashboard },
+    { label: 'Offers', path: '/partner/offers', icon: Gift },
+    { label: 'Links', path: '/partner/links', icon: Link2 },
+    { label: 'Bookings', path: '/partner/referrals', icon: BarChart3 },
+    { label: 'Earnings', path: '/partner/earnings', icon: Wallet },
+    ...(canViewMultipleVenues ? [{ label: 'Profile', path: '/partner/profile', icon: User }] : []),
+  ];
 
   if (authLoading || isLoading) {
     return (
@@ -45,9 +46,11 @@ export function PartnerLayout({ children }: { children: ReactNode }) {
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
             <Link2 className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground mb-2">Invite Required</h1>
+          <h1 className="text-xl font-semibold text-foreground mb-2">Partner Access Required</h1>
           <p className="text-muted-foreground mb-6">
-            The Pulse Partner Portal is available by invitation only. If you have been invited, please check you are signed in with the correct email.
+            {enabled
+              ? 'Your account does not currently have access to the Partner Portal. Please contact support or your venue team.'
+              : 'The Partner Portal is not available right now. Please check back later.'}
           </p>
           <Button variant="outline" onClick={() => signOut()}>
             <LogOut className="w-4 h-4 mr-2" /> Sign Out
