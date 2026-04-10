@@ -183,6 +183,64 @@ export type Database = {
         }
         Relationships: []
       }
+      commissions: {
+        Row: {
+          bill_amount: number
+          commission_rate: number
+          commission_value: number
+          created_at: string
+          id: string
+          partner_id: string
+          referral_id: string
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          bill_amount?: number
+          commission_rate?: number
+          commission_value?: number
+          created_at?: string
+          id?: string
+          partner_id: string
+          referral_id: string
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          bill_amount?: number
+          commission_rate?: number
+          commission_value?: number
+          created_at?: string
+          id?: string
+          partner_id?: string
+          referral_id?: string
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commissions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_referral_id_fkey"
+            columns: ["referral_id"]
+            isOneToOne: false
+            referencedRelation: "referrals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       autopilot_runs: {
         Row: {
           completed_at: string | null
@@ -1376,6 +1434,90 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "overlay_templates_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_commissions: {
+        Row: {
+          commission_id: string
+          created_at: string
+          id: string
+          payout_id: string
+        }
+        Insert: {
+          commission_id: string
+          created_at?: string
+          id?: string
+          payout_id: string
+        }
+        Update: {
+          commission_id?: string
+          created_at?: string
+          id?: string
+          payout_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_commissions_commission_id_fkey"
+            columns: ["commission_id"]
+            isOneToOne: false
+            referencedRelation: "commissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_commissions_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "payouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payouts: {
+        Row: {
+          created_at: string
+          id: string
+          partner_id: string
+          payout_method: string | null
+          reference_note: string | null
+          status: string
+          total_amount: number
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          partner_id: string
+          payout_method?: string | null
+          reference_note?: string | null
+          status?: string
+          total_amount?: number
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          partner_id?: string
+          payout_method?: string | null
+          reference_note?: string | null
+          status?: string
+          total_amount?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payouts_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payouts_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -16,8 +17,10 @@ import { Search, Link2, CalendarCheck, DollarSign, ShieldCheck, CheckCircle2 } f
 import { toast } from 'sonner';
 
 const editableStatuses = ['created', 'submitted', 'clicked', 'booking_confirmed', 'visited', 'bill_entered', 'verified', 'paid'] as const;
+const commissionStatuses = ['pending', 'approved', 'payable', 'paid'] as const;
 
 type UnifiedStatus = typeof editableStatuses[number];
+type CommissionStatus = typeof commissionStatuses[number];
 
 export default function ReferralsPage() {
   return (
@@ -50,6 +53,21 @@ function ReferralsContent() {
     enabled: !!currentVenue,
   });
 
+  const { data: commissions } = useQuery({
+    queryKey: ['venue-commissions', currentVenue?.id],
+    queryFn: async () => {
+      if (!currentVenue) return [];
+      const { data, error } = await supabase
+        .from('commissions')
+        .select('*, referrers(full_name), referrals(guest_name, booking_date)')
+        .eq('venue_id', currentVenue.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!currentVenue,
+  });
+
   const { data: stats } = useQuery({
     queryKey: ['unified-referral-stats', currentVenue?.id],
     queryFn: async () => {
@@ -57,9 +75,9 @@ function ReferralsContent() {
       const [total, booked, verified] = await Promise.all([
         supabase.from('referrals').select('*', { count: 'exact', head: true }).eq('venue_id', currentVenue.id),
         supabase.from('referrals').select('*', { count: 'exact', head: true }).eq('venue_id', currentVenue.id).in('status', ['booking_confirmed', 'visited', 'bill_entered', 'verified', 'paid']),
-        supabase.from('referrals').select('commission').eq('venue_id', currentVenue.id).in('status', ['verified', 'paid']),
+        supabase.from('commissions').select('commission_value').eq('venue_id', currentVenue.id).in('status', ['approved', 'payable', 'paid']),
       ]);
-      const verifiedCommission = (verified.data ?? []).reduce((sum, row: any) => sum + (Number(row.commission) || 0), 0);
+      const verifiedCommission = (verified.data ?? []).reduce((sum, row: any) => sum + (Number(row.commission_value) || 0), 0);
       return { total: total.count ?? 0, booked: booked.count ?? 0, verifiedCommission };
     },
     enabled: !!currentVenue,
@@ -81,7 +99,28 @@ function ReferralsContent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['unified-referrals'] });
       qc.invalidateQueries({ queryKey: ['unified-referral-stats'] });
+      qc.invalidateQueries({ queryKey: ['venue-commissions'] });
       toast.success('Referral status updated');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateCommissionStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: CommissionStatus }) => {
+      const { error } = await supabase.from('commissions').update({ status }).eq('id', id);
+      if (error) throw error;
+      if (currentVenue) {
+        await supabase.from('referral_audit_events').insert({
+          venue_id: currentVenue.id,
+          actor_user_id: user?.id,
+          event_type: 'commission_status_updated',
+          event_payload: { commission_id: id, status },
+        } as any);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['venue-commissions'] });
+      toast.success('Commission updated');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -96,6 +135,24 @@ function ReferralsContent() {
     return partner.includes(s) || guest.includes(s) || code.includes(s);
   });
 
+  const earningsSummary = useMemo(() => {
+    const grouped = new Map<string, { partner: string; revenue: number; commission: number; statuses: Set<string> }>();
+    for (const c of commissions ?? []) {
+      const key = c.partner_id;
+      const existing = grouped.get(key) ?? {
+        partner: (c.referrers as any)?.full_name || 'Partner',
+        revenue: 0,
+        commission: 0,
+        statuses: new Set<string>(),
+      };
+      existing.revenue += Number(c.bill_amount) || 0;
+      existing.commission += Number(c.commission_value) || 0;
+      existing.statuses.add(c.status);
+      grouped.set(key, existing);
+    }
+    return Array.from(grouped.values());
+  }, [commissions]);
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <PageHeader
@@ -106,9 +163,95 @@ function ReferralsContent() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Referrals" value={stats?.total ?? 0} icon={Link2} />
         <StatCard label="Booking Confirmed+" value={stats?.booked ?? 0} icon={CalendarCheck} />
-        <StatCard label="Verified Commission" value={`£${(stats?.verifiedCommission ?? 0).toFixed(2)}`} icon={DollarSign} />
+        <StatCard label="Approved Commission" value={`£${(stats?.verifiedCommission ?? 0).toFixed(2)}`} icon={DollarSign} />
         <StatCard label="Unified Tracking" value="Active" icon={ShieldCheck} />
       </div>
+
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
+          <div className="p-4 border-b border-border">
+            <h3 className="font-semibold">Partner Earnings</h3>
+            <p className="text-xs text-muted-foreground mt-1">Clear payout progress by partner: pending → approved → payable → paid.</p>
+          </div>
+          {!earningsSummary.length ? (
+            <div className="p-6 text-sm text-muted-foreground">No partner earnings yet. Commissions appear after a referral is verified.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Partner</TableHead>
+                  <TableHead>Total Referred Revenue</TableHead>
+                  <TableHead>Total Commission</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {earningsSummary.map((item) => (
+                  <TableRow key={item.partner}>
+                    <TableCell className="font-medium">{item.partner}</TableCell>
+                    <TableCell>£{item.revenue.toFixed(2)}</TableCell>
+                    <TableCell>£{item.commission.toFixed(2)}</TableCell>
+                    <TableCell className="space-x-1">
+                      {Array.from(item.statuses).map((status) => (
+                        <Badge key={status} variant="outline" className="capitalize text-xs">{status}</Badge>
+                      ))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
+          <div className="p-4 border-b border-border">
+            <h3 className="font-semibold">Commission Queue</h3>
+            <p className="text-xs text-muted-foreground mt-1">Approve and prepare each earning before including it in a payout.</p>
+          </div>
+          {!commissions?.length ? (
+            <div className="p-6 text-sm text-muted-foreground">No commission entries yet.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Partner</TableHead>
+                  <TableHead>Booking</TableHead>
+                  <TableHead>Revenue</TableHead>
+                  <TableHead>Commission</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {commissions.map((c: any) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">{(c.referrers as any)?.full_name || 'Partner'}</TableCell>
+                    <TableCell>{(c.referrals as any)?.guest_name || 'Guest booking'}</TableCell>
+                    <TableCell>£{Number(c.bill_amount || 0).toFixed(2)}</TableCell>
+                    <TableCell>£{Number(c.commission_value || 0).toFixed(2)}</TableCell>
+                    <TableCell><Badge variant="secondary" className="capitalize text-xs">{c.status}</Badge></TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {c.status === 'pending' && (
+                          <Button size="sm" variant="outline" onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'approved' })}>Approve</Button>
+                        )}
+                        {c.status === 'approved' && (
+                          <Button size="sm" variant="outline" onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'payable' })}>Mark Payable</Button>
+                        )}
+                        {c.status === 'payable' && (
+                          <Button size="sm" variant="outline" onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'paid' })}>Mark Paid</Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-sm">

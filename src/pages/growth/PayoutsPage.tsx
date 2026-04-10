@@ -1,21 +1,20 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
-import { useReferralAccess } from '@/hooks/use-referral-access';
 import { ReferralGuard } from '@/components/referral/ReferralGuard';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Separator } from '@/components/ui/separator';
 import { EmptyState } from '@/components/ui/empty-state';
 import { toast } from 'sonner';
-import { Wallet, DollarSign, CheckCircle2, Download, CreditCard, Clock } from 'lucide-react';
+import { Wallet, CheckCircle2, DollarSign, Clock } from 'lucide-react';
 
 export default function PayoutsPage() {
   return (
@@ -28,17 +27,18 @@ export default function PayoutsPage() {
 function PayoutsContent() {
   const { currentVenue } = useVenue();
   const { user } = useAuth();
-  const { flags } = useReferralAccess();
   const qc = useQueryClient();
-  const [selectedBatch, setSelectedBatch] = useState<any>(null);
+  const [partnerId, setPartnerId] = useState<string>('');
+  const [payoutMethod, setPayoutMethod] = useState('Bank transfer');
+  const [referenceNote, setReferenceNote] = useState('');
 
-  const { data: batches, isLoading } = useQuery({
-    queryKey: ['payout-batches', currentVenue?.id],
+  const { data: payouts, isLoading } = useQuery({
+    queryKey: ['manual-payouts', currentVenue?.id],
     queryFn: async () => {
       if (!currentVenue) return [];
       const { data, error } = await supabase
-        .from('payout_batches')
-        .select('*')
+        .from('payouts')
+        .select('*, referrers(full_name)')
         .eq('venue_id', currentVenue.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -47,85 +47,169 @@ function PayoutsContent() {
     enabled: !!currentVenue,
   });
 
-  const { data: batchItems } = useQuery({
-    queryKey: ['payout-items', selectedBatch?.id],
+  const { data: payableCommissions } = useQuery({
+    queryKey: ['payable-commissions', currentVenue?.id],
     queryFn: async () => {
-      if (!selectedBatch) return [];
+      if (!currentVenue) return [];
       const { data, error } = await supabase
-        .from('payout_items')
-        .select('*, referrers(full_name)')
-        .eq('batch_id', selectedBatch.id)
-        .order('created_at', { ascending: false });
+        .from('commissions')
+        .select('id, partner_id, commission_value, referrers(full_name)')
+        .eq('venue_id', currentVenue.id)
+        .eq('status', 'payable');
       if (error) throw error;
-      return data ?? [];
+
+      const commissionIds = (data ?? []).map((item) => item.id);
+      if (!commissionIds.length) return data ?? [];
+
+      const { data: assigned, error: assignedError } = await supabase
+        .from('payout_commissions')
+        .select('commission_id')
+        .in('commission_id', commissionIds);
+      if (assignedError) throw assignedError;
+
+      const assignedIds = new Set((assigned ?? []).map((row) => row.commission_id));
+      return (data ?? []).filter((item) => !assignedIds.has(item.id));
     },
-    enabled: !!selectedBatch,
+    enabled: !!currentVenue,
   });
 
-  const stats = {
-    pending: batches?.filter((b: any) => ['draft', 'pending_approval'].includes(b.status)).length ?? 0,
-    approved: batches?.filter((b: any) => b.status === 'approved').length ?? 0,
-    totalOwed: batches?.filter((b: any) => !['paid', 'failed'].includes(b.status)).reduce((sum: number, b: any) => sum + (b.net_payout || 0), 0) ?? 0,
-  };
+  const partnerOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; amount: number }>();
+    for (const commission of payableCommissions ?? []) {
+      const entry = map.get(commission.partner_id) ?? {
+        id: commission.partner_id,
+        name: (commission.referrers as any)?.full_name || 'Partner',
+        amount: 0,
+      };
+      entry.amount += Number(commission.commission_value) || 0;
+      map.set(commission.partner_id, entry);
+    }
+    return Array.from(map.values());
+  }, [payableCommissions]);
 
-  const updateBatch = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const updates: any = { status };
-      if (status === 'approved') updates.approved_at = new Date().toISOString();
-      if (status === 'paid') updates.paid_at = new Date().toISOString();
-      const { error } = await supabase.from('payout_batches').update(updates).eq('id', id);
+  const createPayout = useMutation({
+    mutationFn: async () => {
+      if (!currentVenue || !partnerId) throw new Error('Select a partner first.');
+      const selected = (payableCommissions ?? []).filter((c) => c.partner_id === partnerId);
+      if (!selected.length) throw new Error('This partner has no payable commissions.');
+
+      const totalAmount = selected.reduce((sum, c) => sum + (Number(c.commission_value) || 0), 0);
+      const { data: payout, error } = await supabase
+        .from('payouts')
+        .insert({
+          venue_id: currentVenue.id,
+          partner_id: partnerId,
+          total_amount: totalAmount,
+          payout_method: payoutMethod,
+          reference_note: referenceNote || null,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+
+      const joinRows = selected.map((commission) => ({ payout_id: payout.id, commission_id: commission.id }));
+      const { error: joinError } = await supabase.from('payout_commissions').insert(joinRows);
+      if (joinError) throw joinError;
+
       await supabase.from('referral_audit_events').insert({
-        venue_id: currentVenue!.id,
+        venue_id: currentVenue.id,
         actor_user_id: user?.id,
-        event_type: status === 'approved' ? 'payout_batch_approved' : 'payout_paid',
-        event_payload: { batch_id: id, status },
+        event_type: 'manual_payout_created',
+        event_payload: { payout_id: payout.id, partner_id: partnerId, commission_count: selected.length },
       } as any);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['payout-batches'] });
-      toast.success('Batch updated');
+      setReferenceNote('');
+      qc.invalidateQueries({ queryKey: ['manual-payouts'] });
+      qc.invalidateQueries({ queryKey: ['payable-commissions'] });
+      toast.success('Payout batch created and commissions assigned');
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
+
+  const updatePayout = useMutation({
+    mutationFn: async ({ id, status, partner }: { id: string; status: 'sent' | 'confirmed'; partner: string }) => {
+      const { error } = await supabase.from('payouts').update({ status }).eq('id', id);
+      if (error) throw error;
+
+      if (status === 'confirmed') {
+        const { data: links, error: linkError } = await supabase.from('payout_commissions').select('commission_id').eq('payout_id', id);
+        if (linkError) throw linkError;
+
+        const commissionIds = (links ?? []).map((row) => row.commission_id);
+        if (commissionIds.length) {
+          const { error: commissionError } = await supabase.from('commissions').update({ status: 'paid' }).in('id', commissionIds);
+          if (commissionError) throw commissionError;
+        }
+      }
+
+      await supabase.from('referral_audit_events').insert({
+        venue_id: currentVenue!.id,
+        actor_user_id: user?.id,
+        event_type: 'manual_payout_status_updated',
+        event_payload: { payout_id: id, status, partner },
+      } as any);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['manual-payouts'] });
+      qc.invalidateQueries({ queryKey: ['payable-commissions'] });
+      qc.invalidateQueries({ queryKey: ['venue-commissions'] });
+      toast.success('Payout updated');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const stats = {
+    pending: payouts?.filter((p) => p.status === 'pending').length ?? 0,
+    sent: payouts?.filter((p) => p.status === 'sent').length ?? 0,
+    total: payouts?.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0) ?? 0,
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div>
-        <PageHeader title="Payouts" description="Review and approve partner payouts based on verified bookings." />
-      </div>
+      <PageHeader title="Payouts" description="Create manual payout batches, send them off-platform, and confirm when money lands." />
 
-      {/* Stripe Mode Banner */}
-      {!flags.stripeEnabled && (
-        <div className="p-4 rounded-lg border border-amber-500/20 bg-amber-500/5 flex items-center gap-3">
-          <CreditCard className="w-5 h-5 text-amber-500 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-amber-500">Manual Payout Mode</p>
-            <p className="text-xs text-muted-foreground">
-              Stripe Connect is not configured. Payout batches are prepared in Pulse and processed manually.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4"><Clock className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold">{stats.pending}</p><p className="text-xs text-muted-foreground mt-1">Pending Batches</p></CardContent></Card>
-        <Card><CardContent className="p-4"><CheckCircle2 className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold">{stats.approved}</p><p className="text-xs text-muted-foreground mt-1">Approved This Month</p></CardContent></Card>
-        <Card><CardContent className="p-4"><DollarSign className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold">£{stats.totalOwed.toFixed(0)}</p><p className="text-xs text-muted-foreground mt-1">Total Commission Owed</p></CardContent></Card>
-        <Card><CardContent className="p-4"><Wallet className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold text-muted-foreground">{flags.stripeEnabled ? 'Stripe' : 'Manual'}</p><p className="text-xs text-muted-foreground mt-1">Payout Method</p></CardContent></Card>
+        <Card><CardContent className="p-4"><Clock className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold">{stats.pending}</p><p className="text-xs text-muted-foreground mt-1">Pending Payouts</p></CardContent></Card>
+        <Card><CardContent className="p-4"><CheckCircle2 className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold">{stats.sent}</p><p className="text-xs text-muted-foreground mt-1">Sent, Awaiting Confirmation</p></CardContent></Card>
+        <Card><CardContent className="p-4"><DollarSign className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold">£{stats.total.toFixed(2)}</p><p className="text-xs text-muted-foreground mt-1">Total Payout Amount</p></CardContent></Card>
+        <Card><CardContent className="p-4"><Wallet className="w-5 h-5 text-muted-foreground mb-2" /><p className="text-2xl font-bold text-muted-foreground">Manual</p><p className="text-xs text-muted-foreground mt-1">Payout Method</p></CardContent></Card>
       </div>
 
-      {/* Batches */}
+      <Card>
+        <CardContent className="space-y-4 p-4">
+          <div>
+            <h3 className="font-semibold">Create Payout Batch</h3>
+            <p className="text-xs text-muted-foreground mt-1">Pick a partner with payable commissions, then create a batch you can send manually.</p>
+          </div>
+          <div className="grid md:grid-cols-4 gap-3">
+            <Select value={partnerId} onValueChange={setPartnerId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select partner" />
+              </SelectTrigger>
+              <SelectContent>
+                {partnerOptions.map((partner) => (
+                  <SelectItem key={partner.id} value={partner.id}>{partner.name} • £{partner.amount.toFixed(2)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input value={payoutMethod} onChange={(e) => setPayoutMethod(e.target.value)} placeholder="Payout method" />
+            <Input value={referenceNote} onChange={(e) => setReferenceNote(e.target.value)} placeholder="Reference note (optional)" />
+            <Button onClick={() => createPayout.mutate()} disabled={!partnerId || createPayout.isPending}>Create Batch</Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground text-sm">Loading payouts…</div>
-      ) : !batches?.length ? (
+      ) : !payouts?.length ? (
         <Card className="border-dashed">
           <CardContent className="p-0">
             <EmptyState
               icon={Wallet}
               title="No payout batches yet"
-              description="Verified commissions will be grouped into payout batches automatically."
+              description="Mark commissions as payable, then create your first manual payout batch."
             />
           </CardContent>
         </Card>
@@ -135,37 +219,32 @@ function PayoutsContent() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Month</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Partner</TableHead>
+                  <TableHead>Total Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Reference</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Total Commission</TableHead>
-                  <TableHead>Pulse Fee</TableHead>
-                  <TableHead>Net Payout</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {batches.map((b: any) => (
-                  <TableRow key={b.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedBatch(b)}>
-                    <TableCell className="font-medium">{b.batch_month}</TableCell>
-                    <TableCell><PayoutStatusBadge status={b.status} /></TableCell>
-                    <TableCell>£{(b.total_commission || 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-muted-foreground">£{(b.pulse_fee || 0).toFixed(2)}</TableCell>
-                    <TableCell className="font-medium">£{(b.net_payout || 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        {b.status === 'pending_approval' && (
-                          <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => updateBatch.mutate({ id: b.id, status: 'approved' })}>
-                            <CheckCircle2 className="w-3 h-3" />Approve
-                          </Button>
+                {payouts.map((p: any) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-medium">{(p.referrers as any)?.full_name || 'Partner'}</TableCell>
+                    <TableCell>£{Number(p.total_amount || 0).toFixed(2)}</TableCell>
+                    <TableCell>{p.payout_method || '—'}</TableCell>
+                    <TableCell>{p.reference_note || '—'}</TableCell>
+                    <TableCell><PayoutStatusBadge status={p.status} /></TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {p.status === 'pending' && (
+                          <Button size="sm" variant="outline" onClick={() => updatePayout.mutate({ id: p.id, status: 'sent', partner: (p.referrers as any)?.full_name || 'Partner' })}>Mark Sent</Button>
                         )}
-                        {b.status === 'approved' && !flags.stripeEnabled && (
-                          <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => updateBatch.mutate({ id: b.id, status: 'paid' })}>
-                            <DollarSign className="w-3 h-3" />Mark Paid
-                          </Button>
+                        {p.status === 'sent' && (
+                          <Button size="sm" variant="outline" onClick={() => updatePayout.mutate({ id: p.id, status: 'confirmed', partner: (p.referrers as any)?.full_name || 'Partner' })}>Mark Confirmed</Button>
                         )}
-                        <Button variant="ghost" size="sm" className="text-xs gap-1">
-                          <Download className="w-3 h-3" />CSV
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -175,62 +254,15 @@ function PayoutsContent() {
           </CardContent>
         </Card>
       )}
-
-      {/* Batch Detail Sheet */}
-      <Sheet open={!!selectedBatch} onOpenChange={() => setSelectedBatch(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
-          {selectedBatch && (
-            <>
-              <SheetHeader>
-                <SheetTitle>Payout Batch — {selectedBatch.batch_month}</SheetTitle>
-              </SheetHeader>
-              <div className="space-y-6 mt-6">
-                <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-muted/30 border">
-                  <div><p className="text-[10px] text-muted-foreground uppercase">Total Commission</p><p className="text-lg font-bold">£{(selectedBatch.total_commission || 0).toFixed(2)}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground uppercase">Pulse Fee</p><p className="text-lg font-bold text-muted-foreground">£{(selectedBatch.pulse_fee || 0).toFixed(2)}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground uppercase">Net Payout</p><p className="text-lg font-bold text-accent">£{(selectedBatch.net_payout || 0).toFixed(2)}</p></div>
-                  <div><p className="text-[10px] text-muted-foreground uppercase">Status</p><PayoutStatusBadge status={selectedBatch.status} /></div>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <h4 className="text-sm font-medium mb-3">Payout Items</h4>
-                  {!batchItems?.length ? (
-                    <p className="text-sm text-muted-foreground">No items in this batch.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {batchItems.map((item: any) => (
-                        <div key={item.id} className="p-3 rounded-lg border flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">{(item.referrers as any)?.full_name || 'Partner'}</p>
-                            <p className="text-xs text-muted-foreground">Commission: £{item.commission_amount} • Fee: £{item.pulse_fee}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-bold">£{item.net_amount}</p>
-                            <PayoutStatusBadge status={item.status} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
     </motion.div>
   );
 }
 
 function PayoutStatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    draft: 'bg-muted text-muted-foreground',
-    pending_approval: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-    approved: 'bg-accent/10 text-accent border-accent/20',
-    paid: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-    failed: 'bg-destructive/10 text-destructive border-destructive/20',
+    pending: 'bg-muted text-muted-foreground',
+    sent: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    confirmed: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
   };
-  return <Badge variant="outline" className={`text-xs ${map[status] || ''}`}>{status.replace('_', ' ')}</Badge>;
+  return <Badge variant="outline" className={`text-xs capitalize ${map[status] || ''}`}>{status}</Badge>;
 }
