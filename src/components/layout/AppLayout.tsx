@@ -54,8 +54,8 @@ const workflowNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
   { name: 'Content Feed', href: '/content/feed', icon: Images },
-  { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
   { name: 'Content', href: '/content/library', icon: FolderOpen },
+  { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
 ];
 
 const setupNavigation: NavItem[] = [
