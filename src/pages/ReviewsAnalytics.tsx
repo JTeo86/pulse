@@ -1431,93 +1431,136 @@ function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTi
             </div>
           )}
 
-          {tasks.map(task => (
-            <Card key={task.id}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1.5 flex-1 min-w-0">
+          {tasks.map(task => {
+            const isPending = filter === 'pending';
+            const statusLabel = isPending ? 'Needs reply' : filter === 'responded' ? 'Completed' : 'Ignored';
+            const statusStyle = isPending
+              ? 'border-yellow-500/30 text-yellow-700 bg-yellow-500/10'
+              : filter === 'responded'
+                ? 'border-emerald-500/30 text-emerald-700 bg-emerald-500/10'
+                : 'border-muted-foreground/30 text-muted-foreground bg-muted/50';
+
+            return (
+              <Card key={task.id}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <SourceBadge source={task.source} />
                       {renderStars(task.rating)}
-                      <span className="font-medium text-sm">{task.author_name || 'Anonymous'}</span>
+                      <SourceBadge source={task.source} />
+                      <Badge variant="outline" className={`text-[10px] ${statusStyle}`}>
+                        {statusLabel}
+                      </Badge>
                       {task.ai_priority && (
                         <Badge variant="outline" className={`text-[10px] ${priorityColor[task.ai_priority] || ''}`}>
                           {task.ai_priority}
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-3">{task.review_text || 'No text'}</p>
-                    {task.ai_reason && (
-                      <p className="text-xs text-yellow-600 bg-yellow-500/5 rounded px-2 py-1">
-                        <Bot className="w-3 h-3 inline mr-1" />
-                        {task.ai_reason}
-                      </p>
-                    )}
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {task.review_text || 'No review text available.'}
+                    </p>
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatReviewDate(task.review_date, task.created_at)}
-                  </span>
-                </div>
 
-                {task.final_response && (
-                  <div className="bg-accent/5 border border-accent/20 rounded-lg p-3">
-                    <p className="text-xs font-medium text-accent mb-1">Approved response:</p>
-                    <p className="text-sm">{task.final_response}</p>
-                  </div>
-                )}
-
-                {filter === 'pending' && (
                   <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" onClick={() => setWriterTask(task)}>
-                      <Edit2 className="w-3 h-3 mr-1" /> Write response
-                    </Button>
-                    {task.draft_response && (
-                      <Button size="sm" variant="outline" onClick={() => approveDraft(task)}>
-                        <ThumbsUp className="w-3 h-3 mr-1" /> Approve draft
+                    {isPending && (
+                      <>
+                        <Button size="sm" onClick={() => setWriterTask(task)}>
+                          <Edit2 className="w-3 h-3 mr-1" /> Write response
+                        </Button>
+                        {task.draft_response && (
+                          <Button size="sm" variant="outline" onClick={() => approveDraft(task)}>
+                            <ThumbsUp className="w-3 h-3 mr-1" /> Approve draft
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => updateStatus(task.id, 'ignored')}>
+                          <ThumbsDown className="w-3 h-3 mr-1" /> Ignore
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'archived')}>
+                          <Archive className="w-3 h-3 mr-1" /> Archive
+                        </Button>
+                      </>
+                    )}
+
+                    {filter === 'responded' && task.final_response && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => {
+                          navigator.clipboard.writeText(task.final_response!);
+                          toast({ title: 'Copied' });
+                        }}>
+                          <Copy className="w-3 h-3 mr-1" /> Copy
+                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button size="sm" variant="outline" disabled className="opacity-50">
+                                  <Send className="w-3 h-3 mr-1" /> Post
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Auto-posting coming soon.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </>
+                    )}
+
+                    {filter === 'ignored' && (
+                      <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'archived')}>
+                        <Archive className="w-3 h-3 mr-1" /> Archive
                       </Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => updateStatus(task.id, 'ignored')}>
-                      <ThumbsDown className="w-3 h-3 mr-1" /> Ignore
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'archived')}>
-                      <Archive className="w-3 h-3 mr-1" /> Archive
-                    </Button>
                   </div>
-                )}
 
-                {filter === 'responded' && task.final_response && (
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => {
-                      navigator.clipboard.writeText(task.final_response!);
-                      toast({ title: 'Copied' });
-                    }}>
-                      <Copy className="w-3 h-3 mr-1" /> Copy
-                    </Button>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button size="sm" variant="outline" disabled className="opacity-50">
-                              <Send className="w-3 h-3 mr-1" /> Post
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-xs">Auto-posting coming soon.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                )}
+                  <Collapsible defaultOpen={isPending}>
+                    <div className="border rounded-lg">
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" className="w-full justify-between px-3 rounded-b-none">
+                          <span className="text-xs font-medium">Full review + AI reply</span>
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3 p-3 pt-0">
+                        <p className="text-sm whitespace-pre-wrap">{task.review_text || 'No review text available.'}</p>
+                        {(task.draft_response || task.final_response) && (
+                          <div className="rounded-md border bg-accent/5 p-2.5">
+                            <p className="text-xs font-medium mb-1">{isPending ? 'AI suggested reply' : 'Reply'}</p>
+                            <p className="text-sm whitespace-pre-wrap">{task.draft_response || task.final_response}</p>
+                          </div>
+                        )}
+                        {isPending && !task.draft_response && (
+                          <p className="text-xs text-muted-foreground">No AI draft yet. Click “Write response” to generate one.</p>
+                        )}
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
 
-                {filter === 'ignored' && (
-                  <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'archived')}>
-                    <Archive className="w-3 h-3 mr-1" /> Archive
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  <Collapsible>
+                    <div className="border rounded-lg">
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" className="w-full justify-between px-3">
+                          <span className="text-xs font-medium">Details</span>
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-2 px-3 pb-3">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{task.author_name || 'Anonymous'}</span> · {formatReviewDate(task.review_date, task.created_at)}
+                        </p>
+                        {task.ai_reason && (
+                          <p className="text-xs text-yellow-700 bg-yellow-500/5 rounded px-2 py-1">
+                            <Bot className="w-3 h-3 inline mr-1" />
+                            {task.ai_reason}
+                          </p>
+                        )}
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
