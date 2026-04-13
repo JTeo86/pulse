@@ -30,6 +30,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
 type MemberRole = 'staff' | 'manager';
 
@@ -98,9 +99,7 @@ const inviteSchema = z.object({
 type InviteFormData = z.infer<typeof inviteSchema>;
 
 function isMissingVenueEntitlementsError(error: unknown): boolean {
-  const message = (error as { message?: string } | null)?.message?.toLowerCase() ?? '';
-  const code = (error as { code?: string } | null)?.code ?? '';
-  return code === '42P01' || code === 'PGRST205' || message.includes('venue_entitlements') || message.includes('does not exist');
+  return isMissingBillingSchemaError(error);
 }
 
 function canResend(invite: VenueInvite): boolean {
@@ -133,6 +132,7 @@ export default function TeamPage() {
   const [processing, setProcessing] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [seatLimit, setSeatLimit] = useState(1);
+  const [missingEntitlementsSchema, setMissingEntitlementsSchema] = useState(false);
 
   const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm<InviteFormData>({
     resolver: zodResolver(inviteSchema),
@@ -159,6 +159,8 @@ export default function TeamPage() {
       if (invitesRes.error) throw invitesRes.error;
       if (entitlementsRes.error && !isMissingVenueEntitlementsError(entitlementsRes.error)) throw entitlementsRes.error;
 
+      setMissingEntitlementsSchema(Boolean(entitlementsRes.error && isMissingVenueEntitlementsError(entitlementsRes.error)));
+
       const profileMap = new Map<string, UserProfile>();
       (profilesRes.data || []).forEach((p: UserProfile) => profileMap.set(p.user_id, p));
 
@@ -173,6 +175,7 @@ export default function TeamPage() {
     } catch (error: any) {
       if (isMissingVenueEntitlementsError(error)) {
         setSeatLimit(1);
+        setMissingEntitlementsSchema(true);
       } else {
         toast({ variant: 'destructive', title: 'Error loading team', description: error.message });
       }
@@ -406,6 +409,12 @@ export default function TeamPage() {
       {isSeatLimitReached && (
         <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
           Seat limit reached ({seatsUsed} of {seatLimit}). {isOwner ? 'Upgrade your plan in Billing to add more seats.' : 'Ask your venue owner to upgrade the billing tier.'}
+        </div>
+      )}
+      {missingEntitlementsSchema && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
+          Team entitlement limits are unavailable because billing schema is not yet deployed in this environment.
+          Seat limits are temporarily defaulting to 1 until migration <code>20260410220000_billing_subscriptions_entitlements.sql</code> is applied.
         </div>
       )}
 

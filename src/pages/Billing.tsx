@@ -9,18 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-
-function isMissingBillingSchemaError(error: unknown): boolean {
-  const message = (error as { message?: string } | null)?.message?.toLowerCase() ?? '';
-  const code = (error as { code?: string } | null)?.code ?? '';
-  return code === '42P01' || code === 'PGRST205' || message.includes('does not exist') || message.includes('could not find the table');
-}
+import { isFunctionNotDeployedError, isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
 export default function BillingPage() {
   const { currentVenue, isOwner } = useVenue();
   const { toast } = useToast();
 
-  const { data, refetch, error } = useQuery({
+  const { data, refetch } = useQuery({
     queryKey: ['billing-page', currentVenue?.id],
     enabled: !!currentVenue,
     queryFn: async () => {
@@ -35,17 +30,19 @@ export default function BillingPage() {
         supabase.from('venue_members').select('id, user_id').eq('venue_id', venueId),
         supabase.from('venue_invites').select('id').eq('venue_id', venueId).is('accepted_at', null),
       ]);
-      if (tiersRes.error) throw tiersRes.error;
-      if (subRes.error) throw subRes.error;
-      if (entitlementRes.error) throw entitlementRes.error;
+      const schemaMissing = [tiersRes.error, subRes.error, entitlementRes.error, walletRes.error]
+        .some((err) => err && isMissingBillingSchemaError(err));
+
       if (usageRes.error) throw usageRes.error;
-      if (walletRes.error && !isMissingBillingSchemaError(walletRes.error)) throw walletRes.error;
       if (membersRes.error) throw membersRes.error;
       if (invitesRes.error) throw invitesRes.error;
+      if (walletRes.error && !isMissingBillingSchemaError(walletRes.error)) throw walletRes.error;
+
       return {
-        tiers: tiersRes.data ?? [],
-        sub: subRes.data,
-        entitlement: entitlementRes.data,
+        schemaMissing,
+        tiers: schemaMissing ? [] : (tiersRes.data ?? []),
+        sub: schemaMissing ? null : subRes.data,
+        entitlement: schemaMissing ? null : entitlementRes.data,
         usage: usageRes.data,
         wallet: walletRes.data,
         memberCount: membersRes.data?.length ?? 0,
@@ -63,7 +60,7 @@ export default function BillingPage() {
   const handleCheckout = async (tierId: string) => {
     if (!currentVenue) return;
     const { data, error } = await supabase.functions.invoke('create-checkout-session', { body: { venue_id: currentVenue.id, subscription_tier_id: tierId } });
-    if (error?.message?.toLowerCase().includes('failed to send a request')) {
+    if (isFunctionNotDeployedError(error)) {
       return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Checkout service is not deployed yet in this environment.' });
     }
     if (error) return toast({ variant: 'destructive', title: 'Checkout failed', description: error.message });
@@ -73,7 +70,7 @@ export default function BillingPage() {
   const handleTierChange = async (tierId: string) => {
     if (!currentVenue) return;
     const { error } = await supabase.functions.invoke('change-subscription-tier', { body: { venue_id: currentVenue.id, target_tier_id: tierId } });
-    if (error?.message?.toLowerCase().includes('failed to send a request')) {
+    if (isFunctionNotDeployedError(error)) {
       return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Plan change service is not deployed yet in this environment.' });
     }
     if (error) {
@@ -87,7 +84,7 @@ export default function BillingPage() {
   const openPortal = async () => {
     if (!currentVenue) return;
     const { data, error } = await supabase.functions.invoke('create-customer-portal-session', { body: { venue_id: currentVenue.id } });
-    if (error?.message?.toLowerCase().includes('failed to send a request')) {
+    if (isFunctionNotDeployedError(error)) {
       return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Customer portal service is not deployed yet in this environment.' });
     }
     if (error) return toast({ variant: 'destructive', title: 'Unable to open billing portal', description: error.message });
@@ -109,7 +106,7 @@ export default function BillingPage() {
   }
 
   const currentTierId = data?.sub?.subscription_tier_id;
-  const missingSchema = isMissingBillingSchemaError(error);
+  const missingSchema = Boolean(data?.schemaMissing);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">

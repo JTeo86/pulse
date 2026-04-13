@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { isFunctionNotDeployedError, isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
 export default function SubscriptionTiersTab() {
   const queryClient = useQueryClient();
@@ -13,17 +14,24 @@ export default function SubscriptionTiersTab() {
     slug: '', name: '', stripe_price_id_monthly: '', monthly_image_quota: '0', monthly_storage_mb: '0', max_users_per_venue: '1', description: '',
   });
 
-  const { data: tiers, error, isError } = useQuery({
+  const { data, error, isError } = useQuery({
     queryKey: ['subscription-tiers-admin'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('subscription_tiers').select('*').order('sort_order').order('name');
-      if (error) throw error;
-      return data ?? [];
+      const [{ data: tiers, error: tiersError }, ...probeResults] = await Promise.all([
+        supabase.from('subscription_tiers').select('*').order('sort_order').order('name'),
+        supabase.functions.invoke('create-checkout-session', { body: {} }),
+        supabase.functions.invoke('create-customer-portal-session', { body: {} }),
+        supabase.functions.invoke('change-subscription-tier', { body: {} }),
+        supabase.functions.invoke('stripe-webhook', { body: {} }),
+      ]);
+      if (tiersError) throw tiersError;
+      return {
+        tiers: tiers ?? [],
+        missingFunctions: probeResults.some(({ error }) => isFunctionNotDeployedError(error)),
+      };
     },
   });
-  const schemaNotReady = ((error as { message?: string; code?: string } | null)?.code === '42P01')
-    || ((error as { message?: string; code?: string } | null)?.code === 'PGRST205')
-    || ((error as { message?: string } | null)?.message?.toLowerCase().includes('does not exist') ?? false);
+  const schemaNotReady = isMissingBillingSchemaError(error);
 
   if (isError && schemaNotReady) {
     return (
@@ -37,6 +45,9 @@ export default function SubscriptionTiersTab() {
       </Card>
     );
   }
+
+  const tiers = data?.tiers ?? [];
+  const functionsNotReady = Boolean(data?.missingFunctions);
 
   const saveTier = async (tier: any) => {
     const { error } = await supabase.from('subscription_tiers').upsert(tier, { onConflict: 'id' });
@@ -59,6 +70,17 @@ export default function SubscriptionTiersTab() {
 
   return (
     <div className="space-y-4">
+      {functionsNotReady && (
+        <Card className="border-warning/50">
+          <CardHeader>
+            <CardTitle>Billing functions not deployed</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 text-sm text-muted-foreground">
+            Tier management is visible, but checkout and plan-change actions will fail until billing edge functions are deployed.
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle>Create tier</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-3">
