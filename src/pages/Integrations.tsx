@@ -1,67 +1,145 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Info } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Link2Off, Loader2, Plug } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
+import { useVenue } from '@/lib/venue-context';
+import { useToast } from '@/hooks/use-toast';
+
+type BufferStatus = {
+  connected: boolean;
+  connection: {
+    connected_at: string;
+    buffer_user_id: string | null;
+  } | null;
+};
 
 export default function IntegrationsPage() {
   const navigate = useNavigate();
+  const { currentVenue } = useVenue();
+  const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState<BufferStatus>({ connected: false, connection: null });
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const loadStatus = async () => {
+    if (!currentVenue) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('buffer-oauth?action=status&venue_id=' + currentVenue.id);
+      if (error) throw error;
+      setStatus((data ?? { connected: false, connection: null }) as BufferStatus);
+    } catch (error: any) {
+      toast({ title: 'Failed to load Buffer status', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStatus();
+  }, [currentVenue?.id]);
+
+  useEffect(() => {
+    const bufferState = searchParams.get('buffer');
+    if (bufferState === 'connected') {
+      toast({ title: 'Buffer connected', description: 'Your venue can now send approved content to Buffer.' });
+      loadStatus();
+    }
+  }, [searchParams]);
+
+  const handleConnect = async () => {
+    if (!currentVenue) return;
+    setConnecting(true);
+    try {
+      const redirectTo = `${window.location.origin}/venue/integrations`;
+      const { data, error } = await supabase.functions.invoke('buffer-oauth?action=start', {
+        body: { venue_id: currentVenue.id, redirect_to: redirectTo },
+      });
+      if (error) throw error;
+      if (!data?.auth_url) throw new Error('Missing Buffer authorization URL');
+      window.location.assign(data.auth_url);
+    } catch (error: any) {
+      toast({ title: 'Could not start Buffer OAuth', description: error.message, variant: 'destructive' });
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!currentVenue) return;
+    setDisconnecting(true);
+    try {
+      const { error } = await supabase.functions.invoke('buffer-oauth?action=disconnect', {
+        body: { venue_id: currentVenue.id },
+      });
+      if (error) throw error;
+      toast({ title: 'Buffer disconnected' });
+      await loadStatus();
+    } catch (error: any) {
+      toast({ title: 'Could not disconnect Buffer', description: error.message, variant: 'destructive' });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-      <div className="mb-2">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-6">
+      <div>
         <Button variant="ghost" size="sm" className="gap-2" onClick={() => navigate('/setup')}>
           <ArrowLeft className="w-4 h-4" /> Back to Setup
         </Button>
       </div>
 
       <PageHeader
-        title="Publishing Operations"
-        description="Pulse currently runs an internal publishing queue and export workflow. External scheduler adapters can be added later."
+        title="Integrations"
+        description="Connect Buffer once, then send approved content from Publishing in one click."
       />
 
-      <div className="max-w-2xl space-y-6">
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-accent/5 border border-accent/20">
-          <Info className="w-5 h-5 text-accent shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium text-sm">Current Mode: Internal Queue + Export</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Pulse manages publishing status internally (ready, queued, scheduled, exported, published, failed).
-              You can export a publish pack and complete posting in your social scheduler.
-            </p>
-          </div>
-        </div>
-
-        <div className="card-elevated p-6 space-y-4">
-          <div className="flex items-center gap-3">
+      <div className="max-w-2xl card-elevated p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex gap-3">
             <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-              <Download className="w-5 h-5 text-accent" />
+              <Plug className="w-5 h-5 text-accent" />
             </div>
             <div>
-              <h3 className="font-medium">Operational Publish Pack Export</h3>
-              <p className="text-sm text-muted-foreground">Export caption + media from Publishing Queue with audit history</p>
+              <h3 className="font-medium">Buffer</h3>
+              <p className="text-sm text-muted-foreground">OAuth connection for sending approved posts to your Buffer channels.</p>
             </div>
           </div>
-          <ol className="space-y-2 text-sm text-muted-foreground list-none">
-            <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>Approve content in Drafts</li>
-            <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>Add it to Queue from Publishing</li>
-            <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>Set scheduled time (optional)</li>
-            <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">4</span>Export caption + media pack and post via your scheduler</li>
-            <li className="flex items-start gap-2"><span className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">5</span>Mark published in Pulse to close the loop</li>
-          </ol>
+
+          {loading ? (
+            <Badge variant="outline">Checking...</Badge>
+          ) : status.connected ? (
+            <Badge className="bg-success/10 text-success border-success/20">Connected</Badge>
+          ) : (
+            <Badge variant="secondary">Not connected</Badge>
+          )}
         </div>
 
-        <div className="card-elevated p-6">
-          <h3 className="font-medium">Future Integrations</h3>
-          <p className="text-sm text-muted-foreground mt-2">
-            Pulse uses an adapter-ready publishing architecture. Native scheduler integrations can be enabled later without changing this internal queue workflow.
+        {status.connected && status.connection?.connected_at && (
+          <p className="text-xs text-muted-foreground">
+            Connected on {new Date(status.connection.connected_at).toLocaleString()}
           </p>
-        </div>
+        )}
 
-        <p className="text-xs text-muted-foreground">
-          API keys for integrations are managed by platform admins in{' '}
-          <span className="font-medium text-foreground">Admin → Integrations & API Keys</span>.
-        </p>
+        <div className="flex gap-2">
+          {!status.connected ? (
+            <Button onClick={handleConnect} disabled={connecting || loading}>
+              {connecting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              Connect Buffer
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={handleDisconnect} disabled={disconnecting}>
+              {disconnecting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Link2Off className="w-4 h-4 mr-2" />}
+              Disconnect
+            </Button>
+          )}
+        </div>
       </div>
     </motion.div>
   );
