@@ -20,7 +20,7 @@ export default function PlatformAdmin() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="space-y-6"
+      className="max-w-7xl mx-auto px-6 space-y-6"
     >
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -49,36 +49,42 @@ export default function PlatformAdmin() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-muted/50">
-          <TabsTrigger value="integrations" className="gap-2">
-            <Plug className="w-4 h-4" />
-            Integrations & API Keys
-          </TabsTrigger>
-          <TabsTrigger value="config" className="gap-2">
-            <Settings2 className="w-4 h-4" />
-            Product Defaults
-          </TabsTrigger>
-          <TabsTrigger value="flags" className="gap-2">
-            <Flag className="w-4 h-4" />
-            Feature Flags
-          </TabsTrigger>
-          <TabsTrigger value="video" className="gap-2">
-            <Film className="w-4 h-4" />
-            Video Provider
-          </TabsTrigger>
-          <TabsTrigger value="referral" className="gap-2">
-            <Network className="w-4 h-4" />
-            Referral Release Control
-          </TabsTrigger>
-          <TabsTrigger value="billing-config" className="gap-2">
-            <CreditCard className="w-4 h-4" />
-            Billing Config
-          </TabsTrigger>
-          <TabsTrigger value="subscription-tiers" className="gap-2">
-            <Layers className="w-4 h-4" />
-            Subscription Tiers
-          </TabsTrigger>
-        </TabsList>
+        <div className="relative">
+          <div className="w-full overflow-x-auto">
+            <TabsList className="flex min-w-max gap-2 bg-muted/50">
+              <TabsTrigger value="integrations" className="gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm">
+                <Plug className="w-4 h-4" />
+                Integrations & API Keys
+              </TabsTrigger>
+              <TabsTrigger value="config" className="gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm">
+                <Settings2 className="w-4 h-4" />
+                Product Defaults
+              </TabsTrigger>
+              <TabsTrigger value="flags" className="gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm">
+                <Flag className="w-4 h-4" />
+                Feature Flags
+              </TabsTrigger>
+              <TabsTrigger value="video" className="gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm">
+                <Film className="w-4 h-4" />
+                Video Provider
+              </TabsTrigger>
+              <TabsTrigger value="referral" className="gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm">
+                <Network className="w-4 h-4" />
+                Referral Release Control
+              </TabsTrigger>
+              <TabsTrigger value="billing-config" className="gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm">
+                <CreditCard className="w-4 h-4" />
+                Billing Config
+              </TabsTrigger>
+              <TabsTrigger value="subscription-tiers" className="gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm">
+                <Layers className="w-4 h-4" />
+                Subscription Tiers
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-background to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
+        </div>
 
         <TabsContent value="integrations" className="mt-6">
           <AdminIntegrationsContent />
