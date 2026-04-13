@@ -8,17 +8,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { X, Pencil, Save, ImageIcon, ChevronDown, Loader2 } from 'lucide-react';
+import { X, Pencil, ImageIcon, ChevronDown, Loader2 } from 'lucide-react';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl } from '@/hooks/use-resolved-media';
 import { WebsiteAnalysisEntry } from '@/components/setup/WebsiteAnalysisEntry';
 import { ProfileConfirmationCard } from '@/components/setup/ProfileConfirmationCard';
-
-const visualTypes = ['dish', 'drink', 'dessert', 'interior', 'chef/prep', 'event', 'lifestyle'];
+import { ASSET_TAG_CATEGORIES, PREDEFINED_ASSET_TAGS, normalizeAssetTags, splitAssetTags } from '@/lib/asset-tags';
 
 type SetupState = {
   venueName: string;
@@ -103,7 +104,9 @@ export default function SetupPage() {
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [assets, setAssets] = useState<SetupAsset[]>([]);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
-  const [editingTags, setEditingTags] = useState('');
+  const [editingKnownTags, setEditingKnownTags] = useState<string[]>([]);
+  const [editingLegacyTags, setEditingLegacyTags] = useState<string[]>([]);
+  const [savingTags, setSavingTags] = useState(false);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [analysisUrl, setAnalysisUrl] = useState('');
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -370,23 +373,38 @@ export default function SetupPage() {
   };
 
   const beginEditTags = (asset: SetupAsset) => {
-    const tags = Array.isArray(asset.metadata?.tags) ? asset.metadata?.tags : [];
+    const { known, legacy } = splitAssetTags(asset.metadata?.tags);
     setEditingAssetId(asset.id);
-    setEditingTags(tags.join(', '));
+    setEditingKnownTags(known);
+    setEditingLegacyTags(legacy);
+  };
+
+  const cancelEditTags = () => {
+    setEditingAssetId(null);
+    setEditingKnownTags([]);
+    setEditingLegacyTags([]);
+  };
+
+  const toggleKnownTag = (tag: string) => {
+    setEditingKnownTags((prev) => (
+      prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]
+    ));
   };
 
   const saveTags = async (asset: SetupAsset) => {
-    const nextTags = editingTags.split(',').map((t) => t.trim()).filter(Boolean);
+    const nextTags = [...editingKnownTags, ...editingLegacyTags];
+    setSavingTags(true);
     try {
       const nextMetadata = { ...(asset.metadata || {}), tags: nextTags };
       const { error } = await supabase.from('content_assets').update({ metadata: nextMetadata }).eq('id', asset.id);
       if (error) throw error;
       setAssets((prev) => prev.map((a) => (a.id === asset.id ? { ...a, metadata: nextMetadata } : a)));
-      setEditingAssetId(null);
-      setEditingTags('');
+      cancelEditTags();
       toast({ title: 'Tags updated' });
     } catch (error: any) {
       toast({ title: 'Tag update failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setSavingTags(false);
     }
   };
 
@@ -563,7 +581,7 @@ export default function SetupPage() {
                 <Badge variant="outline">{assets.length} assets in pool</Badge>
               </div>
               <p className="text-xs text-muted-foreground">Default metadata applied: reusable by Pulse, evergreen, medium priority, visual type: dish. Edit metadata in Content as needed.</p>
-              <div className="flex flex-wrap gap-2">{visualTypes.map((t) => <Badge variant="secondary" key={t}>{t}</Badge>)}</div>
+              <div className="flex flex-wrap gap-2">{PREDEFINED_ASSET_TAGS.map((t) => <Badge variant="secondary" key={t}>{t}</Badge>)}</div>
 
               {loadingAssets ? (
                 <div className="py-10 text-sm text-muted-foreground flex items-center justify-center gap-2">
@@ -578,9 +596,9 @@ export default function SetupPage() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {assets.map((asset) => {
-                    const tags = Array.isArray(asset.metadata?.tags) ? asset.metadata.tags : [];
+                    const tags = normalizeAssetTags(asset.metadata?.tags);
                     const label = asset.metadata?.label || asset.metadata?.visual_type || null;
-                    const inEdit = editingAssetId === asset.id;
+                    const legacyTags = splitAssetTags(tags).legacy;
                     return (
                       <div key={asset.id} className="rounded-md border overflow-hidden bg-card">
                         <div className="aspect-square bg-muted relative">
@@ -595,31 +613,26 @@ export default function SetupPage() {
                         <div className="p-3 space-y-2">
                           <p className="text-sm font-medium truncate">{asset.title || 'Untitled asset'}</p>
                           <div className="flex flex-wrap gap-1">
-                            {tags.length > 0 ? tags.map((tag: string) => (
-                              <Badge key={`${asset.id}-${tag}`} variant="secondary">{tag}</Badge>
-                            )) : <Badge variant="outline">No tags</Badge>}
+                            {tags.length > 0 ? tags.map((tag: string) => {
+                              const isLegacy = legacyTags.includes(tag);
+                              return (
+                                <Badge
+                                  key={`${asset.id}-${tag}`}
+                                  variant={isLegacy ? 'outline' : 'secondary'}
+                                  className={isLegacy ? 'text-muted-foreground border-dashed' : undefined}
+                                >
+                                  {tag}{isLegacy ? ' (legacy)' : ''}
+                                </Badge>
+                              );
+                            }) : <Badge variant="outline">No tags</Badge>}
                             {label ? <Badge variant="outline">{label}</Badge> : null}
                           </div>
-                          {inEdit ? (
-                            <div className="space-y-2">
-                              <Input
-                                value={editingTags}
-                                onChange={(e) => setEditingTags(e.target.value)}
-                                placeholder="dish, drink, dessert"
-                              />
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={() => saveTags(asset)}><Save className="h-3.5 w-3.5 mr-1" />Save tags</Button>
-                                <Button size="sm" variant="outline" onClick={() => setEditingAssetId(null)}>Cancel</Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline" onClick={() => beginEditTags(asset)}><Pencil className="h-3.5 w-3.5 mr-1" />Edit tags</Button>
-                              <Button size="sm" variant="destructive" onClick={() => deleteAsset(asset)} disabled={deletingAssetId === asset.id}>
-                                <X className="h-3.5 w-3.5 mr-1" />Delete
-                              </Button>
-                            </div>
-                          )}
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => beginEditTags(asset)}><Pencil className="h-3.5 w-3.5 mr-1" />Edit tags</Button>
+                            <Button size="sm" variant="destructive" onClick={() => deleteAsset(asset)} disabled={deletingAssetId === asset.id}>
+                              <X className="h-3.5 w-3.5 mr-1" />Delete
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -627,6 +640,68 @@ export default function SetupPage() {
                 </div>
               )}
             </CardContent></Card>
+            <Dialog open={Boolean(editingAssetId)} onOpenChange={(open) => !open && cancelEditTags()}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit asset tags</DialogTitle>
+                  <DialogDescription>
+                    Choose from predefined tags for consistent Asset Pool metadata.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  {ASSET_TAG_CATEGORIES.map((category) => (
+                    <div key={category.key} className="space-y-2">
+                      <p className="text-sm font-medium">{category.label}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {category.tags.map((tag) => (
+                          <label key={tag} className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={editingKnownTags.includes(tag)}
+                              onCheckedChange={() => toggleKnownTag(tag)}
+                            />
+                            <span>{tag}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {editingLegacyTags.length > 0 ? (
+                    <div className="space-y-2 rounded-md border border-dashed p-3">
+                      <p className="text-xs text-muted-foreground">
+                        Legacy tags detected. You can remove them, but new legacy tags cannot be added.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {editingLegacyTags.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-1 text-xs text-muted-foreground"
+                            onClick={() => setEditingLegacyTags((prev) => prev.filter((item) => item !== tag))}
+                          >
+                            {tag}
+                            <X className="h-3 w-3" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={cancelEditTags}>Cancel</Button>
+                  <Button
+                    onClick={() => {
+                      const selected = assets.find((asset) => asset.id === editingAssetId);
+                      if (selected) {
+                        void saveTags(selected);
+                      }
+                    }}
+                    disabled={savingTags || !editingAssetId}
+                  >
+                    {savingTags ? 'Saving...' : 'Save tags'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="integrations">
