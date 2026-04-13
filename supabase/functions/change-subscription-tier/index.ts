@@ -16,41 +16,67 @@ type Tier = {
   stripe_price_id_monthly: string | null;
 };
 
-async function readStripeMonthlyPriceAmount(priceId: string, stripeKey: string): Promise<number | null> {
+type StripePriceSnapshot = {
+  id: string;
+  unitAmount: number | null;
+  currency: string | null;
+  interval: string | null;
+  active: boolean;
+};
+
+async function readStripePriceSnapshot(priceId: string, stripeKey: string): Promise<StripePriceSnapshot | null> {
   const res = await fetch(`https://api.stripe.com/v1/prices/${priceId}`, {
     headers: { Authorization: `Bearer ${stripeKey}` },
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message ?? `Failed to fetch Stripe price ${priceId}`);
-  if (data?.type !== 'recurring') return null;
-  if (data?.recurring?.interval !== 'month') return null;
-  return typeof data?.unit_amount === 'number' ? data.unit_amount : null;
+
+  return {
+    id: String(data?.id ?? priceId),
+    unitAmount: typeof data?.unit_amount === 'number' ? data.unit_amount : null,
+    currency: typeof data?.currency === 'string' ? data.currency : null,
+    interval: typeof data?.recurring?.interval === 'string' ? data.recurring.interval : null,
+    active: Boolean(data?.active),
+  };
 }
 
-function commercialTierWeight(tier: Tier) {
-  return (tier.max_users_per_venue ?? 0)
-    + (tier.monthly_image_quota ?? 0) / 10
-    + (tier.monthly_storage_mb ?? 0) / 100
-    + (tier.marketplace_access_enabled ? 10 : 0)
-    + (tier.video_payg_enabled ? 3 : 0);
+function tierCommercialVector(tier: Tier): number[] {
+  return [
+    tier.max_users_per_venue ?? 0,
+    tier.monthly_image_quota ?? 0,
+    tier.monthly_storage_mb ?? 0,
+    tier.marketplace_access_enabled ? 1 : 0,
+    tier.video_payg_enabled ? 1 : 0,
+  ];
+}
+
+function compareVectors(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const av = a[i] ?? 0;
+    const bv = b[i] ?? 0;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
 }
 
 async function isUpgradeChange(currentTier: Tier | null, targetTier: Tier, stripeKey: string): Promise<boolean> {
   if (!currentTier) return true;
 
   if (currentTier.stripe_price_id_monthly && targetTier.stripe_price_id_monthly) {
-    const [currentAmount, targetAmount] = await Promise.all([
-      readStripeMonthlyPriceAmount(currentTier.stripe_price_id_monthly, stripeKey),
-      readStripeMonthlyPriceAmount(targetTier.stripe_price_id_monthly, stripeKey),
+    const [currentPrice, targetPrice] = await Promise.all([
+      readStripePriceSnapshot(currentTier.stripe_price_id_monthly, stripeKey),
+      readStripePriceSnapshot(targetTier.stripe_price_id_monthly, stripeKey),
     ]);
-    if (currentAmount != null && targetAmount != null && currentAmount !== targetAmount) {
-      return targetAmount > currentAmount;
+
+    const sameCurrency = currentPrice?.currency && targetPrice?.currency && currentPrice.currency === targetPrice.currency;
+    const sameInterval = currentPrice?.interval === 'month' && targetPrice?.interval === 'month';
+    if (sameCurrency && sameInterval && currentPrice?.unitAmount != null && targetPrice?.unitAmount != null && currentPrice.unitAmount !== targetPrice.unitAmount) {
+      return targetPrice.unitAmount > currentPrice.unitAmount;
     }
   }
 
-  const currentWeight = commercialTierWeight(currentTier);
-  const targetWeight = commercialTierWeight(targetTier);
-  if (currentWeight !== targetWeight) return targetWeight > currentWeight;
+  const featureComparison = compareVectors(tierCommercialVector(currentTier), tierCommercialVector(targetTier));
+  if (featureComparison !== 0) return featureComparison < 0;
 
   return (targetTier.sort_order ?? 0) > (currentTier.sort_order ?? 0);
 }
@@ -130,23 +156,33 @@ Deno.serve(async (req) => {
     const stripeSub = await getSubRes.json();
     if (!getSubRes.ok) throw new Error(stripeSub?.error?.message ?? 'Failed to read Stripe subscription');
 
-    const scheduleRes = await fetch('https://api.stripe.com/v1/subscription_schedules', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${stripeKey}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        from_subscription: sub.stripe_subscription_id,
-      }),
-    });
-    const schedule = await scheduleRes.json();
-    if (!scheduleRes.ok) throw new Error(schedule?.error?.message ?? 'Failed to create Stripe subscription schedule');
-
     const currentPriceId = stripeSub?.items?.data?.[0]?.price?.id;
     if (!currentPriceId) throw new Error('Unable to determine current Stripe subscription price');
 
-    const scheduleUpdateRes = await fetch(`https://api.stripe.com/v1/subscription_schedules/${schedule.id}`, {
+    const scheduleId = typeof stripeSub?.schedule === 'string' && stripeSub.schedule.length > 0
+      ? stripeSub.schedule
+      : null;
+
+    let activeScheduleId = scheduleId;
+    if (!activeScheduleId) {
+      const scheduleRes = await fetch('https://api.stripe.com/v1/subscription_schedules', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${stripeKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          from_subscription: sub.stripe_subscription_id,
+        }),
+      });
+      const schedule = await scheduleRes.json();
+      if (!scheduleRes.ok) throw new Error(schedule?.error?.message ?? 'Failed to create Stripe subscription schedule');
+      activeScheduleId = schedule?.id;
+    }
+
+    if (!activeScheduleId) throw new Error('Unable to determine Stripe subscription schedule ID');
+
+    const scheduleUpdateRes = await fetch(`https://api.stripe.com/v1/subscription_schedules/${activeScheduleId}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${stripeKey}`,

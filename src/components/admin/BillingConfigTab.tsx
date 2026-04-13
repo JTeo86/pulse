@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { updatePlatformKey } from '@/lib/platform-keys';
+import { isFunctionNotDeployedError, isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
 export default function BillingConfigTab() {
   const queryClient = useQueryClient();
@@ -18,18 +19,25 @@ export default function BillingConfigTab() {
   const { data, error, isError } = useQuery({
     queryKey: ['billing-config-settings'],
     queryFn: async () => {
-      const [{ data: settingsRows, error: settingsError }] = await Promise.all([
+      const [{ data: settingsRows, error: settingsError }, ...probeResults] = await Promise.all([
         supabase.from('platform_settings').select('key, value').in('key', ['stripe_publishable_key', 'billing_customer_portal_enabled', 'billing_enforcement_mode', 'billing_default_trial_days', 'billing_test_mode_banner']),
+        supabase.functions.invoke('create-checkout-session', { body: {} }),
+        supabase.functions.invoke('create-customer-portal-session', { body: {} }),
+        supabase.functions.invoke('change-subscription-tier', { body: {} }),
+        supabase.functions.invoke('stripe-webhook', { body: {} }),
       ]);
       if (settingsError) throw settingsError;
-      return Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]));
+
+      const missingFunctions = probeResults.some(({ error }) => isFunctionNotDeployedError(error));
+      return {
+        settings: Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value])),
+        missingFunctions,
+      };
     },
   });
 
-  const merged = { ...(data ?? {}), ...local };
-  const schemaNotReady = ((error as { message?: string; code?: string } | null)?.code === '42P01')
-    || ((error as { message?: string; code?: string } | null)?.code === 'PGRST205')
-    || ((error as { message?: string } | null)?.message?.toLowerCase().includes('does not exist') ?? false);
+  const merged = { ...(data?.settings ?? {}), ...local };
+  const schemaNotReady = isMissingBillingSchemaError(error);
 
   if (isError && schemaNotReady) {
     return (
@@ -41,6 +49,8 @@ export default function BillingConfigTab() {
       </Card>
     );
   }
+
+  const functionsNotReady = Boolean(data?.missingFunctions);
 
   const setSetting = (key: string, value: string) => {
     setLocal((prev) => ({ ...prev, [key]: value }));
@@ -55,7 +65,19 @@ export default function BillingConfigTab() {
   };
 
   return (
-    <Card>
+    <>
+      {functionsNotReady && (
+        <Card className="border-warning/50">
+          <CardHeader>
+            <CardTitle>Billing functions not deployed</CardTitle>
+            <CardDescription>
+              One or more required billing edge functions are unavailable in this environment.
+              Deploy create-checkout-session, create-customer-portal-session, change-subscription-tier, and stripe-webhook.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+      <Card>
       <CardHeader>
         <CardTitle>Billing Config</CardTitle>
         <CardDescription>Global Stripe and billing behavior controls.</CardDescription>
@@ -104,6 +126,7 @@ export default function BillingConfigTab() {
         </div>
         <Button onClick={saveSettings} disabled={Object.keys(local).length === 0}>Save billing settings</Button>
       </CardContent>
-    </Card>
+      </Card>
+    </>
   );
 }

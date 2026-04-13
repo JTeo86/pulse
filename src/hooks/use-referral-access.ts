@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
+import { isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
 interface ReferralSettings {
   enabled: boolean;
@@ -69,7 +70,7 @@ export function useReferralAccess(): ReferralAccess {
         .select('marketplace_access_enabled')
         .eq('venue_id', currentVenue!.id)
         .maybeSingle();
-      if (error) throw error;
+      if (error && !isMissingBillingSchemaError(error)) throw error;
       return data;
     },
   });
