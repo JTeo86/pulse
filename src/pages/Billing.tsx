@@ -46,6 +46,10 @@ export default function BillingPage() {
         usage: usageRes.data,
         wallet: walletRes.data,
         memberCount: membersRes.data?.length ?? 0,
+        ownerInMembers: Boolean(
+          currentVenue?.owner_user_id &&
+          (membersRes.data ?? []).some((member) => member.user_id === currentVenue.owner_user_id),
+        ),
         pendingInvites: invitesRes.data?.length ?? 0,
       };
     },
@@ -53,7 +57,7 @@ export default function BillingPage() {
 
   const seatUsed = useMemo(() => {
     if (!data || !currentVenue) return 0;
-    const ownerAlreadyCounted = false;
+    const ownerAlreadyCounted = data.ownerInMembers;
     return data.memberCount + (ownerAlreadyCounted ? 0 : 1) + data.pendingInvites;
   }, [data, currentVenue]);
 
@@ -107,6 +111,7 @@ export default function BillingPage() {
 
   const currentTierId = data?.sub?.subscription_tier_id;
   const missingSchema = Boolean(data?.schemaMissing);
+  const billingActionsDisabled = missingSchema;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -134,7 +139,9 @@ export default function BillingPage() {
             <p>Max users: {data?.entitlement?.max_users_per_venue ?? 1}</p>
             <p>Marketplace: {data?.entitlement?.marketplace_access_enabled ? 'Enabled' : 'Disabled'}</p>
             <p>Video credits: {data?.wallet?.balance ?? 0}</p>
-            <Button variant="outline" onClick={openPortal}>Manage billing</Button>
+            <Button variant="outline" onClick={openPortal} disabled={billingActionsDisabled}>
+              Manage billing
+            </Button>
           </CardContent>
         </Card>
 
@@ -170,7 +177,11 @@ export default function BillingPage() {
                 {(tier.feature_summary_json || []).map((f: string) => <p key={f} className="flex items-center gap-2"><Check className="w-3 h-3" />{f}</p>)}
                 {!isCurrent && (
                   <div className="pt-2 flex gap-2">
-                    <Button className="w-full" onClick={() => currentTierId ? handleTierChange(tier.id) : handleCheckout(tier.id)}>
+                    <Button
+                      className="w-full"
+                      onClick={() => currentTierId ? handleTierChange(tier.id) : handleCheckout(tier.id)}
+                      disabled={billingActionsDisabled}
+                    >
                       {currentTierId ? 'Change tier' : 'Upgrade now'}
                     </Button>
                   </div>

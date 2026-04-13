@@ -169,12 +169,18 @@ export default function TeamPage() {
         profile: profileMap.get(m.user_id),
       }));
 
+      const pendingInviteCount = (invitesRes.data || []).filter((invite: VenueInvite) => !invite.accepted_at).length;
+      const ownerCountedInMembers = membersWithProfiles.some((member) => member.user_id === currentVenue.owner_user_id);
+      const currentSeatUsage = membersWithProfiles.length + (ownerCountedInMembers ? 0 : 1) + pendingInviteCount;
+
       setMembers(membersWithProfiles);
       setInvites((invitesRes.data || []) as unknown as VenueInvite[]);
-      setSeatLimit(entitlementsRes.data?.max_users_per_venue ?? 1);
+      setSeatLimit(entitlementsRes.data?.max_users_per_venue ?? Math.max(currentSeatUsage, 1));
     } catch (error: any) {
       if (isMissingVenueEntitlementsError(error)) {
-        setSeatLimit(1);
+        const ownerCountedInMembers = members.some((member) => member.user_id === currentVenue.owner_user_id);
+        const currentSeatUsage = members.length + (ownerCountedInMembers ? 0 : 1) + invites.filter((invite) => !invite.accepted_at).length;
+        setSeatLimit(Math.max(currentSeatUsage, 1));
         setMissingEntitlementsSchema(true);
       } else {
         toast({ variant: 'destructive', title: 'Error loading team', description: error.message });
@@ -333,7 +339,7 @@ export default function TeamPage() {
   const pendingInvites = invites.filter((i) => !i.accepted_at);
   const ownerCountedInMembers = members.some((m) => m.user_id === currentVenue?.owner_user_id);
   const seatsUsed = members.length + (ownerCountedInMembers ? 0 : 1) + pendingInvites.length;
-  const isSeatLimitReached = seatsUsed >= seatLimit;
+  const isSeatLimitReached = !missingEntitlementsSchema && seatsUsed >= seatLimit;
   const transferableMembers = members.filter(
     (m) => m.user_id !== user?.id && currentVenue?.owner_user_id !== m.user_id
   );
@@ -414,7 +420,7 @@ export default function TeamPage() {
       {missingEntitlementsSchema && (
         <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
           Team entitlement limits are unavailable because billing schema is not yet deployed in this environment.
-          Seat limits are temporarily defaulting to 1 until migration <code>20260410220000_billing_subscriptions_entitlements.sql</code> is applied.
+          Seat caps are temporarily advisory only until migration <code>20260410220000_billing_subscriptions_entitlements.sql</code> is applied.
         </div>
       )}
 

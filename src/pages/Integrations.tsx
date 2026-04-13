@@ -1,12 +1,29 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plug } from 'lucide-react';
+import { ArrowLeft, Lock, Plug } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useVenue } from '@/lib/venue-context';
 
 export default function IntegrationsPage() {
   const navigate = useNavigate();
+  const { isOwner } = useVenue();
+
+  if (!isOwner) {
+    return (
+      <div className="max-w-xl space-y-6">
+        <PageHeader title="Integrations" description="Owner-only area" />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Owner access required</CardTitle>
+            <CardDescription>Only the venue owner can manage publishing integrations.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-6">
@@ -18,7 +35,7 @@ export default function IntegrationsPage() {
 
       <PageHeader
         title="Integrations"
-        description="Buffer integration is temporarily paused while we restore stable rendering."
+        description="Buffer publishing is being finalized. This area is intentionally paused for stability."
       />
 
       <div className="max-w-2xl card-elevated p-6 space-y-4">
@@ -30,14 +47,14 @@ export default function IntegrationsPage() {
             <div>
               <h3 className="font-medium">Buffer</h3>
               <p className="text-sm text-muted-foreground">
-                Connection flow is being finalized. This page now fails safely without requiring OAuth or edge functions.
+                The Buffer connection flow is under final hardening. We have paused new connections so publishing remains predictable.
               </p>
             </div>
           </div>
-          <Badge variant="secondary">Coming soon</Badge>
+          <Badge variant="secondary">Temporarily paused</Badge>
         </div>
 
-        <p className="text-sm text-muted-foreground">Buffer connection coming soon.</p>
+        <p className="text-sm text-muted-foreground">No action is required right now. Use the Publishing screen for current queue status.</p>
       </div>
     </motion.div>
   );
