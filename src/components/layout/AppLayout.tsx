@@ -15,7 +15,8 @@ import {
   Shield,
   Plus,
   PenSquare,
-  Upload
+  Upload,
+  Zap
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -53,7 +54,8 @@ interface AppLayoutProps {
 const workflowNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
-  { name: 'Content Feed', href: '/content/feed', icon: Images },
+  { name: 'New Photos', href: '/content/feed', icon: Images },
+  { name: 'Autopilot', href: '/autopilot', icon: Zap },
   { name: 'Content', href: '/content/library', icon: FolderOpen },
   { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
 ];

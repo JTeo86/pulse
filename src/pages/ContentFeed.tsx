@@ -150,7 +150,7 @@ export default function ContentFeed() {
       }
 
       await queryClient.invalidateQueries({ queryKey: ['content-feed-assets', currentVenue.id] });
-      toast({ title: 'Photos added', description: `${files.length} photo${files.length > 1 ? 's' : ''} added to Content Feed.` });
+      toast({ title: 'Photos added', description: `${files.length} photo${files.length > 1 ? 's' : ''} added to New Photos.` });
     } catch (error: any) {
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
     } finally {
@@ -168,8 +168,8 @@ export default function ContentFeed() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Content Feed"
-        description="Photos Pulse uses to create your content"
+        title="New Photos"
+        description="Upload everyday photos. Pulse uses these to create content automatically."
         action={
           <Button onClick={handleAddPhotosClick} disabled={isUploading}>
             {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImagePlus className="w-4 h-4 mr-2" />}

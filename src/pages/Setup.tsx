@@ -428,7 +428,7 @@ export default function SetupPage() {
           <TabsList className="grid grid-cols-5 w-full">
             <TabsTrigger value="basics">Venue</TabsTrigger>
             <TabsTrigger value="brand">Brand</TabsTrigger>
-            <TabsTrigger value="assets">Asset Pool</TabsTrigger>
+            <TabsTrigger value="assets">Brand Library</TabsTrigger>
             <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="automation">Automation</TabsTrigger>
           </TabsList>
@@ -591,7 +591,7 @@ export default function SetupPage() {
               ) : assets.length === 0 ? (
                 <div className="rounded-md border border-dashed p-6 text-center space-y-1">
                   <p className="font-medium">No assets uploaded yet</p>
-                  <p className="text-sm text-muted-foreground">Upload starter images to build your Asset Pool for Pulse and Content Library.</p>
+                  <p className="text-sm text-muted-foreground">Upload starter images to build your Brand Library for Pulse and Content.</p>
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -645,7 +645,7 @@ export default function SetupPage() {
                 <DialogHeader>
                   <DialogTitle>Edit asset tags</DialogTitle>
                   <DialogDescription>
-                    Choose from predefined tags for consistent Asset Pool metadata.
+                    Choose from predefined tags for consistent Brand Library metadata.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
