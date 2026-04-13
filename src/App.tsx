@@ -20,7 +20,7 @@ import Studio from "./pages/Studio";
 import BrandLibrary from "./pages/BrandLibrary";
 import TheEditor from "./pages/TheEditor";
 import ReelCreator from "./pages/ReelCreator";
-import ContentScheduler from "./pages/ContentScheduler";
+import Publishing from "./pages/Publishing";
 import ContentFeed from "./pages/ContentFeed";
 import CompetitorIntel from "./pages/CompetitorIntel";
 import BrandPerformance from "./pages/BrandPerformance";
@@ -171,7 +171,7 @@ function AppRoutes() {
         <Route path="/content/feed" element={<ContentFeed />} />
         <Route path="/content/planner" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
-        <Route path="/content/calendar" element={<ContentScheduler />} />
+        <Route path="/content/calendar" element={<Publishing />} />
         <Route path="/content/scheduler" element={<Navigate to="/content/calendar" replace />} />
         <Route path="/content/campaigns" element={<Navigate to="/home?tab=plans" replace />} />
         <Route path="/content/copywriter" element={<Navigate to="/home?tab=plans" replace />} />
