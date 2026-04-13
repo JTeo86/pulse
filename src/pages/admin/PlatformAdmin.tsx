@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Plug, Settings2, Flag, Network, Film, CreditCard, Layers } from 'lucide-react';
+import { Shield, Plug, Settings2, Flag, Network, Film, CreditCard, Layers, type LucideIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
 import PlatformConfigTab from '@/components/admin/PlatformConfigTab';
 import ReferralNetworkTab from '@/components/admin/ReferralNetworkTab';
@@ -10,15 +11,52 @@ import BillingConfigTab from '@/components/admin/BillingConfigTab';
 import SubscriptionTiersTab from '@/components/admin/SubscriptionTiersTab';
 import AdminIntegrationsContent from '@/components/admin/AdminIntegrationsContent';
 
+type AdminSection = {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+const adminSections: AdminSection[] = [
+  { key: 'integrations', label: 'Integrations & API Keys', icon: Plug },
+  { key: 'config', label: 'Product Defaults', icon: Settings2 },
+  { key: 'flags', label: 'Feature Flags', icon: Flag },
+  { key: 'video', label: 'Video Provider', icon: Film },
+  { key: 'referral', label: 'Referral Release Control', icon: Network },
+  { key: 'billing-config', label: 'Billing Config', icon: CreditCard },
+  { key: 'subscription-tiers', label: 'Subscription Tiers', icon: Layers },
+];
+
 export default function PlatformAdmin() {
-  const [activeTab, setActiveTab] = useState('integrations');
+  const [activeSection, setActiveSection] = useState(adminSections[0].key);
+
+  const activeSectionContent = useMemo(() => {
+    switch (activeSection) {
+      case 'integrations':
+        return <AdminIntegrationsContent />;
+      case 'config':
+        return <PlatformConfigTab />;
+      case 'flags':
+        return <FeatureFlagsTab />;
+      case 'video':
+        return <VideoProviderTab />;
+      case 'referral':
+        return <ReferralNetworkTab />;
+      case 'billing-config':
+        return <BillingConfigTab />;
+      case 'subscription-tiers':
+        return <SubscriptionTiersTab />;
+      default:
+        return <AdminIntegrationsContent />;
+    }
+  }, [activeSection]);
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="max-w-7xl mx-auto px-6 space-y-6"
+      className="mx-auto max-w-7xl space-y-6 px-6 overflow-x-hidden"
     >
       <div className="flex items-start justify-between gap-4 min-w-0">
         <div className="min-w-0">
@@ -43,75 +81,45 @@ export default function PlatformAdmin() {
         <span className="text-muted-foreground">• Changes affect all workspaces</span>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 min-w-0">
-        <div className="relative min-w-0">
-          <div className="w-full overflow-x-auto">
-            <TabsList className="flex gap-2 min-w-max bg-muted/50">
-              <TabsTrigger value="integrations" className="gap-2 whitespace-nowrap shrink-0 rounded-lg px-4 py-2 text-sm">
-                <Plug className="h-4 w-4" />
-                Integrations & API Keys
-              </TabsTrigger>
-              <TabsTrigger value="config" className="gap-2 whitespace-nowrap shrink-0 rounded-lg px-4 py-2 text-sm">
-                <Settings2 className="h-4 w-4" />
-                Product Defaults
-              </TabsTrigger>
-              <TabsTrigger value="flags" className="gap-2 whitespace-nowrap shrink-0 rounded-lg px-4 py-2 text-sm">
-                <Flag className="h-4 w-4" />
-                Feature Flags
-              </TabsTrigger>
-              <TabsTrigger value="video" className="gap-2 whitespace-nowrap shrink-0 rounded-lg px-4 py-2 text-sm">
-                <Film className="h-4 w-4" />
-                Video Provider
-              </TabsTrigger>
-              <TabsTrigger value="referral" className="gap-2 whitespace-nowrap shrink-0 rounded-lg px-4 py-2 text-sm">
-                <Network className="h-4 w-4" />
-                Referral Release Control
-              </TabsTrigger>
-              <TabsTrigger value="billing-config" className="gap-2 whitespace-nowrap shrink-0 rounded-lg px-4 py-2 text-sm">
-                <CreditCard className="h-4 w-4" />
-                Billing Config
-              </TabsTrigger>
-              <TabsTrigger
-                value="subscription-tiers"
-                className="gap-2 whitespace-nowrap shrink-0 rounded-lg px-4 py-2 text-sm"
-              >
-                <Layers className="h-4 w-4" />
-                Subscription Tiers
-              </TabsTrigger>
-            </TabsList>
-          </div>
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-background to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
-        </div>
+      <div className="md:hidden">
+        <Select value={activeSection} onValueChange={setActiveSection}>
+          <SelectTrigger aria-label="Select admin section" className="w-full">
+            <SelectValue placeholder="Select section" />
+          </SelectTrigger>
+          <SelectContent>
+            {adminSections.map((section) => (
+              <SelectItem key={section.key} value={section.key}>
+                {section.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        <TabsContent value="integrations" className="mt-6 min-w-0">
-          <AdminIntegrationsContent />
-        </TabsContent>
+      <div className="grid min-w-0 gap-6 md:grid-cols-[240px_minmax(0,1fr)] md:items-start">
+        <aside className="hidden md:block md:sticky md:top-6 self-start">
+          <nav className="w-[240px] rounded-xl border bg-card p-2" aria-label="Platform admin sections">
+            {adminSections.map((section) => {
+              const Icon = section.icon;
+              const isActive = activeSection === section.key;
 
-        <TabsContent value="config" className="mt-6 min-w-0">
-          <PlatformConfigTab />
-        </TabsContent>
+              return (
+                <Button
+                  key={section.key}
+                  variant={isActive ? 'secondary' : 'ghost'}
+                  className="mb-1 h-auto w-full justify-start gap-2 whitespace-normal px-3 py-2 text-left"
+                  onClick={() => setActiveSection(section.key)}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="text-sm leading-snug">{section.label}</span>
+                </Button>
+              );
+            })}
+          </nav>
+        </aside>
 
-        <TabsContent value="flags" className="mt-6 min-w-0">
-          <FeatureFlagsTab />
-        </TabsContent>
-
-        <TabsContent value="video" className="mt-6 min-w-0">
-          <VideoProviderTab />
-        </TabsContent>
-
-        <TabsContent value="referral" className="mt-6 min-w-0">
-          <ReferralNetworkTab />
-        </TabsContent>
-
-        <TabsContent value="billing-config" className="mt-6 min-w-0">
-          <BillingConfigTab />
-        </TabsContent>
-
-        <TabsContent value="subscription-tiers" className="mt-6 min-w-0">
-          <SubscriptionTiersTab />
-        </TabsContent>
-      </Tabs>
+        <section className="min-w-0 overflow-x-hidden">{activeSectionContent}</section>
+      </div>
     </motion.div>
   );
 }
