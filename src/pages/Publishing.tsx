@@ -8,13 +8,13 @@ export default function PublishingPage() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-6">
       <PageHeader
         title="Publishing"
-        description="Publishing is temporarily in safe mode while Buffer connection is stabilized."
+        description="Publishing is intentionally paused while Buffer publishing is finalized."
       />
       <div className="card-elevated p-6">
         <EmptyState
           icon={Send}
-          title="Buffer connection coming soon"
-          description="The publishing queue is temporarily paused to keep the app stable."
+          title="Publishing paused for stability"
+          description="Buffer publishing is being finalized. Send actions stay disabled in this environment until rollout is complete."
         />
       </div>
     </motion.div>

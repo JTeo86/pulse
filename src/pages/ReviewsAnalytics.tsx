@@ -1581,7 +1581,7 @@ function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTi
 function AutomationStatusCard({ venueId, venueTimezone }: { venueId: string; venueTimezone: string }) {
   const cycle = getCompletedReviewWeekRange(new Date(), venueTimezone);
 
-  const { data: lastRun } = useQuery({
+  const { data: lastRun, isLoading, isError, error } = useQuery({
     queryKey: ['automation-runs', venueId, cycle.weekStart],
     queryFn: async () => {
       const { data: latestRun, error: latestError } = await supabase
@@ -1628,6 +1628,11 @@ function AutomationStatusCard({ venueId, venueTimezone }: { venueId: string; ven
 
   const cycleRun = lastRun?.cycleRun;
   const latestRun = lastRun?.latestRun;
+  const latestRunDate = latestRun?.created_at ? new Date(latestRun.created_at) : null;
+  const daysSinceLatestRun = latestRunDate
+    ? Math.floor((Date.now() - latestRunDate.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isLikelyStale = daysSinceLatestRun !== null && daysSinceLatestRun > 10;
   const runStatus = cycleRun?.status === 'success'
     ? 'Completed for current cycle'
     : cycleRun?.status === 'running'
@@ -1647,6 +1652,12 @@ function AutomationStatusCard({ venueId, venueTimezone }: { venueId: string; ven
           <p>⏰ Runs every Monday at 08:00 (venue local time)</p>
           <p>📋 Auto-fetches reviews → generates report → triages responses</p>
           <p>🎯 Expected target week: {cycle.weekStart} → {cycle.weekEnd}</p>
+          {isLoading && <p>Loading automation diagnostics…</p>}
+          {isError && (
+            <p className="text-destructive">
+              Unable to load automation diagnostics: {error instanceof Error ? error.message : 'Unknown error'}
+            </p>
+          )}
           <p>📌 Current cycle status: {runStatus}</p>
           <p>🗂️ Report for target week: {lastRun?.hasReport ? 'Present' : 'Missing'}</p>
           <p>🧠 Triage for target week: {lastRun?.hasTriage ? 'Present' : 'Missing'}</p>
@@ -1662,6 +1673,21 @@ function AutomationStatusCard({ venueId, venueTimezone }: { venueId: string; ven
             </p>
           ) : (
             <p>No automated runs yet. First run will happen next Monday.</p>
+          )}
+          {isLikelyStale && (
+            <p className="text-yellow-600 dark:text-yellow-500">
+              Automation may be stale: last run was {daysSinceLatestRun} days ago.
+            </p>
+          )}
+          {cycleRun?.error_message && (
+            <p className="text-destructive">
+              Latest cycle error: {cycleRun.error_message}
+            </p>
+          )}
+          {latestRun?.status && latestRun.status !== 'success' && !latestRun?.error_message && (
+            <p className="text-yellow-600 dark:text-yellow-500">
+              Last run did not complete successfully. Review ingestion and report generation panels for step-level details.
+            </p>
           )}
         </div>
       </CardContent>
