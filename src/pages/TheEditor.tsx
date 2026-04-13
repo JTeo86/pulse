@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -17,6 +18,7 @@ import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -140,8 +142,33 @@ export default function TheEditorPage() {
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [fidelityConfirmed, setFidelityConfirmed] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
-  const [usage] = useState({ pro_photo_used: 3, reel_used: 1 });
-  const [limits] = useState({ monthly_pro_photo_credits: 50, monthly_reel_credits: 20 });
+  const month = new Date().toISOString().slice(0, 7);
+  const { data: creditsData } = useQuery({
+    queryKey: ['the-editor-credits', currentVenue?.id, month],
+    enabled: !!currentVenue,
+    queryFn: async () => {
+      const venueId = currentVenue!.id;
+      const [entitlementsRes, usageRes, limitsRes] = await Promise.all([
+        supabase.from('venue_entitlements').select('monthly_image_quota').eq('venue_id', venueId).maybeSingle(),
+        supabase.from('editor_usage').select('pro_photo_used').eq('venue_id', venueId).eq('month', month).maybeSingle(),
+        supabase.from('venue_limits').select('monthly_pro_photo_credits').eq('venue_id', venueId).maybeSingle(),
+      ]);
+
+      const schemaMissing = [entitlementsRes.error, usageRes.error, limitsRes.error].some((error) => error && isMissingBillingSchemaError(error));
+      if (usageRes.error && !isMissingBillingSchemaError(usageRes.error)) throw usageRes.error;
+      if (entitlementsRes.error && !isMissingBillingSchemaError(entitlementsRes.error)) throw entitlementsRes.error;
+      if (limitsRes.error && !isMissingBillingSchemaError(limitsRes.error)) throw limitsRes.error;
+
+      return {
+        schemaMissing,
+        used: usageRes.data?.pro_photo_used ?? 0,
+        limit: entitlementsRes.data?.monthly_image_quota ?? limitsRes.data?.monthly_pro_photo_credits ?? 0,
+      };
+    },
+  });
+  const proPhotoUsed = creditsData?.used ?? 0;
+  const proPhotoLimit = creditsData?.limit ?? 0;
+  const billingUnavailable = Boolean(creditsData?.schemaMissing);
 
   useEffect(() => {
     if (!jobResult?.final_image_url) return;
@@ -179,7 +206,7 @@ export default function TheEditorPage() {
 
   const handleGenerate = async () => {
     if (!currentVenue || !user || !uploadedFile) return;
-    if (usage.pro_photo_used >= limits.monthly_pro_photo_credits) {
+    if (proPhotoLimit > 0 && proPhotoUsed >= proPhotoLimit) {
       toast({ variant: 'destructive', title: 'Credit limit reached', description: 'Contact admin to increase credits.' });
       return;
     }
@@ -471,12 +498,16 @@ export default function TheEditorPage() {
 
       {/* Credits */}
       <div className="flex items-center gap-6 px-4 py-2.5 rounded-lg bg-muted/30 border border-border/50 w-fit">
-        <CreditBar used={usage.pro_photo_used} total={limits.monthly_pro_photo_credits} label="Pro Photo" />
-        {videoEnabled && (
-          <>
-            <div className="w-px h-4 bg-border" />
-            <CreditBar used={usage.reel_used} total={limits.monthly_reel_credits} label="Reel" />
-          </>
+        <CreditBar used={proPhotoUsed} total={Math.max(proPhotoLimit, 1)} label="Pro Photo" />
+        {!videoEnabled && (
+          <span className="text-xs text-muted-foreground ml-2 border-l border-border pl-4">
+            Video generation paused
+          </span>
+        )}
+        {billingUnavailable && (
+          <span className="text-xs text-muted-foreground ml-2 border-l border-border pl-4">
+            Usage limits unavailable in this environment
+          </span>
         )}
       </div>
 

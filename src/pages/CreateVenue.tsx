@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
 const venueSchema = z.object({
   name: z.string().min(2, 'Venue name must be at least 2 characters'),
@@ -64,6 +65,53 @@ export default function CreateVenuePage() {
         });
 
       if (brandKitError) throw brandKitError;
+
+      // Initialize subscription + entitlements from tier defaults (best effort)
+      try {
+        const [{ data: defaultTierSetting }, { data: activeTiers }] = await Promise.all([
+          supabase.from('platform_settings').select('value').eq('key', 'default_new_venue_tier_slug').maybeSingle(),
+          supabase
+            .from('subscription_tiers')
+            .select('id, slug, monthly_image_quota, monthly_storage_mb, max_users_per_venue, marketplace_access_enabled, video_payg_enabled')
+            .eq('is_active', true)
+            .order('sort_order')
+            .order('name'),
+        ]);
+
+        const requestedSlug = defaultTierSetting?.value?.trim();
+        const defaultTier =
+          (activeTiers ?? []).find((tier) => requestedSlug && tier.slug === requestedSlug)
+          ?? (activeTiers ?? [])[0];
+
+        if (defaultTier) {
+          await supabase.from('venue_subscriptions').upsert({
+            venue_id: venue.id,
+            subscription_tier_id: defaultTier.id,
+            status: 'inactive',
+            pending_change_type: 'none',
+          }, { onConflict: 'venue_id' });
+
+          await supabase.from('venue_entitlements').upsert({
+            venue_id: venue.id,
+            subscription_tier_id: defaultTier.id,
+            monthly_image_quota: defaultTier.monthly_image_quota,
+            monthly_storage_mb: defaultTier.monthly_storage_mb,
+            max_users_per_venue: defaultTier.max_users_per_venue,
+            marketplace_access_enabled: defaultTier.marketplace_access_enabled,
+            video_payg_enabled: defaultTier.video_payg_enabled,
+            source_type: 'tier',
+          }, { onConflict: 'venue_id' });
+
+          await supabase.from('venue_limits').upsert({
+            venue_id: venue.id,
+            monthly_pro_photo_credits: defaultTier.monthly_image_quota,
+          }, { onConflict: 'venue_id' });
+        }
+      } catch (billingInitError) {
+        if (!isMissingBillingSchemaError(billingInitError)) {
+          console.warn('Venue billing defaults initialization skipped:', billingInitError);
+        }
+      }
 
       await refreshVenues();
 

@@ -54,7 +54,7 @@ export default function IntegrationsPage() {
           <Badge variant="secondary">Temporarily paused</Badge>
         </div>
 
-        <p className="text-sm text-muted-foreground">No action is required right now. Use the Publishing screen for current queue status.</p>
+        <p className="text-sm text-muted-foreground">No action is required right now. Publishing remains paused until the Buffer rollout is completed.</p>
       </div>
     </motion.div>
   );
