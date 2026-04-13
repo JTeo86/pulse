@@ -134,6 +134,7 @@ export default function SetupPage() {
           public_url: asset.public_url,
           thumbnail_url: asset.thumbnail_url,
           storage_path: asset.storage_path,
+          storage_bucket: asset.storage_bucket,
         }),
       })));
       setAssets(withResolved);
@@ -317,7 +318,6 @@ export default function SetupPage() {
         const { error: uploadErr } = await supabase.storage.from('asset-pool').upload(path, file);
         if (uploadErr) throw uploadErr;
 
-        const { data: signed } = await supabase.storage.from('asset-pool').createSignedUrl(path, 86400);
         await supabase.from('content_assets').insert({
           venue_id: currentVenue.id,
           asset_type: file.type.startsWith('video') ? 'video' : 'image',
@@ -327,7 +327,7 @@ export default function SetupPage() {
           storage_path: path,
           storage_bucket: 'asset-pool',
           pool: 'asset_pool',
-          public_url: signed?.signedUrl || null,
+          public_url: null,
           metadata: {
             starter_upload: true,
             title: file.name,

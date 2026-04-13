@@ -11,13 +11,18 @@ import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveAssetMediaUrl } from '@/hooks/use-resolved-media';
 
 type FeedAsset = {
   id: string;
   title: string | null;
   public_url: string | null;
+  thumbnail_url: string | null;
+  storage_path: string | null;
+  storage_bucket: string | null;
   created_at: string;
   metadata: Record<string, any> | null;
+  resolved_url?: string;
 };
 
 type AssetUsage = {
@@ -43,7 +48,7 @@ export default function ContentFeed() {
       const [assetsRes, usageRes] = await Promise.all([
         supabase
           .from('content_assets')
-          .select('id, title, public_url, created_at, metadata, source_type')
+          .select('id, title, public_url, thumbnail_url, storage_path, storage_bucket, created_at, metadata, source_type')
           .eq('venue_id', currentVenue.id)
           .eq('asset_type', 'image')
           .in('source_type', ['upload', 'manual', 'guest_upload'])
@@ -75,10 +80,17 @@ export default function ContentFeed() {
         usageMap.set(sourceAssetId, { count: nextCount, lastUsedAt });
       }
 
-      return {
-        assets: (assetsRes.data || []) as FeedAsset[],
-        usageMap,
-      };
+      const resolvedAssets = await Promise.all(((assetsRes.data || []) as FeedAsset[]).map(async (asset) => ({
+        ...asset,
+        resolved_url: await resolveAssetMediaUrl({
+          public_url: asset.public_url,
+          thumbnail_url: asset.thumbnail_url,
+          storage_path: asset.storage_path,
+          storage_bucket: asset.storage_bucket,
+        }),
+      })));
+
+      return { assets: resolvedAssets, usageMap };
     },
   });
 
@@ -108,8 +120,6 @@ export default function ContentFeed() {
         const { error: uploadError } = await supabase.storage.from('asset-pool').upload(storagePath, file);
         if (uploadError) throw uploadError;
 
-        const { data: signedData } = await supabase.storage.from('asset-pool').createSignedUrl(storagePath, 60 * 60 * 24 * 365);
-
         const { error: insertAssetError } = await supabase.from('content_assets').insert({
           venue_id: currentVenue.id,
           asset_type: 'image',
@@ -119,7 +129,7 @@ export default function ContentFeed() {
           storage_path: storagePath,
           storage_bucket: 'asset-pool',
           pool: 'asset_pool',
-          public_url: signedData?.signedUrl || null,
+          public_url: null,
           metadata: {
             autopilot_reusable: true,
             content_feed: true,
@@ -214,8 +224,8 @@ export default function ContentFeed() {
                   onClick={() => navigate('/studio/pro-photo')}
                 >
                   <div className="aspect-square bg-muted">
-                    {asset.public_url ? (
-                      <img src={asset.public_url} alt={asset.title || 'Content feed item'} className="w-full h-full object-cover" />
+                    {(asset.resolved_url || asset.public_url) ? (
+                      <img src={asset.resolved_url || asset.public_url || ''} alt={asset.title || 'Content feed item'} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No preview</div>
                     )}
