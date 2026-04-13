@@ -692,7 +692,7 @@ export default function BrandLibraryPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Home
         </Button>
       )}
-      <PageHeader title="Brand Library" description="Store your best images here. Pulse uses these to stay visually consistent." />
+      <PageHeader title="Content Pipeline" description="Manage upcoming posts, suggestions, and content gaps." />
       <Tabs value={topLevelTab} onValueChange={handleTopLevelTabChange}>
         <TabsList>
           <TabsTrigger value="queue">Queue</TabsTrigger>
