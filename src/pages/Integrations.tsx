@@ -35,7 +35,7 @@ export default function IntegrationsPage() {
 
       <PageHeader
         title="Integrations"
-        description="Buffer publishing is being finalized. This area is intentionally paused for stability."
+        description="Publishing integrations are currently in a controlled pause while Buffer rollout hardening is completed."
       />
 
       <div className="max-w-2xl card-elevated p-6 space-y-4">
@@ -54,7 +54,7 @@ export default function IntegrationsPage() {
           <Badge variant="secondary">Temporarily paused</Badge>
         </div>
 
-        <p className="text-sm text-muted-foreground">No action is required right now. Publishing remains paused until the Buffer rollout is completed.</p>
+        <p className="text-sm text-muted-foreground">No action is required from your team today. Existing publishing queues remain read-only until Buffer rollout hardening is complete.</p>
       </div>
     </motion.div>
   );

@@ -137,9 +137,9 @@ export default function ReelCreator() {
             <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mb-4">
               <Film className="w-8 h-8 text-accent" />
             </div>
-            <h3 className="text-lg font-serif font-medium mb-2">Video Generation Coming Soon</h3>
+            <h3 className="text-lg font-serif font-medium mb-2">Reel generation is paused</h3>
             <p className="text-sm text-muted-foreground max-w-md mb-4">
-              Turn your Pro Photos into engaging Reels and Stories. This feature is being prepared and will be available soon.
+              Turn your Pro Photos into engaging Reels and Stories. This workflow is intentionally paused while provider and output quality checks are completed.
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {['One-click video from images', 'Multiple aspect ratios', 'Motion presets', 'AI captions'].map((f) => (

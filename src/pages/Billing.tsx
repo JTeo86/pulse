@@ -193,9 +193,10 @@ export default function BillingPage() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><CreditCard className="w-4 h-4" /> Video credits</CardTitle></CardHeader>
-        <CardContent>
-          <Button variant="outline" disabled>Buy video credits (coming soon)</Button>
+        <CardHeader><CardTitle className="flex items-center gap-2"><CreditCard className="w-4 h-4" /> Video credits</CardTitle><CardDescription>Video credit top-ups are intentionally paused while usage billing validation is finalized.</CardDescription></CardHeader>
+        <CardContent className="space-y-3">
+          <Button variant="outline" disabled>Top-ups paused</Button>
+          <p className="text-xs text-muted-foreground">Your current video credit balance remains visible above. Purchase actions will re-open after rollout validation.</p>
         </CardContent>
       </Card>
     </motion.div>

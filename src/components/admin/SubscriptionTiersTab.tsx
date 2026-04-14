@@ -1,37 +1,98 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, Circle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 import { isFunctionNotDeployedError, isMissingBillingSchemaError } from '@/lib/billing-readiness';
+
+type TierDraft = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+  stripe_price_id_monthly: string;
+  monthly_image_quota: number;
+  monthly_storage_mb: number;
+  max_users_per_venue: number;
+  marketplace_access_enabled: boolean;
+  video_payg_enabled: boolean;
+};
+
+function toTierDraft(tier: any): TierDraft {
+  return {
+    id: tier.id,
+    slug: tier.slug || '',
+    name: tier.name || '',
+    description: tier.description || '',
+    is_active: Boolean(tier.is_active),
+    sort_order: Number(tier.sort_order ?? 0),
+    stripe_price_id_monthly: tier.stripe_price_id_monthly || '',
+    monthly_image_quota: Number(tier.monthly_image_quota ?? 0),
+    monthly_storage_mb: Number(tier.monthly_storage_mb ?? 0),
+    max_users_per_venue: Number(tier.max_users_per_venue ?? 1),
+    marketplace_access_enabled: Boolean(tier.marketplace_access_enabled),
+    video_payg_enabled: Boolean(tier.video_payg_enabled),
+  };
+}
 
 export default function SubscriptionTiersTab() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState({
-    slug: '', name: '', stripe_price_id_monthly: '', monthly_image_quota: '0', monthly_storage_mb: '0', max_users_per_venue: '1', description: '',
+    slug: '',
+    name: '',
+    description: '',
+    sort_order: '0',
+    is_active: true,
+    stripe_price_id_monthly: '',
+    monthly_image_quota: '0',
+    monthly_storage_mb: '0',
+    max_users_per_venue: '1',
+    marketplace_access_enabled: false,
+    video_payg_enabled: false,
   });
+  const [edits, setEdits] = useState<Record<string, TierDraft>>({});
 
   const { data, error, isError } = useQuery({
     queryKey: ['subscription-tiers-admin'],
     queryFn: async () => {
-      const [{ data: tiers, error: tiersError }, ...probeResults] = await Promise.all([
+      const [tiersRes, settingsRes, ...probeResults] = await Promise.all([
         supabase.from('subscription_tiers').select('*').order('sort_order').order('name'),
+        supabase.from('platform_settings').select('value').eq('key', 'default_new_venue_tier_slug').maybeSingle(),
         supabase.functions.invoke('create-checkout-session', { body: {} }),
         supabase.functions.invoke('create-customer-portal-session', { body: {} }),
         supabase.functions.invoke('change-subscription-tier', { body: {} }),
         supabase.functions.invoke('stripe-webhook', { body: {} }),
       ]);
-      if (tiersError) throw tiersError;
+      if (tiersRes.error) throw tiersRes.error;
       return {
-        tiers: tiers ?? [],
+        tiers: tiersRes.data ?? [],
+        defaultTierSlug: settingsRes.data?.value || '',
         missingFunctions: probeResults.some(({ error }) => isFunctionNotDeployedError(error)),
       };
     },
   });
+
   const schemaNotReady = isMissingBillingSchemaError(error);
+  const tiers = data?.tiers ?? [];
+  const defaultTierSlug = data?.defaultTierSlug || '';
+  const functionsNotReady = Boolean(data?.missingFunctions);
+
+  const hasEdit = (tier: any) => Boolean(edits[tier.id]);
+  const getTier = (tier: any) => edits[tier.id] ?? toTierDraft(tier);
+
+  const visibleDefaultTier = useMemo(
+    () => tiers.find((tier) => tier.slug === defaultTierSlug) ?? tiers.find((tier) => tier.is_active),
+    [tiers, defaultTierSlug],
+  );
 
   if (isError && schemaNotReady) {
     return (
@@ -46,25 +107,96 @@ export default function SubscriptionTiersTab() {
     );
   }
 
-  const tiers = data?.tiers ?? [];
-  const functionsNotReady = Boolean(data?.missingFunctions);
+  const setTierField = <K extends keyof TierDraft>(tier: any, key: K, value: TierDraft[K]) => {
+    setEdits((prev) => ({
+      ...prev,
+      [tier.id]: {
+        ...getTier(tier),
+        [key]: value,
+      },
+    }));
+  };
 
   const saveTier = async (tier: any) => {
-    const { error } = await supabase.from('subscription_tiers').upsert(tier, { onConflict: 'id' });
-    if (error) throw error;
+    const payload = edits[tier.id];
+    if (!payload) return;
+
+    const { error } = await supabase.from('subscription_tiers').upsert(
+      {
+        id: payload.id,
+        slug: payload.slug,
+        name: payload.name,
+        description: payload.description,
+        is_active: payload.is_active,
+        sort_order: payload.sort_order,
+        stripe_price_id_monthly: payload.stripe_price_id_monthly,
+        monthly_image_quota: payload.monthly_image_quota,
+        monthly_storage_mb: payload.monthly_storage_mb,
+        max_users_per_venue: payload.max_users_per_venue,
+        marketplace_access_enabled: payload.marketplace_access_enabled,
+        video_payg_enabled: payload.video_payg_enabled,
+      },
+      { onConflict: 'id' },
+    );
+
+    if (error) {
+      toast.error(`Failed to save ${tier.name}`);
+      throw error;
+    }
+
+    setEdits((prev) => {
+      const next = { ...prev };
+      delete next[tier.id];
+      return next;
+    });
+    toast.success(`${payload.name || tier.name} updated`);
+    queryClient.invalidateQueries({ queryKey: ['subscription-tiers-admin'] });
+  };
+
+  const setDefaultTier = async (slug: string) => {
+    const { error } = await supabase
+      .from('platform_settings')
+      .upsert({ key: 'default_new_venue_tier_slug', value: slug, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) {
+      toast.error('Failed to set default new-venue plan');
+      throw error;
+    }
+    toast.success('Default new-venue plan updated');
+    queryClient.invalidateQueries({ queryKey: ['platform-settings'] });
     queryClient.invalidateQueries({ queryKey: ['subscription-tiers-admin'] });
   };
 
   const createTier = async () => {
     const { error } = await supabase.from('subscription_tiers').insert({
-      ...draft,
+      slug: draft.slug,
+      name: draft.name,
+      description: draft.description,
+      sort_order: Number(draft.sort_order),
+      is_active: draft.is_active,
+      stripe_price_id_monthly: draft.stripe_price_id_monthly,
       monthly_image_quota: Number(draft.monthly_image_quota),
       monthly_storage_mb: Number(draft.monthly_storage_mb),
       max_users_per_venue: Number(draft.max_users_per_venue),
+      marketplace_access_enabled: draft.marketplace_access_enabled,
+      video_payg_enabled: draft.video_payg_enabled,
       feature_summary_json: [],
     });
     if (error) throw error;
-    setDraft({ slug: '', name: '', stripe_price_id_monthly: '', monthly_image_quota: '0', monthly_storage_mb: '0', max_users_per_venue: '1', description: '' });
+
+    setDraft({
+      slug: '',
+      name: '',
+      description: '',
+      sort_order: '0',
+      is_active: true,
+      stripe_price_id_monthly: '',
+      monthly_image_quota: '0',
+      monthly_storage_mb: '0',
+      max_users_per_venue: '1',
+      marketplace_access_enabled: false,
+      video_payg_enabled: false,
+    });
+    toast.success('New plan created');
     queryClient.invalidateQueries({ queryKey: ['subscription-tiers-admin'] });
   };
 
@@ -76,40 +208,164 @@ export default function SubscriptionTiersTab() {
             <CardTitle>Billing functions not deployed</CardTitle>
           </CardHeader>
           <CardContent className="pt-0 text-sm text-muted-foreground">
-            Tier management is visible, but checkout and plan-change actions will fail until billing edge functions are deployed.
+            Plan settings can be edited, but checkout and plan-change actions remain unavailable until billing edge functions are deployed.
           </CardContent>
         </Card>
       )}
 
       <Card>
-        <CardHeader><CardTitle>Create tier</CardTitle></CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-3">
-          <Input placeholder="slug" value={draft.slug} onChange={(e) => setDraft((p) => ({ ...p, slug: e.target.value }))} />
-          <Input placeholder="name" value={draft.name} onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))} />
-          <Input placeholder="Stripe monthly price ID" value={draft.stripe_price_id_monthly} onChange={(e) => setDraft((p) => ({ ...p, stripe_price_id_monthly: e.target.value }))} />
-          <Input placeholder="Image quota" type="number" value={draft.monthly_image_quota} onChange={(e) => setDraft((p) => ({ ...p, monthly_image_quota: e.target.value }))} />
-          <Input placeholder="Storage MB" type="number" value={draft.monthly_storage_mb} onChange={(e) => setDraft((p) => ({ ...p, monthly_storage_mb: e.target.value }))} />
-          <Input placeholder="Max users" type="number" value={draft.max_users_per_venue} onChange={(e) => setDraft((p) => ({ ...p, max_users_per_venue: e.target.value }))} />
-          <Input className="md:col-span-2" placeholder="Description" value={draft.description} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} />
-          <Button className="md:col-span-2" onClick={createTier}>Create tier</Button>
+        <CardHeader>
+          <CardTitle>Plan management</CardTitle>
+          <CardDescription>
+            Set plan identity first, then entitlements, then billing mapping. Default new-venue plan is managed here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            Default plan for new venues:{' '}
+            <span className="font-medium text-foreground">
+              {visibleDefaultTier ? `${visibleDefaultTier.name} (${visibleDefaultTier.slug})` : 'Auto-select first active plan'}
+            </span>
+          </p>
         </CardContent>
       </Card>
 
-      {tiers?.map((tier) => (
-        <Card key={tier.id}>
-          <CardHeader><CardTitle>{tier.name}</CardTitle></CardHeader>
-          <CardContent className="grid md:grid-cols-3 gap-3 items-end">
-            <div><Label>Sort order</Label><Input type="number" value={tier.sort_order} onChange={(e) => saveTier({ id: tier.id, sort_order: Number(e.target.value) })} /></div>
-            <div><Label>Stripe monthly price ID</Label><Input value={tier.stripe_price_id_monthly || ''} onChange={(e) => saveTier({ id: tier.id, stripe_price_id_monthly: e.target.value })} /></div>
-            <div className="flex items-center gap-3 border rounded px-3 h-10"><Label>Active</Label><Switch checked={tier.is_active} onCheckedChange={(v) => saveTier({ id: tier.id, is_active: v })} /></div>
-            <div><Label>Monthly image quota</Label><Input type="number" value={tier.monthly_image_quota} onChange={(e) => saveTier({ id: tier.id, monthly_image_quota: Number(e.target.value) })} /></div>
-            <div><Label>Monthly storage (MB)</Label><Input type="number" value={tier.monthly_storage_mb} onChange={(e) => saveTier({ id: tier.id, monthly_storage_mb: Number(e.target.value) })} /></div>
-            <div><Label>Max users/venue</Label><Input type="number" value={tier.max_users_per_venue} onChange={(e) => saveTier({ id: tier.id, max_users_per_venue: Number(e.target.value) })} /></div>
-            <div className="flex items-center gap-3 border rounded px-3 h-10"><Label>Marketplace access</Label><Switch checked={tier.marketplace_access_enabled} onCheckedChange={(v) => saveTier({ id: tier.id, marketplace_access_enabled: v })} /></div>
-            <div className="flex items-center gap-3 border rounded px-3 h-10"><Label>Video PAYG enabled</Label><Switch checked={tier.video_payg_enabled} onCheckedChange={(v) => saveTier({ id: tier.id, video_payg_enabled: v })} /></div>
-          </CardContent>
-        </Card>
-      ))}
+      <Card>
+        <CardHeader>
+          <CardTitle>Create plan</CardTitle>
+          <CardDescription>Add a new tier and then refine details in its plan card below.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Plan name</Label>
+            <Input value={draft.name} onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))} placeholder="Growth" />
+          </div>
+          <div className="space-y-1">
+            <Label>Slug</Label>
+            <Input value={draft.slug} onChange={(e) => setDraft((p) => ({ ...p, slug: e.target.value }))} placeholder="growth" />
+          </div>
+          <div className="space-y-1 md:col-span-2">
+            <Label>Description</Label>
+            <Input value={draft.description} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} placeholder="For busy single-location teams" />
+          </div>
+          <Button className="md:col-span-2" onClick={createTier} disabled={!draft.slug.trim() || !draft.name.trim()}>
+            Create plan
+          </Button>
+        </CardContent>
+      </Card>
+
+      {tiers.map((tier) => {
+        const localTier = getTier(tier);
+        const isDefault = defaultTierSlug
+          ? defaultTierSlug === tier.slug
+          : visibleDefaultTier?.slug === tier.slug;
+
+        return (
+          <Card key={tier.id} className={isDefault ? 'border-accent/40' : ''}>
+            <CardHeader className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="space-y-1">
+                  <CardTitle className="text-lg">{localTier.name || tier.name}</CardTitle>
+                  <CardDescription>Plan slug: {localTier.slug || tier.slug}</CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {isDefault && <Badge>Default for new venues</Badge>}
+                  {localTier.is_active ? <Badge variant="outline">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Button variant={isDefault ? 'secondary' : 'outline'} size="sm" onClick={() => setDefaultTier(tier.slug)}>
+                  {isDefault ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Circle className="mr-1.5 h-3.5 w-3.5" />}
+                  {isDefault ? 'Default plan' : 'Set as default'}
+                </Button>
+                <span className="text-muted-foreground">Used when a venue is created and no explicit tier is chosen.</span>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-5">
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Plan identity</h4>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Name</Label>
+                    <Input value={localTier.name} onChange={(e) => setTierField(tier, 'name', e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Slug</Label>
+                    <Input value={localTier.slug} onChange={(e) => setTierField(tier, 'slug', e.target.value)} />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Description</Label>
+                    <Input value={localTier.description} onChange={(e) => setTierField(tier, 'description', e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Sort order</Label>
+                    <Input type="number" value={localTier.sort_order} onChange={(e) => setTierField(tier, 'sort_order', Number(e.target.value))} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <Label>Active status</Label>
+                    <Switch checked={localTier.is_active} onCheckedChange={(v) => setTierField(tier, 'is_active', v)} />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Entitlements</h4>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Monthly image quota</Label>
+                    <Input type="number" value={localTier.monthly_image_quota} onChange={(e) => setTierField(tier, 'monthly_image_quota', Number(e.target.value))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Monthly storage quota (MB)</Label>
+                    <Input type="number" value={localTier.monthly_storage_mb} onChange={(e) => setTierField(tier, 'monthly_storage_mb', Number(e.target.value))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Max users per venue</Label>
+                    <Input type="number" value={localTier.max_users_per_venue} onChange={(e) => setTierField(tier, 'max_users_per_venue', Number(e.target.value))} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <Label>Marketplace access</Label>
+                    <Switch checked={localTier.marketplace_access_enabled} onCheckedChange={(v) => setTierField(tier, 'marketplace_access_enabled', v)} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2 md:col-span-2">
+                    <Label>Video PAYG eligibility</Label>
+                    <Switch checked={localTier.video_payg_enabled} onCheckedChange={(v) => setTierField(tier, 'video_payg_enabled', v)} />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Billing mapping</h4>
+                <div className="space-y-1">
+                  <Label>Stripe monthly price ID</Label>
+                  <Input value={localTier.stripe_price_id_monthly} onChange={(e) => setTierField(tier, 'stripe_price_id_monthly', e.target.value)} placeholder="price_..." />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                {hasEdit(tier) && (
+                  <Button variant="outline" onClick={() => setEdits((prev) => {
+                    const next = { ...prev };
+                    delete next[tier.id];
+                    return next;
+                  })}>
+                    Discard
+                  </Button>
+                )}
+                <Button onClick={() => saveTier(tier)} disabled={!hasEdit(tier)}>
+                  Save plan
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
