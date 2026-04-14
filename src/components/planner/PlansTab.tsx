@@ -89,6 +89,14 @@ export function PlansTab() {
     setDeleteConfirm(null);
   };
 
+  const getGenerateImageHref = (planId: string, planTitle: string) => {
+    const params = new URLSearchParams({
+      plan_id: planId,
+      brief_title: `${planTitle} image`,
+    });
+    return `/studio/pro-photo?${params.toString()}`;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -215,6 +223,22 @@ export function PlansTab() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs hidden lg:inline-flex"
+                    onClick={() => navigate(getGenerateImageHref(plan.id, plan.title))}
+                  >
+                    Generate image
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs hidden xl:inline-flex"
+                    onClick={() => navigate('/content/library?tab=queue')}
+                  >
+                    Add to content queue
+                  </Button>
                   <span className="text-xs text-muted-foreground">
                     {format(new Date(plan.created_at), 'MMM d')}
                   </span>
@@ -224,9 +248,15 @@ export function PlansTab() {
                         <MoreHorizontal className="w-3.5 h-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuContent align="end" className="w-52">
                       <DropdownMenuItem onClick={() => navigate(`/content/planner/plan/${plan.id}`)}>
                         Open Plan
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(getGenerateImageHref(plan.id, plan.title))}>
+                        Generate image
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate('/content/library?tab=queue')}>
+                        Add to content queue
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {plan.is_archived ? (
@@ -279,6 +309,19 @@ export function PlansTab() {
                       <p className="text-[10px] text-muted-foreground mt-1">
                         {format(new Date(plan.starts_at), 'MMM dd, yyyy')}
                       </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[11px]"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(getGenerateImageHref(plan.id, plan.title));
+                          }}
+                        >
+                          Generate image
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

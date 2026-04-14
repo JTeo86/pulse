@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CampaignEngine } from '@/components/copywriter/CampaignEngine';
 import { RecentDrafts, type CopyProject } from '@/components/copywriter/RecentDrafts';
@@ -6,6 +7,7 @@ import { Sparkles, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function CampaignsTab() {
+  const navigate = useNavigate();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedProject, setSelectedProject] = useState<CopyProject | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -74,6 +76,12 @@ export function CampaignsTab() {
           <Button onClick={handleNewCampaign} className="gap-2">
             <Plus className="w-4 h-4" />
             New Campaign
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate('/studio/pro-photo?campaign_context=campaigns&brief_title=Campaign image')}
+          >
+            Generate image
           </Button>
         </div>
       </div>

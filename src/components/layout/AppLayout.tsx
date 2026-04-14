@@ -16,6 +16,7 @@ import {
   Plus,
   PenSquare,
   Upload,
+  Wand2,
   Zap
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -54,10 +55,10 @@ interface AppLayoutProps {
 const workflowNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
-  { name: 'Uploads', href: '/content/feed', icon: Images },
+  { name: 'New Photos', href: '/content/feed', icon: Images },
   { name: 'Autopilot', href: '/autopilot', icon: Zap },
   { name: 'Content', href: '/content/library', icon: FolderOpen },
-  { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2 },
+  { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2, badge: 'Soon' },
 ];
 
 const setupNavigation: NavItem[] = [
@@ -75,16 +76,16 @@ const quickActions = [
     icon: Upload,
   },
   {
+    name: 'Generate Pro Photo',
+    description: 'Intentionally create a campaign-ready image',
+    href: '/studio/pro-photo',
+    icon: Wand2,
+  },
+  {
     name: 'New Campaign',
     description: 'Create a new campaign or content push',
     href: '/copywriter',
     icon: PenSquare,
-  },
-  {
-    name: 'Manual Post',
-    description: 'Create or schedule a one-off post manually',
-    href: '/content/calendar',
-    icon: CalendarCheck2,
   },
 ];
 
