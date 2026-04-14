@@ -27,7 +27,9 @@ interface BufferChannel {
   formatted_username: string;
 }
 
-const approvedStatuses = ['approved', 'ready'];
+const readyStatuses: NonNullable<ContentItem['status']>[] = ['approved', 'ready'];
+const historyStatuses: NonNullable<ContentItem['status']>[] = ['queued', 'scheduled', 'published', 'failed'];
+const visibleStatuses = [...readyStatuses, ...historyStatuses];
 
 function resolveImage(item: ContentItem) {
   if (item.media_master_url) return item.media_master_url;
@@ -74,7 +76,7 @@ export function InternalPublishingQueue() {
       .from('content_items')
       .select('id, caption_final, media_master_url, media_variants, status, scheduled_for, created_at')
       .eq('venue_id', currentVenue.id)
-      .in('status', approvedStatuses)
+      .in('status', visibleStatuses)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -108,11 +110,23 @@ export function InternalPublishingQueue() {
       .finally(() => setLoading(false));
   }, [currentVenue?.id]);
 
-  const selectedCount = selectedIds.size;
+  const readyItems = useMemo(
+    () => items.filter((item) => item.status ? readyStatuses.includes(item.status) : false),
+    [items],
+  );
+  const historyItems = useMemo(
+    () => items.filter((item) => item.status ? historyStatuses.includes(item.status) : false),
+    [items],
+  );
+  const readyItemIds = useMemo(() => new Set(readyItems.map((item) => item.id)), [readyItems]);
+  const selectedCount = useMemo(
+    () => Array.from(selectedIds).filter((id) => readyItemIds.has(id)).length,
+    [selectedIds, readyItemIds],
+  );
 
   const canSend = useMemo(() => (
-    canPublish && !sending && selectedIds.size > 0 && selectedChannels.size > 0 && bufferConnected
-  ), [canPublish, sending, selectedIds.size, selectedChannels.size, bufferConnected]);
+    canPublish && !sending && selectedCount > 0 && selectedChannels.size > 0 && bufferConnected
+  ), [canPublish, sending, selectedCount, selectedChannels.size, bufferConnected]);
 
   const toggleSelectItem = (id: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -140,7 +154,7 @@ export function InternalPublishingQueue() {
       const { data, error } = await supabase.functions.invoke('send-to-buffer', {
         body: {
           venue_id: currentVenue.id,
-          content_ids: Array.from(selectedIds),
+          content_ids: Array.from(selectedIds).filter((id) => readyItemIds.has(id)),
           profile_ids: Array.from(selectedChannels),
         },
       });
@@ -176,6 +190,7 @@ export function InternalPublishingQueue() {
 
       if (error) throw error;
       toast({ title: 'Buffer status refreshed', description: `${data?.synced ?? 0} items synced.` });
+      await fetchItems();
     } catch (error: any) {
       toast({ title: 'Failed to refresh Buffer status', description: getErrorMessage(error), variant: 'destructive' });
     } finally {
@@ -235,39 +250,82 @@ export function InternalPublishingQueue() {
         <p className="text-sm text-muted-foreground">Only venue owner/admin can publish or refresh statuses.</p>
       )}
 
-      {items.length === 0 ? (
-        <EmptyState icon={Send} title="No approved content" description="Approve content first, then it will appear here for Buffer publishing." />
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => {
-            const image = resolveImage(item);
-            return (
-              <div key={item.id} className="card-elevated p-3 flex gap-3 items-start">
-                <Checkbox
-                  checked={selectedIds.has(item.id)}
-                  disabled={!canPublish}
-                  onCheckedChange={(checked) => toggleSelectItem(item.id, Boolean(checked))}
-                />
-                <div className="w-20 h-20 rounded bg-muted overflow-hidden shrink-0">
-                  {image ? (
-                    <MediaImage src={image} alt="" aspectClassName="w-full h-full" className="object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground"><ImageOff className="w-4 h-4" /></div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm line-clamp-3">{item.caption_final || 'No caption (text-only post can still be sent if you add a caption first).'}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {item.status && <StatusBadge status={item.status} />}
-                    <p className="text-xs text-muted-foreground">Created {new Date(item.created_at).toLocaleString()}</p>
-                    {item.scheduled_for ? <p className="text-xs text-muted-foreground">Scheduled for {new Date(item.scheduled_for).toLocaleString()}</p> : null}
+      <div className="space-y-4">
+        <section className="space-y-3">
+          <div>
+            <h3 className="font-medium">Ready to send</h3>
+            <p className="text-sm text-muted-foreground">Approved content that can be sent to selected Buffer channels.</p>
+          </div>
+          {readyItems.length === 0 ? (
+            <EmptyState icon={Send} title="No ready content" description="Approve content first, then it will appear here for Buffer publishing." />
+          ) : (
+            <div className="space-y-3">
+              {readyItems.map((item) => {
+                const image = resolveImage(item);
+                return (
+                  <div key={item.id} className="card-elevated p-3 flex gap-3 items-start">
+                    <Checkbox
+                      checked={selectedIds.has(item.id)}
+                      disabled={!canPublish}
+                      onCheckedChange={(checked) => toggleSelectItem(item.id, Boolean(checked))}
+                    />
+                    <div className="w-20 h-20 rounded bg-muted overflow-hidden shrink-0">
+                      {image ? (
+                        <MediaImage src={image} alt="" aspectClassName="w-full h-full" className="object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground"><ImageOff className="w-4 h-4" /></div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm line-clamp-3">{item.caption_final || 'No caption (text-only post can still be sent if you add a caption first).'}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {item.status && <StatusBadge status={item.status} />}
+                        <p className="text-xs text-muted-foreground">Created {new Date(item.created_at).toLocaleString()}</p>
+                        {item.scheduled_for ? <p className="text-xs text-muted-foreground">Scheduled for {new Date(item.scheduled_for).toLocaleString()}</p> : null}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <div>
+            <h3 className="font-medium">Already in Buffer / publishing history</h3>
+            <p className="text-sm text-muted-foreground">Track queued, scheduled, published, and failed items.</p>
+          </div>
+          {historyItems.length === 0 ? (
+            <EmptyState icon={RefreshCw} title="No Buffer history yet" description="After sending content to Buffer, delivery statuses will appear here." />
+          ) : (
+            <div className="space-y-3">
+              {historyItems.map((item) => {
+                const image = resolveImage(item);
+                return (
+                  <div key={item.id} className="card-elevated p-3 flex gap-3 items-start">
+                    <div className="w-20 h-20 rounded bg-muted overflow-hidden shrink-0">
+                      {image ? (
+                        <MediaImage src={image} alt="" aspectClassName="w-full h-full" className="object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground"><ImageOff className="w-4 h-4" /></div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm line-clamp-3">{item.caption_final || 'No caption was stored for this post.'}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {item.status && <StatusBadge status={item.status} />}
+                        <p className="text-xs text-muted-foreground">Created {new Date(item.created_at).toLocaleString()}</p>
+                        {item.scheduled_for ? <p className="text-xs text-muted-foreground">Scheduled for {new Date(item.scheduled_for).toLocaleString()}</p> : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
