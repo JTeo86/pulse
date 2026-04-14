@@ -122,7 +122,7 @@ export default function AutopilotPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Autopilot" description="Autopilot status, schedule, and recent activity." />
+      <PageHeader title="Autopilot" description="See what I’m handling for you and what I need next." />
 
       <Card>
         <CardContent className="p-4 space-y-4">
@@ -146,13 +146,13 @@ export default function AutopilotPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Needs from you</CardTitle>
+          <CardTitle className="text-base">Next actions</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           {needsLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading...</div>
           ) : needsFromYou.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No urgent requests right now.</p>
+            <p className="text-sm text-muted-foreground">You’re all set for now.</p>
           ) : (
             <ul className="space-y-2">
               {needsFromYou.map((item) => (
@@ -168,13 +168,13 @@ export default function AutopilotPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Recent Autopilot activity</CardTitle>
+          <CardTitle className="text-base">Recent activity</CardTitle>
         </CardHeader>
         <CardContent className="pt-0 space-y-2">
           {runsLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Loading...</div>
           ) : runs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No runs yet.</p>
+            <p className="text-sm text-muted-foreground">I haven’t run yet.</p>
           ) : (
             runs.slice(0, 5).map((run) => (
               <div key={run.id} className="flex items-center justify-between border rounded-md p-3 text-sm">
