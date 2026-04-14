@@ -12,6 +12,7 @@ type RunType = "daily_content" | "weekly_campaign" | "review_content";
 type GeneratedItem = {
   title: string;
   caption: string;
+  content_type: "food" | "drinks" | "atmosphere" | "social_proof" | "occasion";
   cta: string | null;
   hashtags: string[];
   asset_type: "static" | "video";
@@ -205,6 +206,13 @@ async function buildVenueContext(supabase: any, venueId: string) {
   const upcomingEvents = eventsRes.data || [];
   const recentAssets = assetsRes.data || [];
   const reusableLibraryCount = (reusableLibraryRes.data || []).length;
+  const venueStyle = deriveVenueStyleProfile({
+    profile,
+    brandKit,
+    venue,
+    recentAssets,
+    recentContent,
+  });
 
   return {
     pendingReviews,
@@ -212,14 +220,18 @@ async function buildVenueContext(supabase: any, venueId: string) {
     recentAssets,
     reusableLibraryCount,
     upcomingEvents,
+    venueStyle,
     contextString: [
       `Venue: ${venue?.name || "Unknown"} (${venue?.city || venue?.country_code || "Unknown"})`,
-      profile?.cuisine_type ? `Cuisine: ${profile.cuisine_type}` : "",
-      `Tone: ${profile?.venue_tone || brandKit?.preset || "casual"}`,
+      `Cuisine: ${venueStyle.cuisine}`,
+      `Tone: ${venueStyle.tone}`,
+      `Vibe: ${venueStyle.vibe}`,
+      `Primary customer type: ${venueStyle.customerType}`,
       profile?.brand_summary ? `Brand: ${profile.brand_summary}` : "",
       profile?.target_audience ? `Audience: ${profile.target_audience}` : "",
       profile?.key_selling_points ? `Key selling points: ${profile.key_selling_points}` : "",
       brandKit?.rules_text ? `Brand rules: ${brandKit.rules_text}` : "",
+      `Style guidance: ${venueStyle.styleGuidance}`,
       venue?.instagram_handle ? `Instagram: @${venue.instagram_handle}` : "",
       upcomingEvents.length > 0 ? `Upcoming campaigns: ${upcomingEvents.map((e: any) => e.title).join(", ")}` : "",
       pendingReviews.length > 0 ? `Pending reviews: ${pendingReviews.length}` : "",
@@ -600,12 +612,21 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
 
   const title = String(item.title || `Autopilot ${runType.replace("_", " ")} #${index + 1}`).slice(0, 120);
   const suggested = item.suggested_scheduled_time || item.scheduled_for || null;
+  const rawContentType = String(item.content_type || "").trim().toLowerCase().replace(/\s+/g, "_");
+  const content_type: GeneratedItem["content_type"] = (
+    rawContentType === "food"
+    || rawContentType === "drinks"
+    || rawContentType === "atmosphere"
+    || rawContentType === "social_proof"
+    || rawContentType === "occasion"
+  ) ? rawContentType : "food";
 
   const badges = ["Autopilot"];
   if (runType === "review_content") badges.push("Review-based");
   if (runType === "weekly_campaign") badges.push("Weekly Campaign");
   if (!item.asset_url) badges.push("Needs Asset");
   badges.push("Ready to Schedule");
+  badges.push(`Type:${content_type}`);
 
   const generationReason = String(item.generation_reason || item.reason || "").trim();
   const contentBriefBase = item.content_brief ? String(item.content_brief) : null;
@@ -616,6 +637,7 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
   return {
     title,
     caption,
+    content_type,
     cta: item.cta ? String(item.cta) : null,
     hashtags,
     asset_type,
@@ -625,6 +647,60 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
     campaign_tag: item.campaign_tag ? String(item.campaign_tag) : null,
     badges,
   };
+}
+
+function deriveVenueStyleProfile(input: {
+  profile: any;
+  brandKit: any;
+  venue: any;
+  recentAssets: any[];
+  recentContent: any[];
+}): {
+  cuisine: string;
+  tone: "premium" | "casual" | "energetic";
+  vibe: "dark" | "bright" | "lively";
+  customerType: "couples" | "groups" | "mixed";
+  styleGuidance: string;
+} {
+  const cuisine = String(input.profile?.cuisine_type || "").trim() || "restaurant";
+  const searchableCorpus = [
+    input.profile?.brand_summary,
+    input.profile?.target_audience,
+    input.profile?.key_selling_points,
+    input.brandKit?.preset,
+    input.brandKit?.rules_text,
+    input.venue?.name,
+    ...(input.recentAssets || []).map((asset: any) => `${asset?.title || ""} ${JSON.stringify(asset?.metadata || {})}`),
+    ...(input.recentContent || []).map((content: any) => `${content?.title || ""} ${content?.caption_draft || ""} ${content?.caption_final || ""}`),
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const includesAny = (terms: string[]) => terms.some((term) => searchableCorpus.includes(term));
+
+  const tone: "premium" | "casual" | "energetic" = includesAny(["fine dining", "chef tasting", "elevated", "luxury", "premium", "intimate"])
+    ? "premium"
+    : includesAny(["party", "nightlife", "dj", "late night", "lively", "music", "festival", "sports bar"])
+      ? "energetic"
+      : "casual";
+
+  const vibe: "dark" | "bright" | "lively" = includesAny(["moody", "dim", "candle", "dark", "speakeasy", "intimate lighting"])
+    ? "dark"
+    : includesAny(["neon", "crowd", "dance", "live music", "busy bar", "celebration"])
+      ? "lively"
+      : "bright";
+
+  const customerType: "couples" | "groups" | "mixed" = includesAny(["date night", "romantic", "anniversary", "couples"])
+    ? "couples"
+    : includesAny(["large group", "friends", "team", "party", "family style", "celebration"])
+      ? "groups"
+      : "mixed";
+
+  const styleGuidance = tone === "premium"
+    ? "Use minimal, refined language with understated confidence. Keep captions concise and polished."
+    : tone === "energetic"
+      ? "Use dynamic, lively language with momentum and social energy. Keep rhythm punchy."
+      : "Use warm, friendly, approachable language that feels conversational and welcoming.";
+
+  return { cuisine, tone, vibe, customerType, styleGuidance };
 }
 
 async function markAssetsUsed(
@@ -992,19 +1068,26 @@ ${buildAssetBrief(assets)}
 
 Each piece should:
 - Be immediately postable on Instagram/TikTok
-- Match the venue's brand tone and audience
-- Include a strong caption with emojis and CTA
+- Match the venue's tone, vibe, and audience exactly
+- Use venue-specific references (menu moments, space details, audience behavior) and avoid generic restaurant language
+- Keep caption style aligned to tone:
+  - premium: minimal, refined, understated
+  - casual: warm, friendly, conversational
+  - energetic: lively, dynamic, momentum-driven
+- Include a strong caption with measured emoji use and CTA
 - Suggest relevant hashtags (5-8)
-- Be specific to this venue, not generic
-- Reference actual menu items, ambiance, or seasonal moments
+- Assign one content_type per post: food, drinks, atmosphere, social_proof, occasion
+- Keep variation across posts and avoid repeated phrasing
 - Prioritize missing categories before creating additional volume
 - Do not generate random filler ideas
+- For visual direction, keep lighting/background/styling consistent with this venue's vibe
 
 ${ctx.pendingReviews.length > 0 ? `Consider turning this positive review into social proof: "${ctx.pendingReviews[0]?.review_text?.substring(0, 200) || ""}"` : ""}
 
 Return a JSON array where each item has:
 - "title": short working title
 - "caption": the full post caption
+- "content_type": one of "food", "drinks", "atmosphere", "social_proof", "occasion"
 - "asset_type": "image" or "reel"
 - "content_brief": short description of what visual to create (max 100 chars)
 - "creative_brief": optional richer art direction
@@ -1041,18 +1124,21 @@ ${buildAssetBrief(assets)}
 
 Each piece should:
 - Be specific to this venue
-- Match brand tone
-- Include a strong caption with emojis, hashtags, and CTA
-- Cover a mix: behind-the-scenes, dish highlights, social proof, promotions, atmosphere
+- Match venue tone, vibe, and audience exactly
+- Include a strong caption with tone-matched phrasing, hashtags, and CTA
+- Cover a mix of content_type values: food, drinks, atmosphere, social_proof, occasion
+- Avoid generic claims and avoid repeated sentence templates
 - Weekend content should be higher-engagement
 - Prioritize coverage gaps before optional ideas
 - Keep output intentional and avoid over-generation
+- Keep visual briefs stylistically consistent with the venue aesthetic
 
 ${ctx.upcomingEvents.length > 0 ? `Tie content to these upcoming campaigns: ${ctx.upcomingEvents.map((e: any) => e.title).join(", ")}` : ""}
 
 Return a JSON array where each item has:
 - "title"
 - "caption"
+- "content_type"
 - "asset_type"
 - "content_brief"
 - "creative_brief"
@@ -1082,9 +1168,16 @@ ${buildAssetBrief(assets)}
 
 Generate exactly ${Math.max(2, Math.min(3, plan.requestedCount))} social posts that transform recent guest sentiment into marketing content.
 
+Each post must:
+- Feel tailored to this venue's tone, vibe, and audience
+- Use one content_type from food, drinks, atmosphere, social_proof, occasion
+- Avoid generic restaurant phrasing and repetitive structure
+- Keep visual direction aligned with consistent venue styling
+
 Return a JSON array with fields:
 - "title"
 - "caption"
+- "content_type"
 - "asset_type"
 - "content_brief"
 - "creative_brief"
