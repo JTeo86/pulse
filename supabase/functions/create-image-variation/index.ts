@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resolveAiConfig, resolveModelForTask, chatCompletionsUrl } from '../_shared/ai-key-resolver.ts';
+import { buildImageStyleDirectives, resolveVenueStyle } from '../_shared/venue-style.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -136,6 +137,7 @@ function selectAutoStrategy(siblingCount: number): VariationStrategy {
 function buildVariationPrompt(
   plan: VariationPlan,
   parentMode: string,
+  styleDirectives: string,
   notes?: string,
 ): string {
   return `You are creating a VARIATION of an existing restaurant food photograph.
@@ -173,6 +175,8 @@ ANTI-DUPLICATION:
 - Do NOT produce a near-duplicate with only pixel-level differences.
 
 Parent image mode was: ${parentMode || 'social_ready'}.
+VENUE STYLE DIRECTIVES:
+${styleDirectives}
 ${notes ? `Additional notes: ${notes}` : ''}
 
 The result must be a professional restaurant marketing photograph.
@@ -265,8 +269,24 @@ Deno.serve(async (req) => {
     const base64 = btoa(binary);
     const mime = imgResp.headers.get('content-type') || 'image/jpeg';
 
+    const [profileRes, brandKitRes, assetsRes] = await Promise.all([
+      supabase
+        .from('venue_style_profiles')
+        .select('cuisine_type, venue_tone, lighting_mood, target_audience, brand_summary, style_summary, key_selling_points')
+        .eq('venue_id', venue_id)
+        .maybeSingle(),
+      supabase.from('brand_kits').select('preset, rules_text').eq('venue_id', venue_id).maybeSingle(),
+      supabase.from('content_assets').select('title, metadata').eq('venue_id', venue_id).eq('asset_type', 'image').order('created_at', { ascending: false }).limit(30),
+    ]);
+    const resolvedStyle = resolveVenueStyle({
+      profile: profileRes.data,
+      brandKit: brandKitRes.data,
+      recentAssets: assetsRes.data || [],
+    });
+    const styleDirectives = buildImageStyleDirectives(resolvedStyle).map((line) => `- ${line}`).join('\n');
+
     // Build variation prompt
-    const variationPrompt = buildVariationPrompt(variationPlan, parentMode, notes);
+    const variationPrompt = buildVariationPrompt(variationPlan, parentMode, styleDirectives, notes);
 
     const messageContent: unknown[] = [
       { type: 'text', text: variationPrompt },
