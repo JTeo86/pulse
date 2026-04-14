@@ -70,16 +70,16 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 // Quick manual entry actions for the global manual actions menu
 const quickActions = [
   {
-    name: 'Add Photo',
-    description: 'Add photos that fuel Autopilot content generation',
-    href: '/content/feed',
-    icon: Upload,
-  },
-  {
     name: 'Generate Pro Photo',
     description: 'Intentionally create a campaign-ready image',
     href: '/studio/pro-photo',
     icon: Wand2,
+  },
+  {
+    name: 'Add Photo',
+    description: 'Add photos that fuel Autopilot content generation',
+    href: '/content/feed',
+    icon: Upload,
   },
   {
     name: 'New Campaign',

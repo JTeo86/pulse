@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  ArrowLeft, Sparkles, CheckCircle2, Circle, Plus, Trash2,
+  Sparkles, CheckCircle2, Circle, Plus, Trash2,
   AlertTriangle, Loader2, Calendar,
   Lightbulb, Pencil, TrendingUp, ArrowRight,
   PenTool, Send,
@@ -30,6 +30,7 @@ import { SaveIndicator } from '@/components/ui/save-indicator';
 import { supabase } from '@/integrations/supabase/client';
 import { useRevenueFeedback, useVenueLearningSignals } from '@/hooks/use-revenue-feedback';
 import { RevenueFeedbackCard } from '@/components/planner/RevenueFeedbackCard';
+import { BackButton } from '@/components/navigation/BackButton';
 
 const STATUS_LABELS: Record<string, string> = {
   not_started: 'Idea', planned: 'Planned', in_production: 'In Production',
@@ -161,9 +162,7 @@ export default function EventPlanDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-center gap-3 min-w-0">
-          <Link to="/home?tab=plans">
-            <Button variant="ghost" size="sm" className="gap-2"><ArrowLeft className="w-4 h-4" />Back to Plans</Button>
-          </Link>
+          <BackButton fallbackTo="/home?tab=plans" label="Back to Plans" />
           <div className="min-w-0">
             {editingTitle ? (
               <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Shield, Plug, Settings2, Flag, Network, Film, CreditCard, Layers, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BackButton } from '@/components/navigation/BackButton';
 import FeatureFlagsTab from '@/components/admin/FeatureFlagsTab';
 import PlatformConfigTab from '@/components/admin/PlatformConfigTab';
 import ReferralNetworkTab from '@/components/admin/ReferralNetworkTab';
@@ -58,6 +59,7 @@ export default function PlatformAdmin() {
       transition={{ duration: 0.3 }}
       className="mx-auto max-w-7xl space-y-6 px-6 overflow-x-hidden"
     >
+      <BackButton fallbackTo="/home" />
       <div className="flex items-start justify-between gap-4 min-w-0">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-3">

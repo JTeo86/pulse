@@ -7,7 +7,6 @@ import {
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info,
   ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2,
-  ArrowLeft
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
@@ -19,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { isMissingBillingSchemaError } from '@/lib/billing-readiness';
+import { BackButton } from '@/components/navigation/BackButton';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -285,6 +285,23 @@ export default function TheEditorPage() {
           if (briefId) {
             await supabase.from('plan_asset_briefs').update({ status: 'created' }).eq('id', briefId);
           }
+          await supabase.from('content_items').insert({
+            venue_id: currentVenue.id,
+            source: 'generated',
+            status: 'draft',
+            title: briefTitle ? `Pro Photo · ${briefTitle}` : 'Pro Photo',
+            caption_draft: 'Generated from a campaign brief. Ready for your approval.',
+            media_master_url: data.final_image_url,
+            storage_path: data.storage_path || null,
+            asset_type: 'image',
+            source_plan_title: briefTitle || null,
+            media_variants: {
+              source_asset_id: data.output_asset_id,
+              editor_job_id: newJob.id,
+              generation_mode: data.generation_mode || shotType,
+            },
+          });
+          setSavedToLibrary(true);
         } catch (linkErr) {
           console.error('Failed to auto-link asset to plan:', linkErr);
         }
@@ -292,7 +309,7 @@ export default function TheEditorPage() {
 
       toast({
         title: 'Pro Photo generated',
-        description: planId ? 'Saved to Content Library. Asset linked to campaign.' : 'Review the result below.',
+        description: planId ? 'Added to Content Queue and linked to your campaign.' : 'Review the result below.',
       });
     } catch (err: any) {
       const errMessage = err?.message || 'AI photo generation failed. Please try again.';
@@ -389,7 +406,7 @@ export default function TheEditorPage() {
     if (!currentVenue || !user || !jobResult?.storage_path || savedToLibrary) return;
     try {
       const shotLabel = shotType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      await supabase.from('content_assets').insert({
+      const { data: savedAsset, error: assetError } = await supabase.from('content_assets').insert({
         venue_id: currentVenue.id,
         created_by: user.id,
         asset_type: 'image',
@@ -411,9 +428,28 @@ export default function TheEditorPage() {
           generation_mode: shotType,
           edited_asset_id: jobResult.edited_asset_id || null,
         },
+      }).select('id').single();
+      if (assetError) throw assetError;
+
+      const { error: queueError } = await supabase.from('content_items').insert({
+        venue_id: currentVenue.id,
+        source: 'generated',
+        status: 'draft',
+        title: `Pro Photo · ${shotLabel}`,
+        caption_draft: 'Generated in Pro Photo. Ready for your approval.',
+        media_master_url: jobResult.final_image_url,
+        storage_path: jobResult.storage_path,
+        asset_type: 'image',
+        media_variants: {
+          source_asset_id: savedAsset?.id || null,
+          editor_job_id: jobId || null,
+          generation_mode: shotType,
+        },
       });
+      if (queueError) throw queueError;
+
       setSavedToLibrary(true);
-      toast({ title: 'Saved to Content Library', description: 'Image is available in Brand → Content Library.' });
+      toast({ title: 'Saved to Content Queue', description: 'Image is now in Content Queue and ready for approval.' });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Save failed', description: err.message });
     }
@@ -450,6 +486,8 @@ export default function TheEditorPage() {
       transition={{ duration: 0.3 }}
       className="max-w-6xl mx-auto space-y-6"
     >
+      <BackButton fallbackTo={planId ? `/content/planner/plan/${planId}` : '/content/library'} />
+
       {/* Plan context banner */}
       {planId && briefTitle && (
         <div className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent/5">
@@ -465,12 +503,6 @@ export default function TheEditorPage() {
             ← Back to Plan
           </button>
         </div>
-      )}
-
-      {!planId && (
-        <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/content/library')}>
-          <ArrowLeft className="w-4 h-4" /> Back to Content
-        </Button>
       )}
 
       {/* Header */}
@@ -750,11 +782,21 @@ export default function TheEditorPage() {
                     size="sm"
                   >
                     {savedToLibrary ? (
-                      <><CheckSquare className="w-3.5 h-3.5" /> Saved to Library</>
+                      <><CheckSquare className="w-3.5 h-3.5" /> Saved to Content Queue</>
                     ) : (
-                      <><ImageIcon className="w-3.5 h-3.5" /> Save to Content Library</>
+                      <><ImageIcon className="w-3.5 h-3.5" /> Save to Content Queue</>
                     )}
                   </Button>
+                  {savedToLibrary && (
+                    <Button
+                      onClick={() => navigate('/content/library?tab=queue')}
+                      variant="outline"
+                      className="w-full gap-1.5 text-xs"
+                      size="sm"
+                    >
+                      View in Content Queue
+                    </Button>
+                  )}
                   <Button
                     onClick={handleDownloadLatest}
                     variant="outline"

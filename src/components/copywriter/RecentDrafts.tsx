@@ -43,9 +43,10 @@ export interface CopyProject {
 interface RecentDraftsProps {
   refreshTrigger?: number;
   onSelectProject?: (project: CopyProject) => void;
+  onGenerateImage?: (project: CopyProject) => void;
 }
 
-export function RecentDrafts({ refreshTrigger, onSelectProject }: RecentDraftsProps) {
+export function RecentDrafts({ refreshTrigger, onSelectProject, onGenerateImage }: RecentDraftsProps) {
   const { currentVenue, isAdmin, isDemoMode } = useVenue();
   const { toast } = useToast();
   const [projects, setProjects] = useState<CopyProject[]>([]);
@@ -162,6 +163,17 @@ export function RecentDrafts({ refreshTrigger, onSelectProject }: RecentDraftsPr
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onGenerateImage?.(project);
+                  }}
+                >
+                  Generate image
+                </Button>
                 <span className="text-xs text-muted-foreground">
                   {format(new Date(project.created_at), 'MMM d')}
                 </span>

@@ -697,7 +697,7 @@ export default function BrandLibraryPage() {
         <TabsList>
           <TabsTrigger value="queue">Queue</TabsTrigger>
           <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
-          <TabsTrigger value="library_uploads">Library & Uploads</TabsTrigger>
+          <TabsTrigger value="library_uploads">Library & New Photos</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -888,7 +888,7 @@ export default function BrandLibraryPage() {
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <p className="text-sm font-medium">Library & Uploads</p>
+                  <p className="text-sm font-medium">Library & New Photos</p>
                   <p className="text-xs text-muted-foreground">Browse assets, uploads, and historical content.</p>
                 </div>
                 <div className="flex items-center gap-2">
