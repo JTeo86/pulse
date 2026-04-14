@@ -177,14 +177,14 @@ export default function DraftsPage() {
       >
         <PageHeader
           title="Drafts & Review"
-          description="Review AI-generated content before publishing"
+          description="Review prepared content before publishing"
         />
 
         {items.length === 0 ? (
           <EmptyState
             icon={FileEdit}
             title="No drafts to review"
-            description="When AI generates content from your uploads, it will appear here for approval."
+            description="When I prepare content from your photos, it will appear here."
           />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -237,7 +237,7 @@ export default function DraftsPage() {
             <DialogHeader>
               <DialogTitle>Review Content</DialogTitle>
               <DialogDescription>
-                Review and edit the AI-generated content before approving
+                Review and edit this post before approving
               </DialogDescription>
             </DialogHeader>
 

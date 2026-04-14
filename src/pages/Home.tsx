@@ -333,12 +333,12 @@ export default function Home() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Needs Attention</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Needs your input</CardTitle></CardHeader>
             <CardContent className="pt-0 space-y-2">
-              <ActionRow title="Review content" detail={`${overview?.pendingContent.length ?? 0} items need approval`} to="/content/library?tab=queue" />
+              <ActionRow title="Review content" detail={`${overview?.pendingContent.length ?? 0} posts are ready for approval`} to="/content/library?tab=queue" />
               <ActionRow title="Add photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
               <ActionRow title="Generate image" detail="Create a new Pro Photo now" to="/studio/pro-photo" />
-              <ActionRow title="Reply to reviews" detail={`${overview?.pendingRepliesCount ?? 0} drafted replies waiting`} to="/reputation/reviews?tab=respond" />
+              <ActionRow title="Reply to reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=respond" />
             </CardContent>
           </Card>
 
@@ -372,11 +372,11 @@ export default function Home() {
             <CardContent className="pt-0 space-y-1 text-sm">
               {overview?.lastAutopilotRun ? (
                 <>
-                  <p>Autopilot run {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
+                  <p>I prepared content {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
                   <p className="text-muted-foreground">{overview.lastAutopilotRun.generatedPosts} posts prepared · {overview.lastAutopilotRun.generatedReplies} replies drafted.</p>
                 </>
               ) : (
-                <p className="text-muted-foreground">No recent system actions yet.</p>
+                <p className="text-muted-foreground">No recent activity yet.</p>
               )}
               {latestPulseReport?.generated_at && (
                 <p className="text-muted-foreground">Weekly brief generated {formatDistanceToNow(new Date(latestPulseReport.generated_at), { addSuffix: true })}.</p>

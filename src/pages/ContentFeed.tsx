@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveAssetMediaUrl } from '@/hooks/use-resolved-media';
+import { useAutopilotTrigger } from '@/hooks/use-autopilot';
 
 type FeedAsset = {
   id: string;
@@ -38,6 +39,7 @@ export default function ContentFeed() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
+  const autopilotTrigger = useAutopilotTrigger();
 
   const { data, isLoading } = useQuery({
     queryKey: ['content-feed-assets', currentVenue?.id],
@@ -91,6 +93,40 @@ export default function ContentFeed() {
       })));
 
       return { assets: resolvedAssets, usageMap };
+    },
+  });
+
+  const { data: onboardingDrafts = [], isLoading: draftsLoading } = useQuery({
+    queryKey: ['content-feed-onboarding-drafts', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async () => {
+      if (!currentVenue) return [];
+      const { data: draftRows, error } = await supabase
+        .from('content_items')
+        .select('id, title, caption_draft, thumbnail_url, media_master_url, created_at, status')
+        .eq('venue_id', currentVenue.id)
+        .eq('source', 'autopilot')
+        .in('status', ['draft', 'pending_review'])
+        .order('created_at', { ascending: false })
+        .limit(3);
+      if (error) throw error;
+      return draftRows || [];
+    },
+  });
+
+  const { data: approvedOnboardingCount = 0 } = useQuery({
+    queryKey: ['content-feed-approved-onboarding', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async () => {
+      if (!currentVenue) return 0;
+      const { count, error } = await supabase
+        .from('content_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('venue_id', currentVenue.id)
+        .eq('source', 'autopilot')
+        .eq('status', 'approved');
+      if (error) throw error;
+      return count || 0;
     },
   });
 
@@ -150,6 +186,11 @@ export default function ContentFeed() {
       }
 
       await queryClient.invalidateQueries({ queryKey: ['content-feed-assets', currentVenue.id] });
+      await autopilotTrigger.mutateAsync('daily_content');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['content-feed-onboarding-drafts', currentVenue.id] }),
+        queryClient.invalidateQueries({ queryKey: ['content-feed-approved-onboarding', currentVenue.id] }),
+      ]);
       toast({ title: 'Photos added', description: `${files.length} photo${files.length > 1 ? 's' : ''} added to New Photos.` });
     } catch (error: any) {
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
@@ -165,11 +206,25 @@ export default function ContentFeed() {
     return { unusedCount, lastUploadDate };
   }, [assets, usageMap]);
 
+  const approvePost = async (id: string) => {
+    const { error } = await supabase.from('content_items').update({ status: 'approved' }).eq('id', id);
+    if (error) {
+      toast({ title: 'Could not approve post', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Post approved', description: 'Great — I’ll keep preparing more automatically.' });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['content-feed-onboarding-drafts', currentVenue?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['content-feed-approved-onboarding', currentVenue?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['home-command-centre-overview', currentVenue?.id] }),
+    ]);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="New Photos"
-        description="Upload everyday photos. Pulse uses these to create content automatically."
+        title={assets.length === 0 ? "Let's get your content flowing" : 'New Photos'}
+        description={assets.length === 0 ? 'Start with photos. I’ll prepare posts right away.' : 'Upload everyday photos. Pulse uses these to create content automatically.'}
         action={
           <Button onClick={handleAddPhotosClick} disabled={isUploading}>
             {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImagePlus className="w-4 h-4 mr-2" />}
@@ -206,42 +261,78 @@ export default function ContentFeed() {
       ) : assets.length === 0 ? (
         <Card>
           <CardContent className="p-10 text-center space-y-3">
-            <p className="text-lg font-medium">Add photos to power your content</p>
+            <p className="text-lg font-medium">Let’s get your content flowing</p>
             <Button onClick={handleAddPhotosClick} disabled={isUploading}>Add Photos</Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {assets.map((asset) => {
-            const usage = usageMap.get(asset.id) || { count: 0, lastUsedAt: null };
-            const badge = getUsageBadge(usage);
-
-            return (
-              <Card key={asset.id} className="overflow-hidden">
-                <button
-                  type="button"
-                  className="w-full text-left"
-                  onClick={() => navigate('/studio/pro-photo')}
-                >
-                  <div className="aspect-square bg-muted">
-                    {(asset.resolved_url || asset.public_url) ? (
-                      <img src={asset.resolved_url || asset.public_url || ''} alt={asset.title || 'Content feed item'} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No preview</div>
-                    )}
-                  </div>
-                  <div className="p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <Badge variant={badge.variant}>{badge.label}</Badge>
-                      <span className="text-xs text-muted-foreground">{usage.count} uses</span>
+        <div className="space-y-4">
+          <Card className="border-accent/30 bg-accent/5">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-sm font-medium">I’ve prepared posts from your new photos.</p>
+              {draftsLoading || autopilotTrigger.isPending ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Preparing content...
+                </div>
+              ) : onboardingDrafts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">I’m still preparing your first posts. Check back in a moment.</p>
+              ) : (
+                <div className="space-y-3">
+                  {onboardingDrafts.map((item: any) => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium line-clamp-1">{item.title || 'New post ready'}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || 'Caption ready to review.'}</p>
+                      </div>
+                      <Button size="sm" onClick={() => approvePost(item.id)}>Approve</Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">{asset.title || 'Uploaded image'}</p>
-                    <p className="text-xs text-accent inline-flex items-center gap-1"><Sparkles className="w-3 h-3" />Edit in Studio</p>
-                  </div>
-                </button>
-              </Card>
-            );
-          })}
+                  ))}
+                </div>
+              )}
+              {approvedOnboardingCount > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nice — Autopilot will keep preparing posts automatically.
+                </p>
+              )}
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/studio/pro-photo">Generate image</Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {assets.map((asset) => {
+              const usage = usageMap.get(asset.id) || { count: 0, lastUsedAt: null };
+              const badge = getUsageBadge(usage);
+
+              return (
+                <Card key={asset.id} className="overflow-hidden">
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => navigate('/studio/pro-photo')}
+                  >
+                    <div className="aspect-square bg-muted">
+                      {(asset.resolved_url || asset.public_url) ? (
+                        <img src={asset.resolved_url || asset.public_url || ''} alt={asset.title || 'Content feed item'} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">No preview</div>
+                      )}
+                    </div>
+                    <div className="p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant={badge.variant}>{badge.label}</Badge>
+                        <span className="text-xs text-muted-foreground">{usage.count} uses</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{asset.title || 'Uploaded image'}</p>
+                      <p className="text-xs text-accent inline-flex items-center gap-1"><Sparkles className="w-3 h-3" />Edit in Studio</p>
+                    </div>
+                  </button>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
