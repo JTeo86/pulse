@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resolveAiConfig, resolveModelForTask, chatCompletionsUrl } from '../_shared/ai-key-resolver.ts';
+import { buildImageStyleDirectives, resolveVenueStyle } from '../_shared/venue-style.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -86,6 +87,7 @@ interface VenueStyleContext {
   styleSourcesUsed: string[];
   venueName: string;
   venueCity: string;
+  styleSource: 'selected' | 'inferred';
 }
 
 async function buildVenueStyleContext(
@@ -187,20 +189,29 @@ async function buildVenueStyleContext(
   }
 
   if (referenceImages.length > 0) styleSourcesUsed.push('reference_images');
+  const resolvedStyle = resolveVenueStyle({
+    profile: sp,
+    brandKit: brandKitResult.data,
+    venue: venueResult.data,
+    recentAssets: newAssets,
+    recentContent: [],
+  });
+  styleSourcesUsed.push(`style_${resolvedStyle.source}`);
 
   return {
     brandSummary,
     styleSummary,
-    lightingMood,
+    lightingMood: lightingMood || resolvedStyle.vibe,
     luxuryLevel,
-    cuisineType,
-    venueTone: brandPreset,
+    cuisineType: cuisineType || resolvedStyle.cuisine,
+    venueTone: resolvedStyle.tone || brandPreset,
     negativeRules,
     dishLockRules,
     referenceImages,
     styleSourcesUsed,
     venueName,
     venueCity,
+    styleSource: resolvedStyle.source,
   };
 }
 
@@ -216,6 +227,13 @@ function buildPrompt(ctx: VenueStyleContext, mode: GenerationMode): string {
     : '';
 
   const brandContext = [ctx.brandSummary, ctx.styleSummary, ctx.lightingMood].filter(Boolean).join(' | ');
+  const styleDirectives = buildImageStyleDirectives(resolveVenueStyle({
+    profile: {
+      cuisine_type: ctx.cuisineType,
+      venue_tone: ctx.venueTone,
+      lighting_mood: ctx.lightingMood,
+    },
+  })).map((line) => `- ${line}`).join('\n');
 
   if (mode === 'social_ready') {
     return `You are a professional food photo retoucher.
@@ -252,6 +270,9 @@ FOOD FIDELITY (STRICT):
 
 BRAND CONTEXT:
 ${brandContext || 'Use subtle, natural retouching with authentic restaurant realism.'}
+
+VENUE STYLE DIRECTIVES:
+${styleDirectives}
 
 NEGATIVE RULES:
 ${ctx.negativeRules.length ? ctx.negativeRules.map((r) => `- ${r}`).join('\n') : '- Do not make the result look AI-generated or over-processed.'}
@@ -293,6 +314,9 @@ BACKGROUND GUIDANCE:
 BRAND CONTEXT:
 ${brandContext || 'Use an authentic, clean branded look.'}
 
+VENUE STYLE DIRECTIVES:
+${styleDirectives}
+
 NEGATIVE RULES:
 ${ctx.negativeRules.length ? ctx.negativeRules.map((r) => `- ${r}`).join('\n') : '- Avoid generic AI-styled environments.'}
 
@@ -318,6 +342,9 @@ CAMPAIGN GUIDANCE:
 
 BRAND CONTEXT:
 ${brandContext || 'Premium but believable restaurant marketing style.'}
+
+VENUE STYLE DIRECTIVES:
+${styleDirectives}
 
 NEGATIVE RULES:
 ${ctx.negativeRules.length ? ctx.negativeRules.map((r) => `- ${r}`).join('\n') : '- Avoid uncanny or synthetic food textures.'}

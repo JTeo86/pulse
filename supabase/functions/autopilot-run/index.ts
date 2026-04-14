@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveAiConfig, resolveModelForTask, chatCompletionsUrl } from "../_shared/ai-key-resolver.ts";
+import { resolveVenueStyle } from "../_shared/venue-style.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -206,13 +207,14 @@ async function buildVenueContext(supabase: any, venueId: string) {
   const upcomingEvents = eventsRes.data || [];
   const recentAssets = assetsRes.data || [];
   const reusableLibraryCount = (reusableLibraryRes.data || []).length;
-  const venueStyle = deriveVenueStyleProfile({
+  const resolvedStyle = resolveVenueStyle({
     profile,
     brandKit,
     venue,
     recentAssets,
     recentContent,
   });
+  const venueStyle = deriveVenueStyleProfile(resolvedStyle);
 
   return {
     pendingReviews,
@@ -649,50 +651,21 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
   };
 }
 
-function deriveVenueStyleProfile(input: {
-  profile: any;
-  brandKit: any;
-  venue: any;
-  recentAssets: any[];
-  recentContent: any[];
-}): {
+function deriveVenueStyleProfile(style: ReturnType<typeof resolveVenueStyle>): {
   cuisine: string;
   tone: "premium" | "casual" | "energetic";
   vibe: "dark" | "bright" | "lively";
   customerType: "couples" | "groups" | "mixed";
   styleGuidance: string;
 } {
-  const cuisine = String(input.profile?.cuisine_type || "").trim() || "restaurant";
-  const searchableCorpus = [
-    input.profile?.brand_summary,
-    input.profile?.target_audience,
-    input.profile?.key_selling_points,
-    input.brandKit?.preset,
-    input.brandKit?.rules_text,
-    input.venue?.name,
-    ...(input.recentAssets || []).map((asset: any) => `${asset?.title || ""} ${JSON.stringify(asset?.metadata || {})}`),
-    ...(input.recentContent || []).map((content: any) => `${content?.title || ""} ${content?.caption_draft || ""} ${content?.caption_final || ""}`),
-  ].filter(Boolean).join(" ").toLowerCase();
-
-  const includesAny = (terms: string[]) => terms.some((term) => searchableCorpus.includes(term));
-
-  const tone: "premium" | "casual" | "energetic" = includesAny(["fine dining", "chef tasting", "elevated", "luxury", "premium", "intimate"])
-    ? "premium"
-    : includesAny(["party", "nightlife", "dj", "late night", "lively", "music", "festival", "sports bar"])
-      ? "energetic"
-      : "casual";
-
-  const vibe: "dark" | "bright" | "lively" = includesAny(["moody", "dim", "candle", "dark", "speakeasy", "intimate lighting"])
+  const cuisine = String(style.cuisine || "").trim() || "restaurant";
+  const tone: "premium" | "casual" | "energetic" = style.tone;
+  const vibe: "dark" | "bright" | "lively" = style.vibe === "dark_intimate"
     ? "dark"
-    : includesAny(["neon", "crowd", "dance", "live music", "busy bar", "celebration"])
+    : style.vibe === "lively_busy"
       ? "lively"
       : "bright";
-
-  const customerType: "couples" | "groups" | "mixed" = includesAny(["date night", "romantic", "anniversary", "couples"])
-    ? "couples"
-    : includesAny(["large group", "friends", "team", "party", "family style", "celebration"])
-      ? "groups"
-      : "mixed";
+  const customerType: "couples" | "groups" | "mixed" = style.audience;
 
   const styleGuidance = tone === "premium"
     ? "Use minimal, refined language with understated confidence. Keep captions concise and polished."

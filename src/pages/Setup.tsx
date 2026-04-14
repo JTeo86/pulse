@@ -29,6 +29,7 @@ type SetupState = {
   website: string;
   instagram: string;
   tone: string;
+  vibe: string;
   audience: string;
   positioning: string;
   voiceStyle: string;
@@ -68,6 +69,7 @@ const defaultState: SetupState = {
   website: '',
   instagram: '',
   tone: '',
+  vibe: '',
   audience: '',
   positioning: '',
   voiceStyle: '',
@@ -118,7 +120,11 @@ export default function SetupPage() {
   const [minimalSetupComplete, setMinimalSetupComplete] = useState(false);
 
   const onboarding = searchParams.get('onboarding') === '1';
-  const requestedTab = searchParams.get('tab') === 'automation' ? 'automation' : 'basics';
+  const requestedTab = (() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'automation' || tab === 'style' || tab === 'brand' || tab === 'assets' || tab === 'integrations') return tab;
+    return 'basics';
+  })();
 
   const fetchAssets = async (venueId: string) => {
     setLoadingAssets(true);
@@ -167,6 +173,7 @@ export default function SetupPage() {
         website: currentVenue.website_url || '',
         instagram: currentVenue.instagram_handle || '',
         tone: profileRes.data?.venue_tone || '',
+        vibe: profileRes.data?.lighting_mood || '',
         audience: profileRes.data?.target_audience || '',
         positioning: profileRes.data?.brand_summary || '',
         voiceStyle: rules.voiceStyle || profileRes.data?.venue_tone || '',
@@ -282,6 +289,7 @@ export default function SetupPage() {
           venue_id: currentVenue.id,
           cuisine_type: state.cuisineType || null,
           venue_tone: state.tone || null,
+          lighting_mood: state.vibe || null,
           target_audience: state.audience || null,
           brand_summary: state.positioning || null,
           style_summary: state.visualStyle || null,
@@ -427,8 +435,9 @@ export default function SetupPage() {
         </Card>
 
         <Tabs defaultValue={requestedTab} className="space-y-4">
-          <TabsList className="grid grid-cols-5 w-full">
+          <TabsList className="grid grid-cols-6 w-full">
             <TabsTrigger value="basics">Venue</TabsTrigger>
+            <TabsTrigger value="style">Venue Style</TabsTrigger>
             <TabsTrigger value="brand">Brand</TabsTrigger>
             <TabsTrigger value="assets">Brand Library</TabsTrigger>
             <TabsTrigger value="integrations">Integrations</TabsTrigger>
@@ -554,14 +563,102 @@ export default function SetupPage() {
                     <Field label="Cuisine type" value={state.cuisineType} onChange={(v) => setState((s) => ({ ...s, cuisineType: v }))} />
                     <Field label="Location" value={state.location} onChange={(v) => setState((s) => ({ ...s, location: v }))} />
                     <Field label="Website" value={state.website} onChange={(v) => setState((s) => ({ ...s, website: v }))} />
-                    <Field label="Tone" value={state.tone} onChange={(v) => setState((s) => ({ ...s, tone: v }))} />
-                    <div className="sm:col-span-2"><Field label="Target audience" value={state.audience} onChange={(v) => setState((s) => ({ ...s, audience: v }))} /></div>
+                    <VenueStyleSelect
+                      label="Tone"
+                      value={state.tone}
+                      onValueChange={(value) => setState((s) => ({ ...s, tone: value }))}
+                      options={[
+                        { value: 'premium', label: 'Premium' },
+                        { value: 'casual', label: 'Casual' },
+                        { value: 'energetic', label: 'Energetic' },
+                      ]}
+                    />
+                    <VenueStyleSelect
+                      label="Vibe"
+                      value={state.vibe}
+                      onValueChange={(value) => setState((s) => ({ ...s, vibe: value }))}
+                      options={[
+                        { value: 'dark_intimate', label: 'Dark & intimate' },
+                        { value: 'bright_clean', label: 'Bright & clean' },
+                        { value: 'lively_busy', label: 'Lively & busy' },
+                      ]}
+                    />
+                    <VenueStyleSelect
+                      label="Target audience"
+                      value={state.audience}
+                      onValueChange={(value) => setState((s) => ({ ...s, audience: value }))}
+                      options={[
+                        { value: 'couples', label: 'Couples' },
+                        { value: 'groups', label: 'Groups' },
+                        { value: 'mixed', label: 'Mixed' },
+                      ]}
+                    />
                     <div className="sm:col-span-2">
                       <Label>Brand positioning</Label>
                       <Textarea value={state.positioning} onChange={(e) => setState((s) => ({ ...s, positioning: e.target.value }))} />
                     </div>
                   </div>
                 </details>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="style" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Venue style</CardTitle>
+                <CardDescription>
+                  Selection-only setup for tone, vibe, audience, and cuisine. Leave any field on infer if you want Pulse to derive it from Brand Library assets.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid sm:grid-cols-2 gap-4">
+                <VenueStyleSelect
+                  label="Tone"
+                  value={state.tone}
+                  onValueChange={(value) => setState((s) => ({ ...s, tone: value }))}
+                  options={[
+                    { value: 'premium', label: 'Premium' },
+                    { value: 'casual', label: 'Casual' },
+                    { value: 'energetic', label: 'Energetic' },
+                  ]}
+                />
+                <VenueStyleSelect
+                  label="Vibe"
+                  value={state.vibe}
+                  onValueChange={(value) => setState((s) => ({ ...s, vibe: value }))}
+                  options={[
+                    { value: 'dark_intimate', label: 'Dark & intimate' },
+                    { value: 'bright_clean', label: 'Bright & clean' },
+                    { value: 'lively_busy', label: 'Lively & busy' },
+                  ]}
+                />
+                <VenueStyleSelect
+                  label="Audience"
+                  value={state.audience}
+                  onValueChange={(value) => setState((s) => ({ ...s, audience: value }))}
+                  options={[
+                    { value: 'couples', label: 'Couples' },
+                    { value: 'groups', label: 'Groups' },
+                    { value: 'mixed', label: 'Mixed' },
+                  ]}
+                />
+                <VenueStyleSelect
+                  label="Cuisine"
+                  value={state.cuisineType}
+                  onValueChange={(value) => setState((s) => ({ ...s, cuisineType: value }))}
+                  options={[
+                    { value: 'american', label: 'American' },
+                    { value: 'italian', label: 'Italian' },
+                    { value: 'japanese', label: 'Japanese' },
+                    { value: 'mexican', label: 'Mexican' },
+                    { value: 'mediterranean', label: 'Mediterranean' },
+                    { value: 'indian', label: 'Indian' },
+                    { value: 'seafood', label: 'Seafood' },
+                    { value: 'steakhouse', label: 'Steakhouse' },
+                    { value: 'cafe', label: 'Cafe' },
+                    { value: 'bar', label: 'Bar' },
+                  ]}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -762,6 +859,37 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
     <div>
       <Label>{label}</Label>
       <Input value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function VenueStyleSelect({
+  label,
+  value,
+  onValueChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <Select value={value || '__infer__'} onValueChange={(next) => onValueChange(next === '__infer__' ? '' : next)}>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__infer__">Infer from Brand Library</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={`${label}-${option.value}`} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
