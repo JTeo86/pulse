@@ -223,7 +223,7 @@ export default function ReferralNetworkTab() {
       venue_id: venueId ?? null,
       partner_id: partnerId ?? null,
       actor_user_id: actorUserId,
-      event_payload: payload,
+      event_payload: payload as any,
     }]);
 
     if (error) throw error;
