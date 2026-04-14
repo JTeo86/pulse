@@ -61,6 +61,24 @@ type AssetSelectionResult = {
   recommendedNextActions: string[];
 };
 
+type CoverageCategory = "food" | "drinks" | "interior" | "reviews" | "events";
+
+type GapCoveragePlan = {
+  requestedCount: number;
+  missingCategories: CoverageCategory[];
+  coveredCategories: CoverageCategory[];
+  targetedCategories: CoverageCategory[];
+  timingSignals: {
+    weekendApproaching: boolean;
+    seasonalEventTitles: string[];
+  };
+  assetSignals: {
+    newPhotosCount: number;
+    brandLibraryCount: number;
+  };
+  strategyNotes: string[];
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -150,13 +168,33 @@ Deno.serve(async (req: Request) => {
 });
 
 async function buildVenueContext(supabase: any, venueId: string) {
-  const [venueRes, profileRes, brandKitRes, reviewsRes, contentRes, eventsRes] = await Promise.all([
+  const [venueRes, profileRes, brandKitRes, reviewsRes, contentRes, eventsRes, assetsRes, reusableLibraryRes] = await Promise.all([
     supabase.from("venues").select("name, city, country_code, timezone, website_url, instagram_handle").eq("id", venueId).single(),
     supabase.from("venue_style_profiles").select("cuisine_type, venue_tone, brand_summary, target_audience, key_selling_points").eq("venue_id", venueId).maybeSingle(),
     supabase.from("brand_kits").select("preset, rules_text").eq("venue_id", venueId).maybeSingle(),
     supabase.from("review_response_tasks").select("id, rating, review_text").eq("venue_id", venueId).eq("status", "pending").order("created_at", { ascending: false }).limit(5),
-    supabase.from("content_items").select("id, status, caption_final, scheduled_for, created_at").eq("venue_id", venueId).order("created_at", { ascending: false }).limit(20),
+    supabase
+      .from("content_items")
+      .select("id, status, title, caption_draft, caption_final, content_brief, badges, scheduled_for, created_at")
+      .eq("venue_id", venueId)
+      .order("created_at", { ascending: false })
+      .limit(80),
     supabase.from("venue_event_plans").select("id, title, status, starts_at").eq("venue_id", venueId).eq("status", "active").limit(5),
+    supabase
+      .from("content_assets")
+      .select("id, title, metadata, source_type, created_at")
+      .eq("venue_id", venueId)
+      .eq("asset_type", "image")
+      .in("status", ["approved", "ready", "draft", "queued", "scheduled", "published"])
+      .order("created_at", { ascending: false })
+      .limit(140),
+    supabase
+      .from("content_items")
+      .select("id")
+      .eq("venue_id", venueId)
+      .in("status", ["approved", "ready"])
+      .contains("badges", ["Reusable"])
+      .limit(100),
   ]);
 
   const venue = venueRes.data;
@@ -165,9 +203,14 @@ async function buildVenueContext(supabase: any, venueId: string) {
   const pendingReviews = reviewsRes.data || [];
   const recentContent = contentRes.data || [];
   const upcomingEvents = eventsRes.data || [];
+  const recentAssets = assetsRes.data || [];
+  const reusableLibraryCount = (reusableLibraryRes.data || []).length;
 
   return {
     pendingReviews,
+    recentContent,
+    recentAssets,
+    reusableLibraryCount,
     upcomingEvents,
     contextString: [
       `Venue: ${venue?.name || "Unknown"} (${venue?.city || venue?.country_code || "Unknown"})`,
@@ -209,7 +252,8 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
   try {
     const ctx = await buildVenueContext(supabase, venueId);
     const volume = settings?.content_volume || "medium";
-    const contentCount = volume === "low" ? 1 : volume === "high" ? 3 : 2;
+    const coveragePlan = buildGapCoveragePlan(ctx, runType, volume);
+    const contentCount = coveragePlan.requestedCount;
     const sourceSelection = await selectAssetSources(
       supabase,
       venueId,
@@ -266,10 +310,10 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     }
 
     const prompt = runType === "weekly_campaign"
-      ? buildWeeklyCampaignPrompt(ctx, contentCount, sourceSelection.assets, settings?.mode || "conservative")
+      ? buildWeeklyCampaignPrompt(ctx, contentCount, sourceSelection.assets, settings?.mode || "conservative", coveragePlan)
       : runType === "review_content"
-        ? buildReviewContentPrompt(ctx, sourceSelection.assets, settings?.mode || "conservative")
-        : buildDailyContentPrompt(ctx, contentCount, sourceSelection.assets, settings?.mode || "conservative");
+        ? buildReviewContentPrompt(ctx, sourceSelection.assets, settings?.mode || "conservative", coveragePlan)
+        : buildDailyContentPrompt(ctx, contentCount, sourceSelection.assets, settings?.mode || "conservative", coveragePlan);
 
     const aiConfig = await resolveAiConfig();
     const aiResponse = await fetch(chatCompletionsUrl(aiConfig), {
@@ -290,12 +334,15 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
     const aiData = await aiResponse.json();
     const rawContent = String(aiData.choices?.[0]?.message?.content || "");
     const { parsedItems, items, parseError, normalizationErrors } = parseAndNormalizeItems(rawContent, runType);
+    const safeMaxItems = Math.max(2, Math.min(5, contentCount));
+    const boundedParsedItems = parsedItems.slice(0, safeMaxItems);
+    const boundedItems = items.slice(0, safeMaxItems);
 
     const contentItemIds: string[] = [];
     const saveErrorDetails: SaveErrorDetail[] = [];
     const sourceAssetUsageCounts = new Map<string, number>();
 
-    for (const [index, item] of items.entries()) {
+    for (const [index, item] of boundedItems.entries()) {
       const sourceAsset = sourceSelection.assets.length > 0
         ? sourceSelection.assets[index % sourceSelection.assets.length]
         : null;
@@ -354,7 +401,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
       await markAssetsUsed(supabase, sourceAssetUsageCounts);
     }
 
-    const generatedCount = parsedItems.length;
+    const generatedCount = boundedParsedItems.length;
     const savedCount = contentItemIds.length;
     const failedCount = Math.max(0, generatedCount - savedCount);
     const combinedSaveErrorDetails: SaveErrorDetail[] = [
@@ -394,7 +441,7 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
       run_status: runStatus,
       error_message: errorMessage,
       save_error_details: combinedSaveErrorDetails,
-      generated_item_payloads: parsedItems,
+      generated_item_payloads: boundedParsedItems,
       output_summary: {
         items_generated: generatedCount,
         items_saved: savedCount,
@@ -405,6 +452,18 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         run_status: runStatus,
         run_type: runType,
         source_summary: sourceSelection.summary,
+        coverage_summary: {
+          missing_categories: coveragePlan.missingCategories,
+          covered_categories: coveragePlan.coveredCategories,
+          targeted_categories: coveragePlan.targetedCategories,
+          weekend_approaching: coveragePlan.timingSignals.weekendApproaching,
+          seasonal_events: coveragePlan.timingSignals.seasonalEventTitles,
+        },
+        generation_strategy: {
+          requested_count: coveragePlan.requestedCount,
+          strategy_notes: coveragePlan.strategyNotes,
+          assets_used: coveragePlan.assetSignals,
+        },
         source_priority_used: sourceSelection.assets[0]?.source_priority || null,
         copy_only_fallback_used: sourceSelection.usedCopyOnlyFallback,
         asset_blocked: sourceSelection.isAssetBlocked,
@@ -436,6 +495,18 @@ async function runAutopilot(supabase: any, venueId: string, runType: RunType) {
         copy_only_fallback_used: sourceSelection.usedCopyOnlyFallback,
         asset_blocked: sourceSelection.isAssetBlocked,
         recommended_next_asset_actions: sourceSelection.recommendedNextActions,
+        coverage_summary: {
+          missing_categories: coveragePlan.missingCategories,
+          covered_categories: coveragePlan.coveredCategories,
+          targeted_categories: coveragePlan.targetedCategories,
+          weekend_approaching: coveragePlan.timingSignals.weekendApproaching,
+          seasonal_events: coveragePlan.timingSignals.seasonalEventTitles,
+        },
+        generation_strategy: {
+          requested_count: coveragePlan.requestedCount,
+          strategy_notes: coveragePlan.strategyNotes,
+          assets_used: coveragePlan.assetSignals,
+        },
       },
     };
   } catch (err: any) {
@@ -536,13 +607,19 @@ function normalizeItem(item: any, index: number, runType: RunType): GeneratedIte
   if (!item.asset_url) badges.push("Needs Asset");
   badges.push("Ready to Schedule");
 
+  const generationReason = String(item.generation_reason || item.reason || "").trim();
+  const contentBriefBase = item.content_brief ? String(item.content_brief) : null;
+  const contentBrief = generationReason
+    ? `Why: ${generationReason.slice(0, 120)}${contentBriefBase ? ` • ${contentBriefBase}` : ""}`.slice(0, 220)
+    : contentBriefBase;
+
   return {
     title,
     caption,
     cta: item.cta ? String(item.cta) : null,
     hashtags,
     asset_type,
-    content_brief: item.content_brief ? String(item.content_brief) : null,
+    content_brief: contentBrief,
     creative_brief: item.creative_brief ? String(item.creative_brief) : (item.content_brief ? String(item.content_brief) : null),
     suggested_scheduled_for: suggested ? new Date(suggested).toISOString() : null,
     campaign_tag: item.campaign_tag ? String(item.campaign_tag) : null,
@@ -822,7 +899,77 @@ function buildAssetBrief(assets: any[]): string {
     .join("\n");
 }
 
-function buildDailyContentPrompt(ctx: any, count: number, assets: any[], mode: string): string {
+function buildGapCoveragePlan(ctx: any, runType: RunType, volume: "low" | "medium" | "high"): GapCoveragePlan {
+  const categories: CoverageCategory[] = ["food", "drinks", "interior", "reviews", "events"];
+  const keywordMap: Record<CoverageCategory, string[]> = {
+    food: ["dish", "food", "menu", "chef", "dessert", "meal", "lunch", "dinner", "brunch", "plate"],
+    drinks: ["drink", "cocktail", "wine", "beer", "mocktail", "spritz", "beverage", "bar"],
+    interior: ["interior", "atmosphere", "ambience", "ambiance", "dining room", "patio", "venue", "vibe"],
+    reviews: ["review", "guest said", "rated", "testimonial", "5-star", "social proof"],
+    events: ["event", "weekend", "friday", "saturday", "live music", "special", "promotion", "campaign"],
+  };
+
+  const sourceTexts: string[] = [
+    ...(ctx.recentContent || []).map((item: any) => `${item?.title || ""} ${item?.caption_draft || ""} ${item?.caption_final || ""} ${item?.content_brief || ""}`),
+    ...(ctx.recentAssets || []).map((asset: any) => `${asset?.title || ""} ${JSON.stringify(asset?.metadata || {})}`),
+  ];
+  const sourceText = sourceTexts.join(" ").toLowerCase();
+
+  const coveredCategories = categories.filter((category) =>
+    keywordMap[category].some((keyword) => sourceText.includes(keyword)),
+  );
+  const missingCategories = categories.filter((category) => !coveredCategories.includes(category));
+
+  const now = new Date();
+  const day = now.getDay();
+  const weekendApproaching = day >= 4 && day <= 6;
+  const seasonalEventTitles = (ctx.upcomingEvents || []).slice(0, 3).map((event: any) => String(event.title || "")).filter(Boolean);
+
+  const twoWeeksAgo = new Date(now);
+  twoWeeksAgo.setDate(now.getDate() - 14);
+  const newPhotosCount = (ctx.recentAssets || []).filter((asset: any) =>
+    ["upload", "manual", "guest_upload"].includes(String(asset?.source_type || "")) &&
+    new Date(asset.created_at).getTime() >= twoWeeksAgo.getTime(),
+  ).length;
+  const brandLibraryCount = Number(ctx.reusableLibraryCount || 0);
+
+  const volumeBonus = volume === "high" ? 1 : 0;
+  const baseCount = Math.min(5, Math.max(2, missingCategories.length + volumeBonus));
+  const requestedCount = runType === "review_content" ? Math.max(2, Math.min(3, baseCount)) : baseCount;
+
+  const targetedCategories: CoverageCategory[] = [...missingCategories];
+  if (weekendApproaching && !targetedCategories.includes("events")) targetedCategories.push("events");
+  if (seasonalEventTitles.length > 0 && !targetedCategories.includes("events")) targetedCategories.push("events");
+  if (targetedCategories.length === 0) targetedCategories.push("food", "drinks");
+
+  const strategyNotes = [
+    missingCategories.length > 0
+      ? `Prioritizing missing categories: ${missingCategories.join(", ")}`
+      : "Coverage is healthy; generating a minimal maintenance batch.",
+    weekendApproaching ? "Weekend is approaching, include at least one high-engagement weekend slot." : "",
+    seasonalEventTitles.length > 0 ? `Seasonal/event tie-ins available: ${seasonalEventTitles.join(", ")}` : "",
+    `Using available assets first (new photos: ${newPhotosCount}, brand library: ${brandLibraryCount}).`,
+    "Queue safety: capped to 2-5 intentional posts.",
+  ].filter(Boolean);
+
+  return {
+    requestedCount,
+    missingCategories,
+    coveredCategories,
+    targetedCategories,
+    timingSignals: {
+      weekendApproaching,
+      seasonalEventTitles,
+    },
+    assetSignals: {
+      newPhotosCount,
+      brandLibraryCount,
+    },
+    strategyNotes,
+  };
+}
+
+function buildDailyContentPrompt(ctx: any, count: number, assets: any[], mode: string, plan: GapCoveragePlan): string {
   const today = new Date();
   const dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][today.getDay()];
 
@@ -835,6 +982,10 @@ TODAY: ${dayName}, ${today.toISOString().split("T")[0]}
 
 Generate exactly ${count} social media content piece(s) for today.
 Autopilot mode: ${mode}.
+Coverage priority gaps: ${plan.missingCategories.length > 0 ? plan.missingCategories.join(", ") : "none"}.
+Focus categories for this run: ${plan.targetedCategories.join(", ")}.
+Timing signals: weekend approaching=${plan.timingSignals.weekendApproaching ? "yes" : "no"}; seasonal events=${plan.timingSignals.seasonalEventTitles.join(", ") || "none"}.
+Available assets: new photos=${plan.assetSignals.newPhotosCount}, brand library=${plan.assetSignals.brandLibraryCount}.
 
 ELIGIBLE IMAGE SOURCES (highest priority first):
 ${buildAssetBrief(assets)}
@@ -846,6 +997,8 @@ Each piece should:
 - Suggest relevant hashtags (5-8)
 - Be specific to this venue, not generic
 - Reference actual menu items, ambiance, or seasonal moments
+- Prioritize missing categories before creating additional volume
+- Do not generate random filler ideas
 
 ${ctx.pendingReviews.length > 0 ? `Consider turning this positive review into social proof: "${ctx.pendingReviews[0]?.review_text?.substring(0, 200) || ""}"` : ""}
 
@@ -860,11 +1013,12 @@ Return a JSON array where each item has:
 - "suggested_scheduled_time": suggested ISO datetime for posting (use today's date, optimal times)
 - "campaign_tag": optional campaign tag
 - "source_asset_index": numeric index from the eligible source list when available
+- "generation_reason": one short sentence explaining why this post was generated (gap/timing/event/asset)
 
 Return ONLY the JSON array.`;
 }
 
-function buildWeeklyCampaignPrompt(ctx: any, dailyCount: number, assets: any[], mode: string): string {
+function buildWeeklyCampaignPrompt(ctx: any, dailyCount: number, assets: any[], mode: string, plan: GapCoveragePlan): string {
   const weekStart = new Date();
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -874,8 +1028,12 @@ VENUE CONTEXT:
 ${ctx.contextString}
 
 WEEK STARTING: ${weekStart.toISOString().split("T")[0]}
+Coverage priority gaps: ${plan.missingCategories.length > 0 ? plan.missingCategories.join(", ") : "none"}.
+Focus categories for this run: ${plan.targetedCategories.join(", ")}.
+Timing signals: weekend approaching=${plan.timingSignals.weekendApproaching ? "yes" : "no"}; seasonal events=${plan.timingSignals.seasonalEventTitles.join(", ") || "none"}.
+Available assets: new photos=${plan.assetSignals.newPhotosCount}, brand library=${plan.assetSignals.brandLibraryCount}.
 
-Create a 7-day content campaign plan. Generate ${dailyCount * 5} content pieces spread across the week.
+Create a 7-day content campaign plan. Generate exactly ${dailyCount} content pieces spread across the week.
 Autopilot mode: ${mode}.
 
 ELIGIBLE IMAGE SOURCES (highest priority first):
@@ -887,6 +1045,8 @@ Each piece should:
 - Include a strong caption with emojis, hashtags, and CTA
 - Cover a mix: behind-the-scenes, dish highlights, social proof, promotions, atmosphere
 - Weekend content should be higher-engagement
+- Prioritize coverage gaps before optional ideas
+- Keep output intentional and avoid over-generation
 
 ${ctx.upcomingEvents.length > 0 ? `Tie content to these upcoming campaigns: ${ctx.upcomingEvents.map((e: any) => e.title).join(", ")}` : ""}
 
@@ -901,21 +1061,26 @@ Return a JSON array where each item has:
 - "day": one of ${JSON.stringify(days)}
 - "suggested_scheduled_time": suggested ISO datetime for posting
 - "campaign_tag"
+- "generation_reason": one short sentence explaining why this post was generated (gap/timing/event/asset)
 
 Return ONLY the JSON array.`;
 }
 
-function buildReviewContentPrompt(ctx: any, assets: any[], mode: string): string {
+function buildReviewContentPrompt(ctx: any, assets: any[], mode: string, plan: GapCoveragePlan): string {
   return `You are an expert hospitality social strategist.
 
 VENUE CONTEXT:
 ${ctx.contextString}
 Autopilot mode: ${mode}.
+Coverage priority gaps: ${plan.missingCategories.length > 0 ? plan.missingCategories.join(", ") : "none"}.
+Focus categories for this run: ${plan.targetedCategories.join(", ")}.
+Timing signals: weekend approaching=${plan.timingSignals.weekendApproaching ? "yes" : "no"}; seasonal events=${plan.timingSignals.seasonalEventTitles.join(", ") || "none"}.
+Available assets: new photos=${plan.assetSignals.newPhotosCount}, brand library=${plan.assetSignals.brandLibraryCount}.
 
 ELIGIBLE IMAGE SOURCES (highest priority first):
 ${buildAssetBrief(assets)}
 
-Generate 2 social posts that transform recent guest sentiment into marketing content.
+Generate exactly ${Math.max(2, Math.min(3, plan.requestedCount))} social posts that transform recent guest sentiment into marketing content.
 
 Return a JSON array with fields:
 - "title"
@@ -927,6 +1092,7 @@ Return a JSON array with fields:
 - "hashtags"
 - "suggested_scheduled_time"
 - "campaign_tag"
+- "generation_reason": one short sentence explaining why this post was generated (gap/timing/event/asset)
 
 Return ONLY the JSON array.`;
 }
