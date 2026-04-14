@@ -11,6 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { isFunctionNotDeployedError, isMissingBillingSchemaError } from '@/lib/billing-readiness';
 
+const TIER_USAGE_GUIDE: Record<string, { imagesLabel: string; storageLabel: string; usersLabel: string }> = {
+  starter: { imagesLabel: '~60 images', storageLabel: '2 GB', usersLabel: '2 users' },
+  growth: { imagesLabel: '~200 images', storageLabel: '10 GB', usersLabel: '5 users' },
+  pro: { imagesLabel: '~500 images', storageLabel: '25 GB', usersLabel: '10 users' },
+};
+
 export default function BillingPage() {
   const { currentVenue, isOwner } = useVenue();
   const { toast } = useToast();
@@ -159,6 +165,7 @@ export default function BillingPage() {
       <div className="grid md:grid-cols-3 gap-4">
         {data?.tiers.map((tier: any) => {
           const isCurrent = currentTierId === tier.id;
+          const usageGuide = TIER_USAGE_GUIDE[(tier.slug || '').toLowerCase()];
           return (
             <Card key={tier.id} className={isCurrent ? 'border-accent' : ''}>
               <CardHeader>
@@ -169,11 +176,12 @@ export default function BillingPage() {
                 <CardDescription>{tier.description || '—'}</CardDescription>
               </CardHeader>
               <CardContent className="text-sm space-y-2">
-                <p>Price ID: {tier.stripe_price_id_monthly || 'Not configured'}</p>
-                <p>{tier.monthly_image_quota} images/mo</p>
-                <p>{tier.monthly_storage_mb} MB storage</p>
-                <p>{tier.max_users_per_venue} users</p>
-                <p>Marketplace: {tier.marketplace_access_enabled ? 'Yes' : 'No'}</p>
+                <p>Stripe mapping: {tier.stripe_price_id_monthly || 'Not configured'}</p>
+                <p>Image limit: {usageGuide?.imagesLabel ?? `~${tier.monthly_image_quota} images`} ({tier.monthly_image_quota}/mo)</p>
+                <p>Storage limit: {usageGuide?.storageLabel ?? `${tier.monthly_storage_mb} MB`} ({tier.monthly_storage_mb} MB)</p>
+                <p>User limit: {usageGuide?.usersLabel ?? `${tier.max_users_per_venue} users`}</p>
+                <p>Feature access: {tier.marketplace_access_enabled ? 'Marketplace enabled' : 'Marketplace not included'}</p>
+                <p>Video credits: {tier.video_payg_enabled ? 'PAYG eligible' : 'Not eligible'}</p>
                 {(tier.feature_summary_json || []).map((f: string) => <p key={f} className="flex items-center gap-2"><Check className="w-3 h-3" />{f}</p>)}
                 {!isCurrent && (
                   <div className="pt-2 flex gap-2">

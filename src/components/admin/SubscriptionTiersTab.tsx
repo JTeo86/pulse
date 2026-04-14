@@ -27,6 +27,12 @@ type TierDraft = {
   video_payg_enabled: boolean;
 };
 
+const RECOMMENDED_TIER_LIMITS: Record<string, { images: number; storageMb: number; users: number; featureAccess: string }> = {
+  starter: { images: 60, storageMb: 2048, users: 2, featureAccess: 'Core Pro Photo + Content Queue' },
+  growth: { images: 200, storageMb: 10240, users: 5, featureAccess: 'Starter + Marketplace workflows' },
+  pro: { images: 500, storageMb: 25600, users: 10, featureAccess: 'Growth + advanced team capacity' },
+};
+
 const NEW_TIER_TEMPLATE = {
   slug: '',
   name: '',
@@ -195,6 +201,22 @@ export default function SubscriptionTiersTab() {
     }
   };
 
+  const applyRecommendedTierLimits = (tier: any) => {
+    const localTier = getTier(tier);
+    const recommendation = RECOMMENDED_TIER_LIMITS[(localTier.slug || '').toLowerCase()];
+    if (!recommendation) return;
+    setEdits((prev) => ({
+      ...prev,
+      [tier.id]: {
+        ...localTier,
+        monthly_image_quota: recommendation.images,
+        monthly_storage_mb: recommendation.storageMb,
+        max_users_per_venue: recommendation.users,
+      },
+    }));
+    toast.success(`Applied recommended limits for ${localTier.name || tier.name}`);
+  };
+
   const createTier = async () => {
     const { error } = await supabase.from('subscription_tiers').insert({
       slug: draft.slug,
@@ -306,6 +328,24 @@ export default function SubscriptionTiersTab() {
                 </Button>
                 <span className="text-muted-foreground">Used when a venue is created and no explicit tier is chosen.</span>
               </div>
+
+              {RECOMMENDED_TIER_LIMITS[(localTier.slug || '').toLowerCase()] && (
+                <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-xs">
+                  {(() => {
+                    const recommendation = RECOMMENDED_TIER_LIMITS[(localTier.slug || '').toLowerCase()];
+                    return (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-muted-foreground">
+                          Real usage target: ~{recommendation.images} images · {formatStorageLabel(recommendation.storageMb)} · {recommendation.users} users · {recommendation.featureAccess}
+                        </p>
+                        <Button size="sm" variant="outline" onClick={() => applyRecommendedTierLimits(tier)}>
+                          Apply real-usage defaults
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </CardHeader>
 
             <CardContent className="space-y-5">
@@ -376,6 +416,7 @@ export default function SubscriptionTiersTab() {
                   <Label>Stripe monthly price ID</Label>
                   <Input value={localTier.stripe_price_id_monthly} onChange={(e) => setTierField(tier, 'stripe_price_id_monthly', e.target.value)} placeholder="price_..." />
                 </div>
+                <p className="text-xs text-muted-foreground">Stripe mapping status: {localTier.stripe_price_id_monthly.trim() ? 'Mapped' : 'Missing mapping'}</p>
                 {activeWithoutPriceId && (
                   <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
                     <AlertTriangle className="h-3.5 w-3.5" />

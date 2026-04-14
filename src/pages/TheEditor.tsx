@@ -498,62 +498,20 @@ export default function TheEditorPage() {
     toast({ title: 'Feedback recorded', description: 'Try generating again with different settings.' });
   };
 
-  const shotLabel = shotType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="max-w-6xl mx-auto space-y-6"
+      className="max-w-4xl mx-auto space-y-5"
     >
       <BackButton fallbackTo={planId ? `/content/planner/plan/${planId}` : '/content/library'} />
 
-      {/* Plan context banner */}
-      {(planId && briefTitle) || defaultPrompt ? (
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent/5">
-          <ImageIcon className="w-4 h-4 text-accent shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-foreground">
-              {briefTitle ? <>Creating for campaign brief: <span className="text-accent">{briefTitle}</span></> : 'Campaign context was prefilled for faster generation.'}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              {planId ? 'Asset will automatically link to your campaign plan.' : 'Edit the prompt if you want a different angle.'}
-            </p>
-          </div>
-          <button
-            onClick={() => navigate(`/content/planner/plan/${planId}`)}
-            className="text-xs text-accent hover:underline shrink-0"
-          >
-            ← Back to Plan
-          </button>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center">
-              <Camera className="w-5 h-5 text-accent" />
-            </div>
-            <div>
-              <h1 className="font-serif text-2xl font-medium">Editor</h1>
-              <p className="text-sm text-muted-foreground">Pulse · Pro Photo Studio</p>
-            </div>
-          </div>
-          <p className="text-muted-foreground max-w-xl">
-            Upload a dish photo and generate a professional, on-brand marketing image powered by AI.
-          </p>
-        </div>
-        {jobResult && (
-          <Button variant="outline" size="sm" onClick={handleReset} className="gap-2">
-            <RotateCcw className="w-4 h-4" /> New Photo
-          </Button>
-        )}
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Pro Photo Studio</h1>
+        <p className="text-sm text-muted-foreground">Prompt → Generate → Accept to send to Content.</p>
       </div>
 
-      {/* Credits */}
       <div className="flex items-center gap-6 px-4 py-2.5 rounded-lg bg-muted/30 border border-border/50 w-fit">
         <CreditBar used={proPhotoUsed} total={Math.max(proPhotoLimit, 1)} label="Pro Photo" />
         {!videoEnabled && (
@@ -568,310 +526,101 @@ export default function TheEditorPage() {
         )}
       </div>
 
-      {/* Main layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Upload + Config */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Upload */}
-          <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">1</span>
-              <span className="font-medium text-sm">Upload Dish Photo</span>
-            </div>
-
-            {uploadedPreview ? (
-              <div className="relative group">
-                <img src={uploadedPreview} alt="Uploaded dish" className="w-full aspect-square object-cover rounded-lg border border-border" />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-card border border-border rounded-md px-2 py-1 text-xs font-medium"
-                >
-                  Replace
-                </button>
-              </div>
-            ) : (
-              <div
-                onDrop={onDropZone}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  'border-2 border-dashed rounded-lg aspect-square flex flex-col items-center justify-center gap-3 cursor-pointer transition-all',
-                  isDragging ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50 hover:bg-muted/30'
-                )}
-              >
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                  <Upload className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium">Drop photo here</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">or click to browse</p>
-                </div>
-              </div>
-            )}
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileInput} />
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        {(planId && briefTitle) || defaultPrompt ? (
+          <div className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-muted-foreground">
+            {briefTitle ? `Prefilled from plan: ${briefTitle}.` : 'Prompt was prefilled from your previous flow.'}
           </div>
-
-          {/* Shot Type */}
-          <div className={cn('rounded-xl border bg-card p-5 space-y-4 transition-opacity', !uploadedFile ? 'opacity-40 pointer-events-none' : '')}>
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">2</span>
-              <span className="font-medium text-sm">Prompt & context</span>
-            </div>
+        ) : null}
+        <div
+          onDrop={onDropZone}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onClick={() => !uploadedFile && fileInputRef.current?.click()}
+          className={cn(
+            'rounded-lg border border-dashed p-4 transition-colors',
+            isDragging ? 'border-accent bg-accent/5' : 'border-border',
+          )}
+        >
+          {uploadedPreview ? (
             <div className="space-y-2">
-              <Textarea
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Describe the photo you want Pulse to generate..."
-                className="min-h-20"
-              />
-              <Textarea
-                value={contextText}
-                onChange={(e) => setContextText(e.target.value)}
-                placeholder="Optional context (event, offer, audience, mood)"
-                className="min-h-16"
-              />
+              <img src={uploadedPreview} alt="Uploaded dish" className="w-full max-h-64 object-cover rounded-md border" />
+              <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-full">
+                Replace source image
+              </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Step 3: pick a mode and generate.</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {SHOT_TYPES.map((m) => (
-                <button
-                  key={m.key}
-                  onClick={() => setShotType(m.key)}
-                  className={cn(
-                    'p-2.5 rounded-lg border text-left transition-all relative',
-                    shotType === m.key ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/30'
-                  )}
-                >
-                  {m.default && (
-                    <span className="absolute top-1 right-1 text-[8px] font-bold uppercase text-accent bg-accent/10 rounded px-1">Default</span>
-                  )}
-                  <p className="text-xs font-semibold flex items-center gap-1">
-                    {m.label}
-                    {m.warn && <AlertTriangle className="w-3 h-3 text-amber-500" />}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight font-medium">{m.desc}</p>
-                  <p className="text-[9px] text-muted-foreground/70 mt-1 leading-tight">{m.detail}</p>
-                </button>
-              ))}
-            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center">Drop a source image here or click to upload.</p>
+          )}
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileInput} />
+        <Textarea
+          value={promptText}
+          onChange={(e) => setPromptText(e.target.value)}
+          placeholder="Describe the pro photo to generate..."
+          className="min-h-24"
+        />
+        <Button onClick={handleGenerate} disabled={!uploadedFile || generating || !promptText.trim()} className="w-full gap-2" size="lg">
+          {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4" /> Generate</>}
+        </Button>
+      </div>
 
-            {/* Generate CTA */}
-            <Button
-              onClick={handleGenerate}
-              disabled={!uploadedFile || generating || !promptText.trim()}
-              className="w-full gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"
-              size="lg"
-            >
-              {generating ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
-              ) : (
-                <><Wand2 className="w-4 h-4" /> Generate Pro Photo</>
-              )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={jobResult?.final_image_url || 'preview'}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="rounded-xl border bg-card p-5 space-y-4"
+        >
+          <p className="text-sm font-medium">Image Preview</p>
+          {jobResult?.final_image_url ? (
+            <img src={jobResult.final_image_url} alt="Generated Pro Photo" className="w-full max-h-[520px] object-cover rounded-lg border" />
+          ) : (
+            <div className="h-64 rounded-lg border border-dashed flex items-center justify-center text-sm text-muted-foreground">
+              Generate to preview your image.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Button onClick={handleSaveToLibrary} disabled={!jobResult || savedToLibrary} className="gap-2">
+              <Check className="w-4 h-4" /> {savedToLibrary ? 'Accepted' : 'Accept'}
+            </Button>
+            <Button onClick={() => setJobResult(null)} disabled={!jobResult} variant="outline" className="gap-2">
+              <RotateCcw className="w-4 h-4" /> Regenerate
+            </Button>
+            <Button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} variant="outline" className="gap-2">
+              <Wand2 className="w-4 h-4" /> Edit
             </Button>
           </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {isAdmin && jobResult && (
+        <button
+          onClick={handleFidelityConfirm}
+          className={cn(
+            'w-full flex items-center gap-3 p-3.5 rounded-lg border text-left transition-all',
+            fidelityConfirmed ? 'border-accent/40 bg-accent/5' : 'border-border hover:border-accent/30'
+          )}
+        >
+          {fidelityConfirmed
+            ? <CheckSquare className="w-4 h-4 text-accent shrink-0" />
+            : <Square className="w-4 h-4 text-muted-foreground shrink-0" />
+          }
+          <div>
+            <p className="text-sm font-medium">Dish fidelity confirmed</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Optional admin quality control</p>
+          </div>
+        </button>
+      )}
+
+      {jobResult?.generation_warning && (
+        <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-300/40 bg-amber-100/40">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800">{jobResult.generation_warning}</p>
         </div>
-
-        {/* Right: Results */}
-        <div className="lg:col-span-3">
-          <AnimatePresence mode="wait">
-            {!jobResult ? (
-              <motion.div
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="h-full min-h-[400px] rounded-xl border border-dashed border-border flex flex-col items-center justify-center gap-4 text-center p-8"
-              >
-                <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center">
-                  <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
-                </div>
-                <div>
-                  <p className="font-medium text-muted-foreground">Your result will appear here</p>
-                  <p className="text-sm text-muted-foreground/60 mt-1">Upload a photo and generate to see the transformation</p>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key={`result-${jobId || jobResult.final_image_url}`}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="space-y-4"
-              >
-                {/* Side by side */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Original</p>
-                    <img src={uploadedPreview!} alt="Original" className="w-full aspect-square object-cover rounded-lg border border-border" />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Generated</p>
-                      <Badge className="text-[10px] bg-accent/20 text-accent border-accent/30">AI</Badge>
-                    </div>
-                    <img src={jobResult.final_image_url} alt="Pro Photo" className="w-full aspect-square object-cover rounded-lg border border-accent/20" />
-                  </div>
-                </div>
-
-                {/* Inputs Used */}
-                <div className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Inputs Used</p>
-                    <StyleSourceBadge sources={jobResult.style_sources} refCount={jobResult.reference_count} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Camera className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">Mode:</span>
-                      <span className="font-medium capitalize">{(jobResult.generation_mode || shotType).replace(/_/g, ' ')}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">References:</span>
-                      <span className="font-medium">{jobResult.reference_count} images</span>
-                    </div>
-                  </div>
-                </div>
-
-                {jobResult.generation_warning && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-300/40 bg-amber-100/40">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-800">{jobResult.generation_warning}</p>
-                  </div>
-                )}
-
-                {/* Feedback controls */}
-                <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">How does this look?</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {FEEDBACK_OPTIONS.map((fb) => {
-                      const Icon = fb.icon;
-                      const isPositive = fb.type === 'approved' || fb.type === 'great_match';
-                      const isSelected = feedbackSent === fb.type;
-                      const isNegative = !isPositive && fb.type !== 'rejected';
-                      return (
-                        <button
-                          key={fb.type}
-                          onClick={() => {
-                            if (isNegative || fb.type === 'rejected') {
-                              handleRejectAndRegenerate(fb.type);
-                            } else {
-                              handleFeedback(fb.type);
-                            }
-                          }}
-                          disabled={!!feedbackSent}
-                          className={cn(
-                            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-all',
-                            isSelected
-                              ? 'border-accent bg-accent/10 text-accent font-medium'
-                              : feedbackSent
-                                ? 'border-border text-muted-foreground opacity-40 cursor-not-allowed'
-                                : 'border-border hover:border-accent/30 text-muted-foreground hover:text-foreground'
-                          )}
-                        >
-                          <Icon className="w-3 h-3" />
-                          {fb.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {feedbackSent && (
-                    <p className="text-[10px] text-muted-foreground">
-                      {(feedbackSent === 'approved' || feedbackSent === 'great_match')
-                        ? 'Saved as style reference for future generations.'
-                        : 'Feedback recorded — this will improve future results. Try regenerating below.'}
-                    </p>
-                  )}
-                </div>
-
-                {/* Fidelity */}
-                {isAdmin && (
-                  <button
-                    onClick={handleFidelityConfirm}
-                    className={cn(
-                      'w-full flex items-center gap-3 p-3.5 rounded-lg border text-left transition-all',
-                      fidelityConfirmed ? 'border-accent/40 bg-accent/5' : 'border-border hover:border-accent/30'
-                    )}
-                  >
-                    {fidelityConfirmed
-                      ? <CheckSquare className="w-4 h-4 text-accent shrink-0" />
-                      : <Square className="w-4 h-4 text-muted-foreground shrink-0" />
-                    }
-                    <div>
-                      <p className="text-sm font-medium">This image still represents the actual dish</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Fidelity confirmation — required before publishing</p>
-                    </div>
-                  </button>
-                )}
-
-                {!fidelityConfirmed && shotType === 'campaign' && isAdmin && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-                    <p className="text-sm text-destructive">Campaign mode outputs are heavily stylized. Consider using Social Ready for everyday posting.</p>
-                  </div>
-                )}
-
-                {/* Primary Actions */}
-                <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Actions</p>
-                  <Button
-                    onClick={handleSaveToLibrary}
-                    disabled={savedToLibrary}
-                    className="w-full gap-1.5 bg-accent hover:bg-accent/90 text-accent-foreground text-xs"
-                    size="sm"
-                  >
-                    {savedToLibrary ? (
-                      <><Check className="w-3.5 h-3.5" /> Accepted</>
-                    ) : (
-                      <><Check className="w-3.5 h-3.5" /> Accept</>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => setJobResult(null)}
-                    variant="outline"
-                    className="w-full gap-1.5 text-xs"
-                    size="sm"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" /> Regenerate
-                  </Button>
-                  <Button
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    variant="outline"
-                    className="w-full gap-1.5 text-xs"
-                    size="sm"
-                  >
-                    <Wand2 className="w-3.5 h-3.5" /> Edit prompt
-                  </Button>
-                  <Button
-                    onClick={handleDownloadLatest}
-                    variant="outline"
-                    className="w-full gap-1.5 text-xs"
-                    size="sm"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Download Image
-                  </Button>
-                  <div className="border-t border-border pt-3 space-y-2">
-                    <Button
-                      variant="ghost"
-                      className="w-full gap-1.5 text-xs text-muted-foreground hover:text-destructive"
-                      size="sm"
-                      onClick={handleDiscard}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Discard
-                    </Button>
-                  </div>
-                  {!savedToLibrary && !planId && (
-                    <p className="text-[10px] text-muted-foreground text-center">
-                      Accept to automatically save this asset and send it to approval.
-                    </p>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+      )}
     </motion.div>
   );
 }
