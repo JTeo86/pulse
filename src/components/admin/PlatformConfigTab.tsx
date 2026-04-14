@@ -34,22 +34,6 @@ const REVIEW_DEFAULTS: Array<{
   },
 ];
 
-const PRODUCT_DEFAULTS: Array<{
-  key: string;
-  label: string;
-  description: string;
-  type: 'text';
-  defaultValue: string;
-}> = [
-  {
-    key: 'default_new_venue_tier_slug',
-    label: 'Default Tier for New Venues',
-    description: 'Subscription tier slug assigned to newly created venues when available.',
-    type: 'text',
-    defaultValue: '',
-  },
-];
-
 const AI_DEFAULTS: Array<{
   key: string;
   label: string;
@@ -177,19 +161,6 @@ export default function PlatformConfigTab() {
       return map;
     },
   });
-  const { data: tiers } = useQuery({
-    queryKey: ['subscription-tiers-for-default'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('subscription_tiers')
-        .select('slug, name')
-        .eq('is_active', true)
-        .order('sort_order')
-        .order('name');
-      if (error) return [];
-      return data ?? [];
-    },
-  });
 
   const [local, setLocal] = useState<SettingsMap>({});
   const merged: SettingsMap = { ...(settings ?? {}), ...local };
@@ -240,36 +211,13 @@ export default function PlatformConfigTab() {
             <CardTitle className="text-base">Product Defaults</CardTitle>
           </div>
           <CardDescription>
-            Global defaults only. Tier entitlements are managed in Subscription Tiers.
+            Only global defaults live here. New venue default plan is managed in Subscription Tiers.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {PRODUCT_DEFAULTS.map((field) => (
-            <div key={field.key} className="flex items-start justify-between gap-4">
-              <div className="space-y-0.5 min-w-0">
-                <Label className="text-sm font-medium">{field.label}</Label>
-                <p className="text-xs text-muted-foreground">{field.description}</p>
-              </div>
-              <div className="shrink-0 w-52">
-                <Select
-                  value={merged.default_new_venue_tier_slug || '__auto__'}
-                  onValueChange={(v) => handleChange(field.key, v === '__auto__' ? '' : v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Auto-select first active tier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__auto__">Auto-select first active tier</SelectItem>
-                    {(tiers ?? []).map((tier) => (
-                      <SelectItem key={tier.slug} value={tier.slug}>
-                        {tier.name} ({tier.slug})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          ))}
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Use the Subscription Tiers tab to choose the default new-venue plan and plan entitlements.
+          </p>
         </CardContent>
       </Card>
 
