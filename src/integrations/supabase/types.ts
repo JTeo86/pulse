@@ -2569,29 +2569,41 @@ export type Database = {
       }
       referrals: {
         Row: {
+          attribution_confidence: number | null
+          bill_amount: number | null
           booking_date: string | null
+          commission: number | null
           created_at: string
           guest_name: string | null
           id: string
           partner_id: string
+          source_type: string | null
           status: string
           venue_id: string
         }
         Insert: {
+          attribution_confidence?: number | null
+          bill_amount?: number | null
           booking_date?: string | null
+          commission?: number | null
           created_at?: string
           guest_name?: string | null
           id?: string
           partner_id: string
+          source_type?: string | null
           status?: string
           venue_id: string
         }
         Update: {
+          attribution_confidence?: number | null
+          bill_amount?: number | null
           booking_date?: string | null
+          commission?: number | null
           created_at?: string
           guest_name?: string | null
           id?: string
           partner_id?: string
+          source_type?: string | null
           status?: string
           venue_id?: string
         }
@@ -4269,6 +4281,17 @@ export type Database = {
       transfer_venue_ownership: {
         Args: { p_new_owner_id: string; p_venue_id: string }
         Returns: undefined
+      }
+      upsert_referral_entry: {
+        Args: {
+          p_bill_amount?: number
+          p_booking_date?: string
+          p_guest_name?: string
+          p_partner_id: string
+          p_source_type?: string
+          p_venue_id: string
+        }
+        Returns: string
       }
     }
     Enums: {
