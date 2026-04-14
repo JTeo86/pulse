@@ -1,4 +1,4 @@
-import { encode as hexEncode } from 'https://deno.land/std@0.224.0/encoding/hex.ts';
+// No external crypto imports needed — uses Web Crypto API
 import { createServiceClient, getStripeSecretKey, syncVenueEntitlements } from '../_shared/billing.ts';
 
 function secureCompare(a: string, b: string) {
@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
       if (!sig?.t || !sig?.v1) throw new Error('Missing Stripe signature');
       const signedPayload = `${sig.t}.${body}`;
       const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(webhookSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const sigBytes = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload));
-      const expected = new TextDecoder().decode(hexEncode(new Uint8Array(sigBytes)));
+      const sigBytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload)));
+      const expected = Array.from(sigBytes).map(b => b.toString(16).padStart(2, '0')).join('');
       if (!secureCompare(expected, sig.v1)) throw new Error('Invalid Stripe signature');
     }
 
