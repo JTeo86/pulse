@@ -858,6 +858,79 @@ export type Database = {
           },
         ]
       }
+      credit_ledger: {
+        Row: {
+          created_at: string
+          credit_type: string
+          delta: number
+          id: string
+          reason: string
+          reference_id: string | null
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          credit_type?: string
+          delta?: number
+          id?: string
+          reason?: string
+          reference_id?: string | null
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          credit_type?: string
+          delta?: number
+          id?: string
+          reason?: string
+          reference_id?: string | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_ledger_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_wallets: {
+        Row: {
+          balance: number
+          created_at: string
+          credit_type: string
+          id: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          credit_type?: string
+          id?: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          credit_type?: string
+          id?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_wallets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       edited_assets: {
         Row: {
           compliance_notes: string | null
@@ -2679,6 +2752,60 @@ export type Database = {
           },
         ]
       }
+      subscription_tiers: {
+        Row: {
+          created_at: string
+          description: string | null
+          feature_summary_json: Json | null
+          id: string
+          is_active: boolean
+          marketplace_access_enabled: boolean
+          max_users_per_venue: number
+          monthly_image_quota: number
+          monthly_storage_mb: number
+          name: string
+          slug: string
+          sort_order: number
+          stripe_price_id_monthly: string | null
+          updated_at: string
+          video_payg_enabled: boolean
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          feature_summary_json?: Json | null
+          id?: string
+          is_active?: boolean
+          marketplace_access_enabled?: boolean
+          max_users_per_venue?: number
+          monthly_image_quota?: number
+          monthly_storage_mb?: number
+          name: string
+          slug: string
+          sort_order?: number
+          stripe_price_id_monthly?: string | null
+          updated_at?: string
+          video_payg_enabled?: boolean
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          feature_summary_json?: Json | null
+          id?: string
+          is_active?: boolean
+          marketplace_access_enabled?: boolean
+          max_users_per_venue?: number
+          monthly_image_quota?: number
+          monthly_storage_mb?: number
+          name?: string
+          slug?: string
+          sort_order?: number
+          stripe_price_id_monthly?: string | null
+          updated_at?: string
+          video_payg_enabled?: boolean
+        }
+        Relationships: []
+      }
       system_events: {
         Row: {
           created_at: string
@@ -2850,6 +2977,63 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      venue_entitlements: {
+        Row: {
+          created_at: string
+          id: string
+          marketplace_access_enabled: boolean
+          max_users_per_venue: number
+          monthly_image_quota: number
+          monthly_storage_mb: number
+          source_type: string
+          subscription_tier_id: string | null
+          updated_at: string
+          venue_id: string
+          video_payg_enabled: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          marketplace_access_enabled?: boolean
+          max_users_per_venue?: number
+          monthly_image_quota?: number
+          monthly_storage_mb?: number
+          source_type?: string
+          subscription_tier_id?: string | null
+          updated_at?: string
+          venue_id: string
+          video_payg_enabled?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          marketplace_access_enabled?: boolean
+          max_users_per_venue?: number
+          monthly_image_quota?: number
+          monthly_storage_mb?: number
+          source_type?: string
+          subscription_tier_id?: string | null
+          updated_at?: string
+          venue_id?: string
+          video_payg_enabled?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_entitlements_subscription_tier_id_fkey"
+            columns: ["subscription_tier_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_entitlements_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       venue_event_plans: {
         Row: {
@@ -3430,6 +3614,76 @@ export type Database = {
             foreignKeyName: "venue_style_reference_assets_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          pending_change_effective_at: string | null
+          pending_change_tier_id: string | null
+          pending_change_type: string | null
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_tier_id: string | null
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          pending_change_effective_at?: string | null
+          pending_change_tier_id?: string | null
+          pending_change_type?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_tier_id?: string | null
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          pending_change_effective_at?: string | null
+          pending_change_tier_id?: string | null
+          pending_change_type?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_tier_id?: string | null
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_subscriptions_pending_change_tier_id_fkey"
+            columns: ["pending_change_tier_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_subscriptions_subscription_tier_id_fkey"
+            columns: ["subscription_tier_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_subscriptions_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
             referencedRelation: "venues"
             referencedColumns: ["id"]
           },
