@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,32 @@ type TierDraft = {
   video_payg_enabled: boolean;
 };
 
+const NEW_TIER_TEMPLATE = {
+  slug: '',
+  name: '',
+  description: '',
+  sort_order: '0',
+  is_active: true,
+  stripe_price_id_monthly: '',
+  monthly_image_quota: '0',
+  monthly_storage_mb: '0',
+  max_users_per_venue: '1',
+  marketplace_access_enabled: false,
+  video_payg_enabled: false,
+};
+
+function hasRequiredIdentity(draft: TierDraft) {
+  return Boolean(draft.name.trim()) && Boolean(draft.slug.trim());
+}
+
+function formatStorageLabel(storageMb: number) {
+  if (storageMb >= 1024) {
+    const gb = storageMb / 1024;
+    return `${gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)} GB`;
+  }
+  return `${storageMb} MB`;
+}
+
 function toTierDraft(tier: any): TierDraft {
   return {
     id: tier.id,
@@ -46,19 +72,7 @@ function toTierDraft(tier: any): TierDraft {
 
 export default function SubscriptionTiersTab() {
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState({
-    slug: '',
-    name: '',
-    description: '',
-    sort_order: '0',
-    is_active: true,
-    stripe_price_id_monthly: '',
-    monthly_image_quota: '0',
-    monthly_storage_mb: '0',
-    max_users_per_venue: '1',
-    marketplace_access_enabled: false,
-    video_payg_enabled: false,
-  });
+  const [draft, setDraft] = useState(NEW_TIER_TEMPLATE);
   const [edits, setEdits] = useState<Record<string, TierDraft>>({});
 
   const { data, error, isError } = useQuery({
@@ -120,6 +134,13 @@ export default function SubscriptionTiersTab() {
   const saveTier = async (tier: any) => {
     const payload = edits[tier.id];
     if (!payload) return;
+    if (!hasRequiredIdentity(payload)) {
+      toast.error('Plan name and slug are required');
+      return;
+    }
+    if (payload.is_active && !payload.stripe_price_id_monthly.trim()) {
+      toast.warning(`Active tier "${payload.name || tier.name}" has no Stripe monthly price ID`);
+    }
 
     const { error } = await supabase.from('subscription_tiers').upsert(
       {
@@ -166,6 +187,14 @@ export default function SubscriptionTiersTab() {
     queryClient.invalidateQueries({ queryKey: ['subscription-tiers-admin'] });
   };
 
+  const deactivateTier = async (tier: any) => {
+    const localTier = getTier(tier);
+    setTierField(tier, 'is_active', false);
+    if (localTier.is_active) {
+      toast.message(`${localTier.name || tier.name} marked inactive. Save plan to persist.`);
+    }
+  };
+
   const createTier = async () => {
     const { error } = await supabase.from('subscription_tiers').insert({
       slug: draft.slug,
@@ -183,19 +212,7 @@ export default function SubscriptionTiersTab() {
     });
     if (error) throw error;
 
-    setDraft({
-      slug: '',
-      name: '',
-      description: '',
-      sort_order: '0',
-      is_active: true,
-      stripe_price_id_monthly: '',
-      monthly_image_quota: '0',
-      monthly_storage_mb: '0',
-      max_users_per_venue: '1',
-      marketplace_access_enabled: false,
-      video_payg_enabled: false,
-    });
+    setDraft(NEW_TIER_TEMPLATE);
     toast.success('New plan created');
     queryClient.invalidateQueries({ queryKey: ['subscription-tiers-admin'] });
   };
@@ -256,6 +273,8 @@ export default function SubscriptionTiersTab() {
 
       {tiers.map((tier) => {
         const localTier = getTier(tier);
+        const missingIdentity = !hasRequiredIdentity(localTier);
+        const activeWithoutPriceId = localTier.is_active && !localTier.stripe_price_id_monthly.trim();
         const isDefault = defaultTierSlug
           ? defaultTierSlug === tier.slug
           : visibleDefaultTier?.slug === tier.slug;
@@ -271,11 +290,17 @@ export default function SubscriptionTiersTab() {
                 <div className="flex flex-wrap gap-2">
                   {isDefault && <Badge>Default for new venues</Badge>}
                   {localTier.is_active ? <Badge variant="outline">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
+                  <Badge variant="outline">
+                    {localTier.monthly_image_quota} images / mo
+                  </Badge>
+                  <Badge variant="outline">
+                    {formatStorageLabel(localTier.monthly_storage_mb)} storage
+                  </Badge>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Button variant={isDefault ? 'secondary' : 'outline'} size="sm" onClick={() => setDefaultTier(tier.slug)}>
+                <Button variant={isDefault ? 'secondary' : 'outline'} size="sm" onClick={() => setDefaultTier(localTier.slug || tier.slug)}>
                   {isDefault ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Circle className="mr-1.5 h-3.5 w-3.5" />}
                   {isDefault ? 'Default plan' : 'Set as default'}
                 </Button>
@@ -308,6 +333,11 @@ export default function SubscriptionTiersTab() {
                     <Switch checked={localTier.is_active} onCheckedChange={(v) => setTierField(tier, 'is_active', v)} />
                   </div>
                 </div>
+                {missingIdentity && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    Plan name and slug are required before saving.
+                  </div>
+                )}
               </div>
 
               <Separator />
@@ -346,9 +376,21 @@ export default function SubscriptionTiersTab() {
                   <Label>Stripe monthly price ID</Label>
                   <Input value={localTier.stripe_price_id_monthly} onChange={(e) => setTierField(tier, 'stripe_price_id_monthly', e.target.value)} placeholder="price_..." />
                 </div>
+                {activeWithoutPriceId && (
+                  <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Active plan has no Stripe monthly price ID; checkout may fail until this is set.
+                  </div>
+                )}
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="secondary" onClick={() => setDefaultTier(localTier.slug || tier.slug)} disabled={!localTier.slug.trim()}>
+                  Set as default
+                </Button>
+                <Button variant="outline" onClick={() => deactivateTier(tier)} disabled={!localTier.is_active}>
+                  Deactivate
+                </Button>
                 {hasEdit(tier) && (
                   <Button variant="outline" onClick={() => setEdits((prev) => {
                     const next = { ...prev };
@@ -358,7 +400,7 @@ export default function SubscriptionTiersTab() {
                     Discard
                   </Button>
                 )}
-                <Button onClick={() => saveTier(tier)} disabled={!hasEdit(tier)}>
+                <Button onClick={() => saveTier(tier)} disabled={!hasEdit(tier) || missingIdentity}>
                   Save plan
                 </Button>
               </div>
