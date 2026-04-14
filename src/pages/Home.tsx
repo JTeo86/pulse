@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, ClipboardList, Home as HomeIcon, Sparkles, AlertTriangle, Clock3 } from 'lucide-react';
+import { CalendarDays, ClipboardList, Home as HomeIcon, Sparkles, AlertTriangle, Clock3, CheckCircle2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
@@ -291,6 +291,9 @@ export default function Home() {
     setSearchParams(nextParams, { replace: true });
   };
 
+  const greeting = getGreeting();
+  const headerTitle = currentVenue ? `${greeting}, ${currentVenue.name}` : `${greeting}`;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -299,8 +302,8 @@ export default function Home() {
       className="space-y-6"
     >
       <PageHeader
-        title={`Command Centre${currentVenue ? ` • ${currentVenue.name}` : ''}`}
-        description="Your week is ready."
+        title={headerTitle}
+        description="Command Centre · premium weekly overview"
       />
 
       <ReferralHomeCards />
@@ -334,7 +337,7 @@ export default function Home() {
             <CardContent className="pt-0 space-y-2">
               <ActionRow title="Review content" detail={`${overview?.pendingContent.length ?? 0} items need approval`} to="/content/library?tab=queue" />
               <ActionRow title="Add photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
-              <ActionRow title="Generate image" detail="Create a new Pro Photo in 2–3 steps" to="/studio/pro-photo" />
+              <ActionRow title="Generate image" detail="Create a new Pro Photo now" to="/studio/pro-photo" />
               <ActionRow title="Reply to reviews" detail={`${overview?.pendingRepliesCount ?? 0} drafted replies waiting`} to="/reputation/reviews?tab=respond" />
             </CardContent>
           </Card>
@@ -351,11 +354,11 @@ export default function Home() {
                   <div key={opportunity.title} className="rounded-lg border p-3 space-y-2">
                     <p className="text-sm font-medium">{opportunity.title}</p>
                     <p className="text-xs text-muted-foreground">{opportunity.description}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" asChild><Link to="/studio/pro-photo">Generate image</Link></Button>
-                      <Button size="sm" variant="outline" asChild><Link to="/home?tab=plans">Create plan</Link></Button>
-                      <Button size="sm" variant="outline" asChild><Link to="/content/library?tab=queue">Add to queue</Link></Button>
-                    </div>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to={`/studio/pro-photo?prompt=${encodeURIComponent(`Create a premium social image for: ${opportunity.title}`)}&context=${encodeURIComponent(opportunity.description || '')}`}>
+                        Generate image
+                      </Link>
+                    </Button>
                   </div>
                 ))
               )}
@@ -464,4 +467,11 @@ function buildCoverageSummary(scheduledItems: Array<{ scheduled_for: string | nu
 function formatLastRun(timestamp: string) {
   const date = new Date(timestamp);
   return `${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} • ${formatDistanceToNow(date, { addSuffix: true })}`;
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
 }
