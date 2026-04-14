@@ -692,7 +692,15 @@ export default function BrandLibraryPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Home
         </Button>
       )}
-      <PageHeader title="Content Pipeline" description="Manage upcoming posts, suggestions, and content gaps." />
+      <PageHeader
+        title="Content Pipeline"
+        description="Review and approve upcoming posts."
+        action={(
+          <Button className="gap-2" onClick={() => navigate('/studio/pro-photo')}>
+            <Wand2 className="w-4 h-4" /> Create new image
+          </Button>
+        )}
+      />
       <Tabs value={topLevelTab} onValueChange={handleTopLevelTabChange}>
         <TabsList>
           <TabsTrigger value="queue">Queue</TabsTrigger>
@@ -796,7 +804,7 @@ export default function BrandLibraryPage() {
                               <div className="flex flex-wrap gap-2">
                                 <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
                                 <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
-                                <Button size="sm" variant="outline" onClick={() => setScheduleTarget(item)}>Reschedule</Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>Delete</Button>
                               </div>
                             </div>
                           </div>
@@ -870,7 +878,7 @@ export default function BrandLibraryPage() {
                         <div className="flex flex-wrap gap-2">
                           <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
                           <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
-                          <Button size="sm" variant="outline" onClick={() => setScheduleTarget(item)}>Schedule</Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>Delete</Button>
                         </div>
                       </div>
                     </div>

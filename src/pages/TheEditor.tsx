@@ -6,12 +6,13 @@ import {
   Upload, Camera, Wand2, Download,
   CheckSquare, Square, AlertTriangle, Loader2, Star,
   RotateCcw, Image as ImageIcon, Info,
-  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2,
+  ThumbsUp, ThumbsDown, Sun, Moon, Palette, Eye, Utensils, Sparkles, Trash2, Check,
 } from 'lucide-react';
 import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
@@ -116,6 +117,12 @@ export default function TheEditorPage() {
   const planId = searchParams.get('plan_id');
   const briefId = searchParams.get('brief_id');
   const briefTitle = searchParams.get('brief_title');
+  const promptParam = searchParams.get('prompt');
+  const contextParam = searchParams.get('context');
+  const eventTitleParam = searchParams.get('event_title');
+
+  const defaultPrompt = promptParam || (briefTitle ? `Create a premium campaign image for ${briefTitle}.` : eventTitleParam ? `Create a premium campaign image for ${eventTitleParam}.` : '');
+  const defaultContext = contextParam || (briefTitle ? `This visual supports ${briefTitle}. Keep it on-brand and post-ready.` : '');
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
@@ -123,6 +130,8 @@ export default function TheEditorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [shotType, setShotType] = useState<ShotType>('social_ready');
+  const [promptText, setPromptText] = useState(defaultPrompt);
+  const [contextText, setContextText] = useState(defaultContext);
 
   const [generating, setGenerating] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -178,6 +187,11 @@ export default function TheEditorPage() {
     };
   }, [jobResult, shotType]);
 
+  useEffect(() => {
+    setPromptText(defaultPrompt);
+    setContextText(defaultContext);
+  }, [defaultPrompt, defaultContext]);
+
   const handleFileDrop = useCallback(async (file: File) => {
     if (!currentVenue || !user) return;
     if (!file.type.startsWith('image/')) {
@@ -206,6 +220,10 @@ export default function TheEditorPage() {
 
   const handleGenerate = async () => {
     if (!currentVenue || !user || !uploadedFile) return;
+    if (!promptText.trim()) {
+      toast({ variant: 'destructive', title: 'Add a prompt', description: 'Describe what you want to generate before continuing.' });
+      return;
+    }
     if (proPhotoLimit > 0 && proPhotoUsed >= proPhotoLimit) {
       toast({ variant: 'destructive', title: 'Credit limit reached', description: 'Contact admin to increase credits.' });
       return;
@@ -245,6 +263,8 @@ export default function TheEditorPage() {
           sourceFileName: uploadedFile.name,
           realism_mode: shotType,
           skip_library_save: skipLibrarySave,
+          prompt_override: promptText.trim(),
+          context_hint: contextText.trim() || null,
         },
       });
       if (fnError) {
@@ -449,7 +469,8 @@ export default function TheEditorPage() {
       if (queueError) throw queueError;
 
       setSavedToLibrary(true);
-      toast({ title: 'Saved to Content Queue', description: 'Image is now in Content Queue and ready for approval.' });
+      toast({ title: 'Accepted', description: 'Saved to Content Queue and ready for approval.' });
+      navigate('/content/library?tab=queue');
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Save failed', description: err.message });
     }
@@ -489,12 +510,16 @@ export default function TheEditorPage() {
       <BackButton fallbackTo={planId ? `/content/planner/plan/${planId}` : '/content/library'} />
 
       {/* Plan context banner */}
-      {planId && briefTitle && (
+      {(planId && briefTitle) || defaultPrompt ? (
         <div className="flex items-center gap-3 p-3 rounded-lg border border-accent/20 bg-accent/5">
           <ImageIcon className="w-4 h-4 text-accent shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-foreground">Creating for campaign brief: <span className="text-accent">{briefTitle}</span></p>
-            <p className="text-[10px] text-muted-foreground">Asset will automatically link to your campaign plan.</p>
+            <p className="text-xs font-medium text-foreground">
+              {briefTitle ? <>Creating for campaign brief: <span className="text-accent">{briefTitle}</span></> : 'Campaign context was prefilled for faster generation.'}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {planId ? 'Asset will automatically link to your campaign plan.' : 'Edit the prompt if you want a different angle.'}
+            </p>
           </div>
           <button
             onClick={() => navigate(`/content/planner/plan/${planId}`)}
@@ -591,8 +616,23 @@ export default function TheEditorPage() {
           <div className={cn('rounded-xl border bg-card p-5 space-y-4 transition-opacity', !uploadedFile ? 'opacity-40 pointer-events-none' : '')}>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-accent/20 text-accent text-xs font-bold flex items-center justify-center">2</span>
-              <span className="font-medium text-sm">Mode</span>
+              <span className="font-medium text-sm">Prompt & context</span>
             </div>
+            <div className="space-y-2">
+              <Textarea
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Describe the photo you want Pulse to generate..."
+                className="min-h-20"
+              />
+              <Textarea
+                value={contextText}
+                onChange={(e) => setContextText(e.target.value)}
+                placeholder="Optional context (event, offer, audience, mood)"
+                className="min-h-16"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Step 3: pick a mode and generate.</p>
             <div className="grid grid-cols-2 gap-1.5">
               {SHOT_TYPES.map((m) => (
                 <button
@@ -619,7 +659,7 @@ export default function TheEditorPage() {
             {/* Generate CTA */}
             <Button
               onClick={handleGenerate}
-              disabled={!uploadedFile || generating}
+              disabled={!uploadedFile || generating || !promptText.trim()}
               className="w-full gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"
               size="lg"
             >
@@ -782,21 +822,27 @@ export default function TheEditorPage() {
                     size="sm"
                   >
                     {savedToLibrary ? (
-                      <><CheckSquare className="w-3.5 h-3.5" /> Saved to Content Queue</>
+                      <><Check className="w-3.5 h-3.5" /> Accepted</>
                     ) : (
-                      <><ImageIcon className="w-3.5 h-3.5" /> Save to Content Queue</>
+                      <><Check className="w-3.5 h-3.5" /> Accept</>
                     )}
                   </Button>
-                  {savedToLibrary && (
-                    <Button
-                      onClick={() => navigate('/content/library?tab=queue')}
-                      variant="outline"
-                      className="w-full gap-1.5 text-xs"
-                      size="sm"
-                    >
-                      View in Content Queue
-                    </Button>
-                  )}
+                  <Button
+                    onClick={() => setJobResult(null)}
+                    variant="outline"
+                    className="w-full gap-1.5 text-xs"
+                    size="sm"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Regenerate
+                  </Button>
+                  <Button
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                    variant="outline"
+                    className="w-full gap-1.5 text-xs"
+                    size="sm"
+                  >
+                    <Wand2 className="w-3.5 h-3.5" /> Edit prompt
+                  </Button>
                   <Button
                     onClick={handleDownloadLatest}
                     variant="outline"
@@ -817,7 +863,7 @@ export default function TheEditorPage() {
                   </div>
                   {!savedToLibrary && !planId && (
                     <p className="text-[10px] text-muted-foreground text-center">
-                      This image is not yet saved. Save it or it will be lost.
+                      Accept to automatically save this asset and send it to approval.
                     </p>
                   )}
                 </div>
