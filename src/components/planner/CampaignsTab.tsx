@@ -33,6 +33,15 @@ export function CampaignsTab() {
     setWizardOpen(true);
   };
 
+  const handleGenerateImage = (project?: CopyProject) => {
+    const params = new URLSearchParams({
+      campaign_context: 'campaigns',
+      brief_title: project ? `${project.goal.replace(/_/g, ' ')} campaign image` : 'Campaign image',
+    });
+    if (project?.id) params.set('campaign_id', project.id);
+    navigate(`/studio/pro-photo?${params.toString()}`);
+  };
+
   if (wizardOpen) {
     return (
       <motion.div
@@ -59,6 +68,7 @@ export function CampaignsTab() {
       <RecentDrafts
         refreshTrigger={refreshTrigger}
         onSelectProject={handleSelectProject}
+        onGenerateImage={handleGenerateImage}
       />
 
       {/* Empty / CTA state */}
@@ -79,7 +89,7 @@ export function CampaignsTab() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => navigate('/studio/pro-photo?campaign_context=campaigns&brief_title=Campaign image')}
+            onClick={() => handleGenerateImage()}
           >
             Generate image
           </Button>

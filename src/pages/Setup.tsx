@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/ui/page-header';
+import { BackButton } from '@/components/navigation/BackButton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -410,6 +411,7 @@ export default function SetupPage() {
 
   return (
     <>
+      <BackButton fallbackTo="/home" />
       <PageHeader title="Setup" description="Give Pulse the essentials once, then let it run." />
       <div className="p-6 max-w-5xl space-y-6">
         <Card className="border-accent/30">
