@@ -268,31 +268,40 @@ export type Database = {
       }
       autopilot_settings: {
         Row: {
+          allow_copy_only_fallback: boolean
           approval_mode: string
           content_volume: string
           created_at: string
           frequency: string
           is_enabled: boolean
+          mode: string
+          require_asset_for_runs: boolean
           run_time: string
           updated_at: string
           venue_id: string
         }
         Insert: {
+          allow_copy_only_fallback?: boolean
           approval_mode?: string
           content_volume?: string
           created_at?: string
           frequency?: string
           is_enabled?: boolean
+          mode?: string
+          require_asset_for_runs?: boolean
           run_time?: string
           updated_at?: string
           venue_id: string
         }
         Update: {
+          allow_copy_only_fallback?: boolean
           approval_mode?: string
           content_volume?: string
           created_at?: string
           frequency?: string
           is_enabled?: boolean
+          mode?: string
+          require_asset_for_runs?: boolean
           run_time?: string
           updated_at?: string
           venue_id?: string
@@ -529,6 +538,125 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "brand_visual_presets_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commission_disputes: {
+        Row: {
+          commission_id: string
+          created_at: string
+          dispute_type: string
+          id: string
+          opened_by: string | null
+          payout_period_id: string | null
+          reason: string
+          status: string
+        }
+        Insert: {
+          commission_id: string
+          created_at?: string
+          dispute_type?: string
+          id?: string
+          opened_by?: string | null
+          payout_period_id?: string | null
+          reason?: string
+          status?: string
+        }
+        Update: {
+          commission_id?: string
+          created_at?: string
+          dispute_type?: string
+          id?: string
+          opened_by?: string | null
+          payout_period_id?: string | null
+          reason?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commission_disputes_commission_id_fkey"
+            columns: ["commission_id"]
+            isOneToOne: false
+            referencedRelation: "commissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commission_disputes_payout_period_id_fkey"
+            columns: ["payout_period_id"]
+            isOneToOne: false
+            referencedRelation: "payout_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commissions: {
+        Row: {
+          bill_amount: number
+          commission_rate: number
+          commission_value: number
+          created_at: string
+          id: string
+          locked_commission_value: number | null
+          partner_id: string
+          payout_period_id: string | null
+          referral_id: string | null
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          bill_amount?: number
+          commission_rate?: number
+          commission_value?: number
+          created_at?: string
+          id?: string
+          locked_commission_value?: number | null
+          partner_id: string
+          payout_period_id?: string | null
+          referral_id?: string | null
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          bill_amount?: number
+          commission_rate?: number
+          commission_value?: number
+          created_at?: string
+          id?: string
+          locked_commission_value?: number | null
+          partner_id?: string
+          payout_period_id?: string | null
+          referral_id?: string | null
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commissions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_payout_period_id_fkey"
+            columns: ["payout_period_id"]
+            isOneToOne: false
+            referencedRelation: "payout_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_referral_id_fkey"
+            columns: ["referral_id"]
+            isOneToOne: false
+            referencedRelation: "referrals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
@@ -1506,6 +1634,42 @@ export type Database = {
           },
         ]
       }
+      payout_commissions: {
+        Row: {
+          commission_id: string
+          created_at: string
+          id: string
+          payout_id: string
+        }
+        Insert: {
+          commission_id: string
+          created_at?: string
+          id?: string
+          payout_id: string
+        }
+        Update: {
+          commission_id?: string
+          created_at?: string
+          id?: string
+          payout_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_commissions_commission_id_fkey"
+            columns: ["commission_id"]
+            isOneToOne: false
+            referencedRelation: "commissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_commissions_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "payouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payout_items: {
         Row: {
           batch_id: string
@@ -1567,6 +1731,95 @@ export type Database = {
           },
           {
             foreignKeyName: "payout_items_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payout_periods: {
+        Row: {
+          created_at: string
+          due_at: string | null
+          id: string
+          month: string
+          paid_at: string | null
+          status: string
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          month: string
+          paid_at?: string | null
+          status?: string
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          month?: string
+          paid_at?: string | null
+          status?: string
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_periods_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payouts: {
+        Row: {
+          created_at: string
+          id: string
+          partner_id: string
+          payout_method: string
+          reference_note: string | null
+          status: string
+          total_amount: number
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          partner_id: string
+          payout_method?: string
+          reference_note?: string | null
+          status?: string
+          total_amount?: number
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          partner_id?: string
+          payout_method?: string
+          reference_note?: string | null
+          status?: string
+          total_amount?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payouts_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payouts_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
@@ -2281,6 +2534,84 @@ export type Database = {
           },
         ]
       }
+      referral_rollout_audit_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          event_payload: Json | null
+          event_scope: string
+          event_type: string
+          id: string
+          partner_id: string | null
+          venue_id: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_payload?: Json | null
+          event_scope: string
+          event_type: string
+          id?: string
+          partner_id?: string | null
+          venue_id?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          event_payload?: Json | null
+          event_scope?: string
+          event_type?: string
+          id?: string
+          partner_id?: string | null
+          venue_id?: string | null
+        }
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          booking_date: string | null
+          created_at: string
+          guest_name: string | null
+          id: string
+          partner_id: string
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          booking_date?: string | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          partner_id: string
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          booking_date?: string | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          partner_id?: string
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       referrers: {
         Row: {
           created_at: string
@@ -2289,8 +2620,14 @@ export type Database = {
           id: string
           instagram_handle: string | null
           notes: string | null
+          partner_beta_access: boolean
+          partner_referral_enabled: boolean
+          partner_rollout_changed_at: string | null
+          partner_rollout_changed_by: string | null
+          partner_stage_override: number | null
           role_type: string
           status: string
+          user_id: string | null
           venue_id: string | null
         }
         Insert: {
@@ -2300,8 +2637,14 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           notes?: string | null
+          partner_beta_access?: boolean
+          partner_referral_enabled?: boolean
+          partner_rollout_changed_at?: string | null
+          partner_rollout_changed_by?: string | null
+          partner_stage_override?: number | null
           role_type?: string
           status?: string
+          user_id?: string | null
           venue_id?: string | null
         }
         Update: {
@@ -2311,8 +2654,14 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           notes?: string | null
+          partner_beta_access?: boolean
+          partner_referral_enabled?: boolean
+          partner_rollout_changed_at?: string | null
+          partner_rollout_changed_by?: string | null
+          partner_stage_override?: number | null
           role_type?: string
           status?: string
+          user_id?: string | null
           venue_id?: string | null
         }
         Relationships: [
@@ -3752,6 +4101,11 @@ export type Database = {
           name: string
           owner_user_id: string | null
           plan: string | null
+          referral_beta_access: boolean
+          referral_enabled: boolean
+          referral_rollout_changed_at: string | null
+          referral_rollout_changed_by: string | null
+          referral_stage_override: number | null
           timezone: string
           website_url: string | null
         }
@@ -3767,6 +4121,11 @@ export type Database = {
           name: string
           owner_user_id?: string | null
           plan?: string | null
+          referral_beta_access?: boolean
+          referral_enabled?: boolean
+          referral_rollout_changed_at?: string | null
+          referral_rollout_changed_by?: string | null
+          referral_stage_override?: number | null
           timezone?: string
           website_url?: string | null
         }
@@ -3782,6 +4141,11 @@ export type Database = {
           name?: string
           owner_user_id?: string | null
           plan?: string | null
+          referral_beta_access?: boolean
+          referral_enabled?: boolean
+          referral_rollout_changed_at?: string | null
+          referral_rollout_changed_by?: string | null
+          referral_stage_override?: number | null
           timezone?: string
           website_url?: string | null
         }
