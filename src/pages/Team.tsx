@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
+import { Link } from 'react-router-dom';
 import {
   Users, UserPlus, Shield, User, Trash2, RefreshCw,
   Copy, Clock, Mail, Crown, ArrowRightLeft, Loader2,
@@ -31,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { isMissingBillingSchemaError } from '@/lib/billing-readiness';
+import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
 
 type MemberRole = 'staff' | 'manager';
 
@@ -413,9 +415,18 @@ export default function TeamPage() {
         }
       />
       {isSeatLimitReached && (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
-          Seat limit reached ({seatsUsed} of {seatLimit}). {isOwner ? 'Upgrade your plan in Billing to add more seats.' : 'Ask your venue owner to upgrade the billing tier.'}
-        </div>
+        <UpgradePrompt
+          title={`Seat limit reached (${seatsUsed}/${seatLimit})`}
+          description={isOwner ? 'You can still manage your current team as usual.' : 'You can still work with your current team without changes.'}
+          benefit={isOwner ? 'Moving to a higher plan gives you more seats so you can invite additional teammates.' : 'Ask your venue owner to upgrade when you are ready to add more teammates.'}
+          ctaLabel={isOwner ? 'Upgrade seats' : 'See plans'}
+          ctaTo={isOwner ? '/settings/billing' : '/pricing'}
+          secondaryAction={(
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/pricing">View pricing</Link>
+            </Button>
+          )}
+        />
       )}
       {missingEntitlementsSchema && (
         <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
