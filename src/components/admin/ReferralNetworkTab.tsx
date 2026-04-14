@@ -217,14 +217,14 @@ export default function ReferralNetworkTab() {
     const { data: authData } = await supabase.auth.getUser();
     const actorUserId = authData.user?.id ?? null;
 
-    const { error } = await supabase.from('referral_rollout_audit_events').insert({
+    const { error } = await supabase.from('referral_rollout_audit_events').insert([{
       event_scope: eventScope,
       event_type: eventType,
       venue_id: venueId ?? null,
       partner_id: partnerId ?? null,
       actor_user_id: actorUserId,
       event_payload: payload,
-    });
+    }]);
 
     if (error) throw error;
     return actorUserId;

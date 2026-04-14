@@ -113,7 +113,7 @@ export default function PartnerEarnings() {
               const { error } = await (supabase as any).from('commission_disputes').insert({
                 commission_id: issueCommissionId,
                 payout_period_id: row.payout_period_id,
-                opened_by: referrer?.user_id ?? null,
+                opened_by: (referrer as any)?.user_id ?? null,
                 dispute_type: 'partner_dispute',
                 reason: issueNote.trim(),
               });
