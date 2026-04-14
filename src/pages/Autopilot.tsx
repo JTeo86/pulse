@@ -109,6 +109,9 @@ export default function AutopilotPage() {
   });
 
   const latestRun = runs[0];
+  const latestCoverage = (latestRun?.output_summary as any)?.coverage_summary || null;
+  const missingCoverage = Array.isArray(latestCoverage?.missing_categories) ? latestCoverage.missing_categories : [];
+  const coveredCoverage = Array.isArray(latestCoverage?.covered_categories) ? latestCoverage.covered_categories : [];
 
   if (loading) {
     return (
@@ -140,6 +143,15 @@ export default function AutopilotPage() {
           <div className="grid gap-3 md:grid-cols-2">
             <InfoRow label="Last run" value={latestRun ? formatDistanceToNow(new Date(latestRun.created_at), { addSuffix: true }) : 'Never'} />
             <InfoRow label="Next run" value={getNextRunLabel(settings?.frequency, settings?.run_time)} />
+          </div>
+
+          <div className="rounded-md border p-3 space-y-1.5">
+            <p className="text-xs uppercase text-muted-foreground">Coverage summary</p>
+            <p className="text-sm">
+              {latestCoverage
+                ? `Missing: ${missingCoverage.length > 0 ? missingCoverage.join(', ') : 'none'} · Covered: ${coveredCoverage.length > 0 ? coveredCoverage.join(', ') : 'none'}`
+                : 'No coverage summary yet. Run Autopilot once to see gaps and coverage.'}
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -333,9 +333,9 @@ export default function Home() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Needs your input</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Needs Attention</CardTitle></CardHeader>
             <CardContent className="pt-0 space-y-2">
-              <ActionRow title="Review content" detail={`${overview?.pendingContent.length ?? 0} posts are ready for approval`} to="/content/library?tab=queue" />
+              <ActionRow title="Review posts" detail={`${overview?.pendingContent.length ?? 0} posts are ready for approval`} to="/content/library?tab=queue" />
               <ActionRow title="Add photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
               <ActionRow title="Generate image" detail="Create a new Pro Photo now" to="/studio/pro-photo" />
               <ActionRow title="Reply to reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=respond" />
@@ -354,11 +354,16 @@ export default function Home() {
                   <div key={opportunity.title} className="rounded-lg border p-3 space-y-2">
                     <p className="text-sm font-medium">{opportunity.title}</p>
                     <p className="text-xs text-muted-foreground">{opportunity.description}</p>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link to={`/studio/pro-photo?prompt=${encodeURIComponent(`Create a premium social image for: ${opportunity.title}`)}&context=${encodeURIComponent(opportunity.description || '')}`}>
-                        Generate image
-                      </Link>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link to={`/studio/pro-photo?prompt=${encodeURIComponent(`Create a premium social image for: ${opportunity.title}`)}&context=${encodeURIComponent(opportunity.description || '')}`}>
+                          Generate image
+                        </Link>
+                      </Button>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link to="/home?tab=plans">Create plan</Link>
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}
