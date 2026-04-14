@@ -43,7 +43,7 @@ export default function DashboardPage() {
           .eq('venue_id', currentVenue.id);
 
         const drafts = contentItems?.filter(c => c.status === 'draft' || c.status === 'needs_changes').length || 0;
-        const approved = contentItems?.filter(c => ['approved', 'ready', 'queued', 'sent_to_buffer', 'scheduled', 'exported'].includes(c.status || '')).length || 0;
+        const approved = contentItems?.filter(c => ['approved', 'ready', 'queued', 'scheduled', 'exported'].includes(c.status || '')).length || 0;
         const published = contentItems?.filter(c => c.status === 'published').length || 0;
 
         setStats({

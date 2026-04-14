@@ -5,8 +5,7 @@ export type PublishingQueueStatus =
   | 'scheduled'
   | 'exported'
   | 'published'
-  | 'failed'
-  | 'sent_to_buffer';
+  | 'failed';
 
 export type PublishingQueueViewStatus = 'ready' | 'queued' | 'scheduled' | 'exported' | 'published' | 'failed';
 
@@ -29,7 +28,7 @@ export interface PublishingAdapter {
 
 export function normalizePublishingStatus(status: string | null | undefined): PublishingQueueViewStatus {
   if (status === 'approved' || status === 'ready') return 'ready';
-  if (status === 'sent_to_buffer' || status === 'queued') return 'queued';
+  if (status === 'queued') return 'queued';
   if (status === 'scheduled') return 'scheduled';
   if (status === 'exported') return 'exported';
   if (status === 'published') return 'published';

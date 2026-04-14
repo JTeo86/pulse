@@ -42,7 +42,7 @@ export default function BrandOverviewPage() {
         ]);
 
         const drafts = contentResult.data?.filter(i => i.status === 'draft' || i.status === 'needs_changes').length || 0;
-        const approved = contentResult.data?.filter(i => ['approved', 'ready', 'queued', 'sent_to_buffer', 'scheduled', 'exported'].includes(i.status || '')).length || 0;
+        const approved = contentResult.data?.filter(i => ['approved', 'ready', 'queued', 'scheduled', 'exported'].includes(i.status || '')).length || 0;
         const published = contentResult.data?.filter(i => i.status === 'published').length || 0;
 
         setStats({

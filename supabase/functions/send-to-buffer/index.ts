@@ -12,12 +12,25 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function errorResponse(message: string, status = 400, code = 'bad_request', details?: unknown) {
+  return jsonResponse({ error: { code, message, details } }, status);
+}
+
 async function getUserIdFromAuthHeader(supabase: ReturnType<typeof createClient>, authHeader: string | null) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.replace('Bearer ', '');
   const { data, error } = await supabase.auth.getClaims(token);
   if (error || !data?.claims?.sub) return null;
   return String(data.claims.sub);
+}
+
+async function canPublish(supabase: ReturnType<typeof createClient>, venueId: string, userId: string) {
+  const [{ data: isVenueAdmin }, { data: venueRow }] = await Promise.all([
+    supabase.rpc('is_venue_admin', { check_venue_id: venueId, check_user_id: userId }),
+    supabase.from('venues').select('owner_user_id').eq('id', venueId).maybeSingle(),
+  ]);
+
+  return Boolean(isVenueAdmin || (venueRow?.owner_user_id && String(venueRow.owner_user_id) === userId));
 }
 
 function resolveMediaUrl(item: any): string | null {
@@ -42,9 +55,17 @@ function resolveMediaUrl(item: any): string | null {
   return null;
 }
 
+function toBufferScheduledAt(isoString: string | null): { value?: string; error?: string } {
+  if (!isoString) return {};
+  const time = new Date(isoString).getTime();
+  if (Number.isNaN(time)) return { error: 'Invalid scheduled_for timestamp' };
+  if (time <= Date.now() + 30_000) return { error: 'scheduled_for must be in the future' };
+  return { value: String(Math.floor(time / 1000)) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-  if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (req.method !== 'POST') return errorResponse('Method not allowed', 405, 'method_not_allowed');
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -53,7 +74,7 @@ Deno.serve(async (req) => {
 
   try {
     const userId = await getUserIdFromAuthHeader(supabase, req.headers.get('Authorization'));
-    if (!userId) return jsonResponse({ error: 'Unauthorized' }, 401);
+    if (!userId) return errorResponse('Unauthorized', 401, 'unauthorized');
 
     const body = await req.json();
     const venueId = String(body?.venue_id ?? '');
@@ -61,53 +82,65 @@ Deno.serve(async (req) => {
     const profileIds: string[] = Array.isArray(body?.profile_ids) ? body.profile_ids.map((id: unknown) => String(id)) : [];
 
     if (!venueId || contentIds.length === 0 || profileIds.length === 0) {
-      return jsonResponse({ error: 'venue_id, content_ids, and profile_ids are required' }, 400);
+      return errorResponse('venue_id, content_ids, and profile_ids are required', 400, 'missing_required_fields');
     }
 
-    const { data: isMember } = await supabase.rpc('is_venue_member', { check_venue_id: venueId, check_user_id: userId });
-    if (!isMember) return jsonResponse({ error: 'Forbidden' }, 403);
+    const isAllowed = await canPublish(supabase, venueId, userId);
+    if (!isAllowed) return errorResponse('Only venue owner/admin can publish to Buffer.', 403, 'forbidden');
 
-    const { data: connection } = await supabase
+    const { data: connection, error: connectionError } = await supabase
       .from('venue_buffer_connections')
       .select('buffer_access_token')
       .eq('venue_id', venueId)
       .maybeSingle();
 
+    if (connectionError) return errorResponse('Failed to load Buffer connection.', 500, 'connection_lookup_failed', connectionError.message);
     if (!connection?.buffer_access_token) {
-      return jsonResponse({ error: 'Buffer is not connected for this venue.' }, 400);
+      return errorResponse('Buffer is not connected for this venue.', 400, 'buffer_not_connected');
     }
 
     const { data: items, error: itemsError } = await supabase
       .from('content_items')
-      .select('id, venue_id, caption_final, status, media_master_url, media_variants')
+      .select('id, venue_id, caption_final, status, media_master_url, media_variants, scheduled_for')
       .eq('venue_id', venueId)
       .in('id', contentIds)
-      .in('status', ['approved', 'ready', 'queued', 'failed']);
+      .in('status', ['approved', 'ready', 'failed']);
 
-    if (itemsError) throw itemsError;
+    if (itemsError) return errorResponse('Failed to load content items.', 500, 'content_lookup_failed', itemsError.message);
 
     const rows = items ?? [];
     if (rows.length !== contentIds.length) {
-      return jsonResponse({ error: 'Some content items were not found or are not sendable.' }, 400);
+      return errorResponse('Some content items were not found or are not in an approved state.', 400, 'invalid_content_selection');
     }
 
-    const results: Array<{ content_id: string; ok: boolean; error?: string; update_id?: string }> = [];
+    const orderedRows = contentIds
+      .map((id) => rows.find((row) => row.id === id))
+      .filter((row): row is NonNullable<typeof rows[number]> => Boolean(row));
 
-    for (const item of rows) {
+    const results: Array<{ content_id: string; ok: boolean; error?: string; update_id?: string; status?: 'queued' | 'scheduled' }> = [];
+
+    for (const item of orderedRows) {
       const mediaUrl = resolveMediaUrl(item);
       const text = (item.caption_final || '').trim();
 
-      if (!mediaUrl) {
-        results.push({ content_id: item.id, ok: false, error: 'Missing media URL' });
+      if (!mediaUrl && !text) {
+        results.push({ content_id: item.id, ok: false, error: 'Post needs either caption text or a static image.' });
+        continue;
+      }
+
+      const scheduling = toBufferScheduledAt(item.scheduled_for);
+      if (scheduling.error) {
+        results.push({ content_id: item.id, ok: false, error: scheduling.error });
         continue;
       }
 
       const payload = new URLSearchParams();
       profileIds.forEach((id, idx) => payload.append(`profile_ids[${idx}]`, id));
-      payload.set('text', text);
-      payload.set('media[photo]', mediaUrl);
       payload.set('shorten', 'false');
       payload.set('now', 'false');
+      if (text) payload.set('text', text);
+      if (mediaUrl) payload.set('media[photo]', mediaUrl);
+      if (scheduling.value) payload.set('scheduled_at', scheduling.value);
 
       const sendRes = await fetch('https://api.bufferapp.com/1/updates/create.json', {
         method: 'POST',
@@ -121,27 +154,41 @@ Deno.serve(async (req) => {
       const sendData = await sendRes.json();
 
       if (!sendRes.ok || !sendData?.success) {
-        const message = sendData?.message || sendData?.error || 'Failed to send content to Buffer';
+        const message = sendData?.message || sendData?.error || sendData?.error_description || 'Failed to send content to Buffer';
         results.push({ content_id: item.id, ok: false, error: String(message) });
         continue;
       }
 
-      const updateId = sendData?.updates?.[0]?.id ? String(sendData.updates[0].id) : undefined;
-      await supabase
+      const firstUpdate = Array.isArray(sendData?.updates) ? sendData.updates[0] : null;
+      const updateId = firstUpdate?.id ? String(firstUpdate.id) : undefined;
+      const nextStatus: 'queued' | 'scheduled' = scheduling.value ? 'scheduled' : 'queued';
+
+      const { error: updateError } = await supabase
         .from('content_items')
         .update({
-          status: 'sent_to_buffer',
+          status: nextStatus,
           buffer_update_id: updateId ?? null,
           buffer_payload: {
             profile_ids: profileIds,
             sent_at: new Date().toISOString(),
+            scheduled_at_unix: scheduling.value ?? null,
+            scheduled_for: item.scheduled_for,
             update_count: Array.isArray(sendData?.updates) ? sendData.updates.length : null,
+            response_summary: {
+              success: Boolean(sendData?.success),
+              updates: Array.isArray(sendData?.updates) ? sendData.updates.length : 0,
+            },
           },
         })
         .eq('id', item.id)
         .eq('venue_id', venueId);
 
-      results.push({ content_id: item.id, ok: true, update_id: updateId });
+      if (updateError) {
+        results.push({ content_id: item.id, ok: false, error: `Buffer send succeeded but save failed: ${updateError.message}` });
+        continue;
+      }
+
+      results.push({ content_id: item.id, ok: true, update_id: updateId, status: nextStatus });
     }
 
     const successCount = results.filter((r) => r.ok).length;
@@ -153,6 +200,6 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('send-to-buffer error:', error);
-    return jsonResponse({ error: error instanceof Error ? error.message : 'Internal error' }, 500);
+    return errorResponse(error instanceof Error ? error.message : 'Internal error', 500, 'internal_error');
   }
 });
