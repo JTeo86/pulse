@@ -33,6 +33,50 @@ async function canPublish(supabase: ReturnType<typeof createClient>, venueId: st
   return Boolean(isVenueAdmin || (venueRow?.owner_user_id && String(venueRow.owner_user_id) === userId));
 }
 
+function extractUpdateIds(bufferUpdateId: string | null, bufferPayload: unknown): string[] {
+  const payloadIds = (bufferPayload && typeof bufferPayload === 'object' && Array.isArray((bufferPayload as Record<string, unknown>).update_ids))
+    ? (bufferPayload as Record<string, unknown>).update_ids as unknown[]
+    : [];
+
+  const normalizedPayloadIds = payloadIds
+    .filter((id): id is string | number => id !== null && id !== undefined)
+    .map((id) => String(id).trim())
+    .filter((id) => id.length > 0);
+
+  if (normalizedPayloadIds.length > 0) return Array.from(new Set(normalizedPayloadIds));
+  if (typeof bufferUpdateId === 'string' && bufferUpdateId.trim().length > 0) return [bufferUpdateId.trim()];
+  return [];
+}
+
+function mapBufferUpdateState(updateData: any): 'queued' | 'scheduled' | 'published' | 'failed' {
+  const bufferStatus = String(updateData?.status ?? '').toLowerCase();
+  const dueAt = updateData?.due_at ? new Date(updateData.due_at).getTime() : null;
+
+  if (bufferStatus === 'sent') return 'published';
+  if (bufferStatus === 'failed' || bufferStatus === 'error') return 'failed';
+  if (typeof dueAt === 'number' && !Number.isNaN(dueAt) && dueAt > Date.now()) return 'scheduled';
+  return 'queued';
+}
+
+function aggregatePulseStatus(statuses: Array<'queued' | 'scheduled' | 'published' | 'failed'>): 'queued' | 'scheduled' | 'published' | 'failed' {
+  if (statuses.length === 0) return 'failed';
+
+  const allPublished = statuses.every((status) => status === 'published');
+  if (allPublished) return 'published';
+
+  const allFailed = statuses.every((status) => status === 'failed');
+  if (allFailed) return 'failed';
+
+  const hasQueued = statuses.some((status) => status === 'queued');
+  if (hasQueued) return 'queued';
+
+  const hasFailed = statuses.some((status) => status === 'failed');
+  const hasScheduled = statuses.some((status) => status === 'scheduled');
+  if (hasScheduled && !hasFailed) return 'scheduled';
+
+  return 'queued';
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return errorResponse('Method not allowed', 405, 'method_not_allowed');
@@ -62,10 +106,9 @@ Deno.serve(async (req) => {
 
     const { data: items, error: itemsError } = await supabase
       .from('content_items')
-      .select('id, buffer_update_id, status')
+      .select('id, buffer_update_id, buffer_payload, status')
       .eq('venue_id', venueId)
       .in('status', ['queued', 'scheduled'])
-      .not('buffer_update_id', 'is', null)
       .order('updated_at', { ascending: false })
       .limit(25);
 
@@ -74,25 +117,39 @@ Deno.serve(async (req) => {
     const results: Array<{ content_id: string; ok: boolean; status?: string; error?: string }> = [];
 
     for (const item of items ?? []) {
-      const updateRes = await fetch(`https://api.bufferapp.com/1/updates/${item.buffer_update_id}.json`, {
-        headers: { Authorization: `Bearer ${connection.buffer_access_token}` },
-      });
+      const updateIds = extractUpdateIds(item.buffer_update_id, item.buffer_payload);
+      if (updateIds.length === 0) {
+        const { error: updateError } = await supabase
+          .from('content_items')
+          .update({ status: 'failed' })
+          .eq('id', item.id)
+          .eq('venue_id', venueId);
 
-      const updateData = await updateRes.json();
-      if (!updateRes.ok) {
-        results.push({ content_id: item.id, ok: false, error: updateData?.error ?? updateData?.message ?? 'Failed to fetch Buffer update' });
+        if (updateError) {
+          results.push({ content_id: item.id, ok: false, error: updateError.message });
+          continue;
+        }
+
+        results.push({ content_id: item.id, ok: true, status: 'failed' });
         continue;
       }
 
-      const bufferStatus = String(updateData?.status ?? '').toLowerCase();
-      const dueAt = updateData?.due_at ? new Date(updateData.due_at).getTime() : null;
-      let mappedStatus: 'queued' | 'scheduled' | 'published' = 'queued';
+      const mappedStatuses: Array<'queued' | 'scheduled' | 'published' | 'failed'> = [];
+      for (const updateId of updateIds) {
+        const updateRes = await fetch(`https://api.bufferapp.com/1/updates/${updateId}.json`, {
+          headers: { Authorization: `Bearer ${connection.buffer_access_token}` },
+        });
 
-      if (bufferStatus === 'sent') {
-        mappedStatus = 'published';
-      } else if (typeof dueAt === 'number' && !Number.isNaN(dueAt) && dueAt > Date.now()) {
-        mappedStatus = 'scheduled';
+        const updateData = await updateRes.json();
+        if (!updateRes.ok) {
+          mappedStatuses.push('failed');
+          continue;
+        }
+
+        mappedStatuses.push(mapBufferUpdateState(updateData));
       }
+
+      const mappedStatus = aggregatePulseStatus(mappedStatuses);
 
       const { error: updateError } = await supabase
         .from('content_items')

@@ -117,7 +117,14 @@ Deno.serve(async (req) => {
       .map((id) => rows.find((row) => row.id === id))
       .filter((row): row is NonNullable<typeof rows[number]> => Boolean(row));
 
-    const results: Array<{ content_id: string; ok: boolean; error?: string; update_id?: string; status?: 'queued' | 'scheduled' }> = [];
+    const results: Array<{
+      content_id: string;
+      ok: boolean;
+      error?: string;
+      update_id?: string;
+      update_ids?: string[];
+      status?: 'queued' | 'scheduled';
+    }> = [];
 
     for (const item of orderedRows) {
       const mediaUrl = resolveMediaUrl(item);
@@ -159,8 +166,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const firstUpdate = Array.isArray(sendData?.updates) ? sendData.updates[0] : null;
-      const updateId = firstUpdate?.id ? String(firstUpdate.id) : undefined;
+      const updateIds = Array.isArray(sendData?.updates)
+        ? sendData.updates
+          .map((update: any) => update?.id)
+          .filter((id: unknown): id is string | number => id !== null && id !== undefined)
+          .map((id: string | number) => String(id))
+        : [];
+      const updateId = updateIds[0];
       const nextStatus: 'queued' | 'scheduled' = scheduling.value ? 'scheduled' : 'queued';
 
       const { error: updateError } = await supabase
@@ -170,13 +182,14 @@ Deno.serve(async (req) => {
           buffer_update_id: updateId ?? null,
           buffer_payload: {
             profile_ids: profileIds,
+            update_ids: updateIds,
             sent_at: new Date().toISOString(),
             scheduled_at_unix: scheduling.value ?? null,
             scheduled_for: item.scheduled_for,
-            update_count: Array.isArray(sendData?.updates) ? sendData.updates.length : null,
+            update_count: updateIds.length,
             response_summary: {
               success: Boolean(sendData?.success),
-              updates: Array.isArray(sendData?.updates) ? sendData.updates.length : 0,
+              updates: updateIds.length,
             },
           },
         })
@@ -188,7 +201,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      results.push({ content_id: item.id, ok: true, update_id: updateId, status: nextStatus });
+      results.push({ content_id: item.id, ok: true, update_id: updateId, update_ids: updateIds, status: nextStatus });
     }
 
     const successCount = results.filter((r) => r.ok).length;
