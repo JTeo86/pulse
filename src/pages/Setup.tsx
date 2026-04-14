@@ -805,9 +805,9 @@ export default function SetupPage() {
 
           <TabsContent value="integrations">
             <Card><CardContent className="pt-6 space-y-2 text-sm text-muted-foreground">
-              <p>Buffer publishing is being finalized. Publishing stays in safe mode until the workflow is fully production-ready.</p>
+              <p>Buffer is live for V1. Connect in Integrations, then publish approved content directly from Pulse.</p>
               <Button variant="outline" onClick={() => window.location.assign('/venue/integrations')}>
-                View publishing status
+                Manage Buffer integration
               </Button>
             </CardContent></Card>
           </TabsContent>

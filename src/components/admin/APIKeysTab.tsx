@@ -76,7 +76,7 @@ export default function APIKeysTab() {
       <div>
         <h2 className="text-lg font-medium">API Keys &amp; Tokens</h2>
         <p className="text-sm text-muted-foreground">
-          Manage third-party API credentials used by backend functions. Key values are stored securely and never sent back to the browser.
+          Manage third-party API credentials used by backend functions. Key values are stored securely and never sent back to the browser. Buffer OAuth app credentials are configured separately as Supabase edge function secrets (BUFFER_CLIENT_ID, BUFFER_CLIENT_SECRET, BUFFER_REDIRECT_URI).
         </p>
       </div>
 

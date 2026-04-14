@@ -8,7 +8,6 @@ type Status =
   | 'needs_changes'
   | 'approved'
   | 'queued'
-  | 'sent_to_buffer'
   | 'scheduled'
   | 'exported'
   | 'published'
@@ -27,7 +26,6 @@ const statusConfig: Record<Status, { label: string; className: string }> = {
   needs_changes: { label: 'Needs Changes', className: 'status-chip bg-warning/10 text-warning' },
   approved: { label: 'Ready', className: 'status-chip bg-success/10 text-success' },
   queued: { label: 'Queued', className: 'status-chip bg-info/10 text-info' },
-  sent_to_buffer: { label: 'Queued (Legacy)', className: 'status-chip bg-info/10 text-info' },
   scheduled: { label: 'Scheduled', className: 'status-chip bg-accent/20 text-accent-foreground' },
   exported: { label: 'Exported', className: 'status-chip bg-warning/10 text-warning' },
   published: { label: 'Published', className: 'status-chip bg-success/10 text-success' },
