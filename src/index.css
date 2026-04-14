@@ -143,11 +143,11 @@
 
 @layer components {
   .container-editorial {
-    @apply max-w-6xl mx-auto px-6 lg:px-8;
+    @apply max-w-6xl mx-auto px-5 sm:px-6 lg:px-8;
   }
 
   .card-elevated {
-    @apply bg-card rounded-lg border border-border;
+    @apply bg-card rounded-2xl border border-border/80;
     box-shadow: var(--shadow-soft);
   }
 
@@ -162,7 +162,7 @@
 
   /* Premium glass effect */
   .card-glass {
-    @apply bg-card/80 backdrop-blur-xl rounded-xl border border-border/50;
+    @apply bg-card/80 backdrop-blur-xl rounded-2xl border border-border/50;
     box-shadow: var(--shadow-soft);
   }
 
@@ -234,7 +234,7 @@
 
   /* Module card styling */
   .module-card {
-    @apply relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card to-card/50 p-6;
+    @apply relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card to-card/50 p-6;
     box-shadow: var(--shadow-soft);
   }
 
@@ -254,6 +254,10 @@
 }
 
 @layer utilities {
+  .premium-page {
+    @apply space-y-6 sm:space-y-7;
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.4s ease-out;
   }

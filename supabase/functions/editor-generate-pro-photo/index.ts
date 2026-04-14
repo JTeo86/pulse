@@ -226,7 +226,7 @@ function buildPrompt(ctx: VenueStyleContext, mode: GenerationMode): string {
     ? `\n${ctx.dishLockRules.map((rule) => `- ${rule}`).join('\n')}`
     : '';
 
-  const brandContext = [ctx.brandSummary, ctx.styleSummary, ctx.lightingMood].filter(Boolean).join(' | ');
+  const brandContext = [ctx.brandSummary, ctx.styleSummary].filter(Boolean).join(' | ');
   const styleDirectives = buildImageStyleDirectives(resolveVenueStyle({
     profile: {
       cuisine_type: ctx.cuisineType,
@@ -234,12 +234,52 @@ function buildPrompt(ctx: VenueStyleContext, mode: GenerationMode): string {
       lighting_mood: ctx.lightingMood,
     },
   })).map((line) => `- ${line}`).join('\n');
+  const lightingGuide = ctx.lightingMood || `${ctx.venueTone} restaurant lighting`;
+
+  const baseStructuredSections = `
+PRO PHOTO SYSTEM: STRUCTURED_FOOD_REALISM_V2
+
+1) OBJECTIVE
+- Create a realistic, high-quality food photo suitable for premium hospitality marketing.
+- Keep the output natural, editorial, and believable.
+
+2) DISH INTEGRITY (STRICT)
+- Preserve the exact dish identity, ingredients, portion size, plating layout, and crockery.
+- Do not add ingredients, remove ingredients, or alter food anatomy.
+- Do not distort plate geometry, garnish placement, or serving proportions.
+- No additions or distortions.${dishLockExtra}
+
+3) VENUE STYLE ALIGNMENT
+- Match venue identity, tone, vibe, and cuisine.
+- Venue name: ${ctx.venueName}${ctx.venueCity ? ` (${ctx.venueCity})` : ''}.
+- Venue tone: ${ctx.venueTone || 'premium casual'}.
+- Cuisine direction: ${ctx.cuisineType || 'restaurant-authentic'}.
+- Brand summary: ${brandContext || 'Use restrained, premium restaurant visual language.'}
+
+4) SCENE COMPOSITION
+- Keep a clean, minimal environment.
+- Avoid clutter and visual noise.
+- Ensure the dish is the hero with realistic depth and spacing.
+
+5) LIGHTING
+- Apply lighting that matches venue vibe: ${lightingGuide}.
+- Use natural highlight rolloff and plausible shadows.
+- Avoid blown highlights, crushed shadows, or theatrical lighting unless explicitly mode-required.
+
+6) STRICT CONSTRAINTS
+- No artificial garnish.
+- No unrealistic textures.
+- No over-enhancement.
+- Avoid AI artifacts, synthetic edges, waxy surfaces, repeated patterns, and warped utensils.
+`;
 
   if (mode === 'social_ready') {
     return `You are a professional food photo retoucher.
 
 MODE: SOCIAL_READY
 Goal: Improve the original image without changing the scene.
+
+${baseStructuredSections}
 
 MANDATORY RULES:
 - preserve original scene
@@ -286,6 +326,8 @@ Output as JPEG.`;
 MODE: BACKDROP
 Goal: Keep the dish, replace the background with a controlled surface.
 
+${baseStructuredSections}
+
 REQUIRED PIPELINE:
 1) isolate dish
 2) enhance dish
@@ -327,6 +369,8 @@ Output as JPEG.`;
 
 MODE: CAMPAIGN
 Goal: Stylized promotional image.
+
+${baseStructuredSections}
 
 MANDATORY RULES:
 - allow creativity

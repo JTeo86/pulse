@@ -12,7 +12,6 @@ import { usePhaseFlags } from '@/hooks/use-phase-flags';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
@@ -121,8 +120,8 @@ export default function TheEditorPage() {
   const contextParam = searchParams.get('context');
   const eventTitleParam = searchParams.get('event_title');
 
-  const defaultPrompt = promptParam || (briefTitle ? `Create a premium campaign image for ${briefTitle}.` : eventTitleParam ? `Create a premium campaign image for ${eventTitleParam}.` : '');
-  const defaultContext = contextParam || (briefTitle ? `This visual supports ${briefTitle}. Keep it on-brand and post-ready.` : '');
+  const autoObjective = promptParam || (briefTitle ? `Create a premium campaign image for ${briefTitle}.` : eventTitleParam ? `Create a premium campaign image for ${eventTitleParam}.` : 'Generate a realistic, high-quality food photo.');
+  const autoContext = contextParam || (briefTitle ? `This visual supports ${briefTitle}. Keep it on-brand and post-ready.` : 'Match venue style with a clean, minimal scene.');
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedPreview, setUploadedPreview] = useState<string | null>(null);
@@ -130,8 +129,6 @@ export default function TheEditorPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [shotType, setShotType] = useState<ShotType>('social_ready');
-  const [promptText, setPromptText] = useState(defaultPrompt);
-  const [contextText, setContextText] = useState(defaultContext);
 
   const [generating, setGenerating] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -187,11 +184,6 @@ export default function TheEditorPage() {
     };
   }, [jobResult, shotType]);
 
-  useEffect(() => {
-    setPromptText(defaultPrompt);
-    setContextText(defaultContext);
-  }, [defaultPrompt, defaultContext]);
-
   const handleFileDrop = useCallback(async (file: File) => {
     if (!currentVenue || !user) return;
     if (!file.type.startsWith('image/')) {
@@ -220,10 +212,6 @@ export default function TheEditorPage() {
 
   const handleGenerate = async () => {
     if (!currentVenue || !user || !uploadedFile) return;
-    if (!promptText.trim()) {
-      toast({ variant: 'destructive', title: 'Add a prompt', description: 'Describe what you want to generate before continuing.' });
-      return;
-    }
     if (proPhotoLimit > 0 && proPhotoUsed >= proPhotoLimit) {
       toast({ variant: 'destructive', title: 'Credit limit reached', description: 'Contact admin to increase credits.' });
       return;
@@ -263,8 +251,8 @@ export default function TheEditorPage() {
           sourceFileName: uploadedFile.name,
           realism_mode: shotType,
           skip_library_save: skipLibrarySave,
-          prompt_override: promptText.trim(),
-          context_hint: contextText.trim() || null,
+          prompt_override: autoObjective,
+          context_hint: autoContext,
         },
       });
       if (fnError) {
@@ -509,7 +497,7 @@ export default function TheEditorPage() {
 
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Pro Photo Studio</h1>
-        <p className="text-sm text-muted-foreground">Prompt → Generate → Accept to send to Content.</p>
+        <p className="text-sm text-muted-foreground">Upload → Generate → Accept. Pulse auto-builds your premium Pro Photo prompt.</p>
       </div>
 
       <div className="flex items-center gap-6 px-4 py-2.5 rounded-lg bg-muted/30 border border-border/50 w-fit">
@@ -527,7 +515,7 @@ export default function TheEditorPage() {
       </div>
 
       <div className="rounded-xl border bg-card p-5 space-y-4">
-        {(planId && briefTitle) || defaultPrompt ? (
+        {(planId && briefTitle) || promptParam ? (
           <div className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-muted-foreground">
             {briefTitle ? `Prefilled from plan: ${briefTitle}.` : 'Prompt was prefilled from your previous flow.'}
           </div>
@@ -554,14 +542,17 @@ export default function TheEditorPage() {
           )}
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileInput} />
-        <Textarea
-          value={promptText}
-          onChange={(e) => setPromptText(e.target.value)}
-          placeholder="Describe the pro photo to generate..."
-          className="min-h-24"
-        />
-        <Button onClick={handleGenerate} disabled={!uploadedFile || generating || !promptText.trim()} className="w-full gap-2" size="lg">
-          {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4" /> Generate</>}
+        <div className="rounded-lg border border-border/70 bg-muted/20 px-3.5 py-3 space-y-2">
+          <p className="text-xs font-medium text-foreground/90">Automatic prompt system enabled</p>
+          <p className="text-xs text-muted-foreground">
+            Objective: {autoObjective}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Context: {autoContext}
+          </p>
+        </div>
+        <Button onClick={handleGenerate} disabled={!uploadedFile || generating} className="w-full gap-2" size="lg">
+          {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Crafting realistic Pro Photo...</> : <><Wand2 className="w-4 h-4" /> Generate Pro Photo</>}
         </Button>
       </div>
 
@@ -576,6 +567,10 @@ export default function TheEditorPage() {
           <p className="text-sm font-medium">Image Preview</p>
           {jobResult?.final_image_url ? (
             <img src={jobResult.final_image_url} alt="Generated Pro Photo" className="w-full max-h-[520px] object-cover rounded-lg border" />
+          ) : generating ? (
+            <div className="h-64 rounded-lg border border-dashed flex items-center justify-center text-sm text-muted-foreground animate-pulse">
+              Building your premium photo with venue-aware realism...
+            </div>
           ) : (
             <div className="h-64 rounded-lg border border-dashed flex items-center justify-center text-sm text-muted-foreground">
               Generate to preview your image.
