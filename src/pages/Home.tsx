@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ClipboardList, Home as HomeIcon, Sparkles, CheckCircle2, Pencil, XCircle, AlertTriangle, Clock3 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { CalendarDays, ClipboardList, Home as HomeIcon, Sparkles, AlertTriangle, Clock3 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,10 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast';
 import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
 import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
-import { generateExplanation } from '@/lib/explanations';
 import { generatePerformanceInsights, generateWeeklyPulseReport, type WeeklyPulseReport } from '@/lib/performance-feedback';
 
 type HomeTab = 'today' | 'opportunities' | 'plans';
@@ -93,8 +91,6 @@ const themeLabels: Record<string, string> = {
 
 export default function Home() {
   const { currentVenue } = useVenue();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialTab = useMemo<HomeTab>(() => {
@@ -282,71 +278,6 @@ export default function Home() {
     },
   });
 
-  const approveReply = useMutation({
-    mutationFn: async (task: ReplyTask) => {
-      if (!task.draft_response?.trim()) throw new Error('Draft reply missing');
-      const { error } = await supabase
-        .from('review_response_tasks')
-        .update({
-          final_response: task.draft_response,
-          status: 'responded',
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', task.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['home-command-centre-overview', currentVenue?.id] });
-      toast({ title: 'Reply approved' });
-    },
-    onError: (error: Error) => toast({ title: 'Could not approve reply', description: error.message, variant: 'destructive' }),
-  });
-
-  const rejectReply = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('review_response_tasks')
-        .update({ status: 'ignored' })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['home-command-centre-overview', currentVenue?.id] });
-      toast({ title: 'Reply rejected' });
-    },
-    onError: (error: Error) => toast({ title: 'Could not reject reply', description: error.message, variant: 'destructive' }),
-  });
-
-  const approveContent = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('content_items')
-        .update({ status: 'ready' })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['home-command-centre-overview', currentVenue?.id] });
-      toast({ title: 'Content approved' });
-    },
-    onError: (error: Error) => toast({ title: 'Could not approve content', description: error.message, variant: 'destructive' }),
-  });
-
-  const rejectContent = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('content_items')
-        .update({ status: 'archived' })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['home-command-centre-overview', currentVenue?.id] });
-      toast({ title: 'Content rejected' });
-    },
-    onError: (error: Error) => toast({ title: 'Could not reject content', description: error.message, variant: 'destructive' }),
-  });
-
   const handleTabChange = (value: string) => {
     const next = (value as HomeTab) || 'today';
     setActiveTab(next);
@@ -388,261 +319,64 @@ export default function Home() {
         </TabsList>
 
         <TabsContent value="today" className="space-y-5">
-          {overviewLoading ? (
-            <Skeleton className="h-40 rounded-xl" />
-          ) : (
-            <Card className="border-accent/30 bg-accent/5">
-              <CardContent className="p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Your week is ready</p>
-                    <p className="text-2xl font-semibold">{(overview?.preparedContentCount ?? 0) + (overview?.pendingRepliesCount ?? 0)} items ready</p>
-                    <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                      <span>{overview?.preparedContentCount ?? 0} ready posts</span>
-                      <span>•</span>
-                      <span>{overview?.pendingRepliesCount ?? 0} review replies</span>
-                      <span>•</span>
-                      <span>{marketOpportunities.length} open opportunities</span>
-                    </div>
-                  </div>
-                  <Button variant="outline" asChild>
-                    <Link to="/reputation/reviews?tab=respond">Review</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <Card className="border-accent/30 bg-accent/5">
+            <CardHeader className="pb-2"><CardTitle className="text-base">This Week summary</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 pt-0">
+              <SummaryLine label="Posts ready" value={`${overview?.preparedContentCount ?? 0}`} tone="good" />
+              <SummaryLine label="Needs approval" value={`${overview?.pendingContent.length ?? 0}`} tone={(overview?.pendingContent.length ?? 0) > 0 ? 'warning' : 'neutral'} />
+              <SummaryLine label="Missing content" value={`${overview?.coverageGaps.length ?? 0}`} tone={(overview?.coverageGaps.length ?? 0) > 0 ? 'warning' : 'neutral'} />
+              <SummaryLine label="Reviews" value={`${overview?.pendingRepliesCount ?? 0} to reply`} tone={(overview?.pendingRepliesCount ?? 0) > 0 ? 'warning' : 'neutral'} />
+            </CardContent>
+          </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">What&apos;s working</CardTitle>
-            </CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Needs Attention</CardTitle></CardHeader>
+            <CardContent className="pt-0 space-y-2">
+              <ActionRow title="Review content" detail={`${overview?.pendingContent.length ?? 0} items need approval`} to="/content/library?tab=queue" />
+              <ActionRow title="Add photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
+              <ActionRow title="Generate image" detail="Create a new Pro Photo in 2–3 steps" to="/studio/pro-photo" />
+              <ActionRow title="Reply to reviews" detail={`${overview?.pendingRepliesCount ?? 0} drafted replies waiting`} to="/reputation/reviews?tab=respond" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Opportunities</CardTitle></CardHeader>
             <CardContent className="pt-0 space-y-3">
-              {pulseReportLoading ? (
-                <Skeleton className="h-24 rounded-lg" />
+              {opportunitiesLoading ? (
+                <Skeleton className="h-20 rounded-lg" />
+              ) : marketOpportunities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No open opportunities right now.</p>
               ) : (
-                <>
-                  {latestPulseReport?.pulse_report && (
-                    <p className="text-xs text-muted-foreground">
-                      Week of {latestPulseReport.week_start} to {latestPulseReport.week_end}
-                    </p>
-                  )}
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Working now</p>
-                      <ul className="text-sm list-disc pl-5 space-y-1">
-                        {(overview?.weeklyPerformanceReport.whatWorked || []).slice(0, 3).map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Needs work</p>
-                      <ul className="text-sm list-disc pl-5 space-y-1">
-                        {(overview?.weeklyPerformanceReport.whatToImprove || []).slice(0, 3).map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
+                marketOpportunities.slice(0, 4).map((opportunity) => (
+                  <div key={opportunity.title} className="rounded-lg border p-3 space-y-2">
+                    <p className="text-sm font-medium">{opportunity.title}</p>
+                    <p className="text-xs text-muted-foreground">{opportunity.description}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" asChild><Link to="/studio/pro-photo">Generate image</Link></Button>
+                      <Button size="sm" variant="outline" asChild><Link to="/home?tab=plans">Create plan</Link></Button>
+                      <Button size="sm" variant="outline" asChild><Link to="/content/library?tab=queue">Add to queue</Link></Button>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Next moves</p>
-                    <ul className="text-sm list-disc pl-5 space-y-1">
-                      {(overview?.weeklyPerformanceReport.whatToDoNext || []).slice(0, 3).map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
+                ))
               )}
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Needs attention</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                {overviewLoading ? (
-                  <Skeleton className="h-36 rounded-lg" />
-                ) : (
-                  <>
-                    {overview?.pendingReplies.slice(0, 3).map((task) => (
-                      <ApprovalRow
-                        key={task.id}
-                        title={`${task.author_name || 'Guest'}${task.rating ? ` • ${task.rating}★` : ''}`}
-                        subtitle={task.review_text || 'Review text unavailable'}
-                        onApprove={() => approveReply.mutate(task)}
-                        onReject={() => rejectReply.mutate(task.id)}
-                        editTo="/reputation/reviews?tab=respond"
-                        explanation={generateExplanation({
-                          review_signal: [
-                            task.rating && task.rating <= 2
-                              ? 'A low-rating review needed a fast response'
-                              : 'Keeps response time consistent for guest feedback',
-                          ],
-                          content_gap: overview?.coverageGaps ?? [],
-                        })}
-                        disabled={!task.draft_response?.trim()}
-                      />
-                    ))}
-
-                    {overview?.pendingContent.slice(0, 3).map((item) => (
-                      <ApprovalRow
-                        key={item.id}
-                        title={item.title || 'Untitled draft post'}
-                        subtitle={item.caption_draft || 'Caption draft pending'}
-                        onApprove={() => approveContent.mutate(item.id)}
-                        onReject={() => rejectContent.mutate(item.id)}
-                        editTo="/content/library"
-                        explanation={generateExplanation({
-                          content_gap: overview?.coverageGaps ?? ['3-day content'],
-                          timing: item.scheduled_for
-                            ? { day_of_week: new Date(item.scheduled_for).toLocaleDateString('en-US', { weekday: 'long' }) }
-                            : undefined,
-                          asset_usage: { reuse_frequency: 'low' },
-                        })}
-                      />
-                    ))}
-
-                    {!overview?.pendingReplies.length && !overview?.pendingContent.length && (
-                      <p className="text-sm text-muted-foreground">Nothing needs attention right now.</p>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">What&apos;s working</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 pt-0">
-                {(overview?.performanceInsights || []).slice(0, 5).map((insight) => (
-                  <p key={insight} className="text-sm">• {insight}</p>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Review queue</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                <SummaryLine label="Top signal" value={overview?.positiveTheme || 'No clear signal yet'} tone="good" />
-                <SummaryLine label="Recurring issue" value={overview?.negativeTheme || 'No repeating issue detected'} tone={overview?.negativeTheme ? 'warning' : 'neutral'} />
-                <SummaryLine label="Urgent replies" value={`${overview?.urgentReviewsCount ?? 0} open`} tone={(overview?.urgentReviewsCount ?? 0) > 0 ? 'warning' : 'neutral'} />
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/reputation/reviews?tab=respond">View queue</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Days covered</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                <p className="text-lg font-semibold">{overview?.coveredDaysCount ?? 0} days covered</p>
-                <div className="flex flex-wrap gap-2">
-                  {(overview?.coverageGaps.length ? overview.coverageGaps : ['No action needed']).map((gap) => (
-                    <Badge key={gap} variant="outline" className="text-xs">
-                      {gap}
-                    </Badge>
-                  ))}
-                </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/content/calendar">Review</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Content health</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                {contentHealthLoading ? (
-                  <Skeleton className="h-24 rounded-lg" />
-                ) : (
-                  <>
-                    <p className="text-sm font-medium">
-                      {(contentHealth?.unusedCount ?? 0) > 0
-                        ? `${contentHealth?.unusedCount ?? 0} unused photos`
-                        : 'Coverage is running low'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {contentHealth?.lastUploadAt
-                        ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}`
-                        : 'No photos uploaded yet'}
-                    </p>
-                  </>
-                )}
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/content/feed">Add photos</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Opportunities</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                {opportunitiesLoading ? (
-                  <Skeleton className="h-24 rounded-lg" />
-                ) : marketOpportunities.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No new opportunities yet.</p>
-                ) : (
-                  marketOpportunities.slice(0, 5).map((item) => (
-                    <div key={`${item.title}-${item.suggestedAction}`} className="rounded-md border border-border/60 p-2">
-                      <p className="text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">{item.description}</p>
-                      <p className="text-xs mt-1">Action: {item.suggestedAction}</p>
-                      <div className="mt-2 rounded-md bg-muted/30 px-2 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why this was created</p>
-                        <ul className="mt-1 list-disc pl-4 space-y-0.5">
-                          {generateExplanation({
-                            content_gap: overview?.coverageGaps ?? [],
-                            review_signal: [item.title],
-                            timing: { day_of_week: 'this week' },
-                          }).map((point) => (
-                            <li key={point} className="text-xs text-muted-foreground">{point}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  ))
-                )}
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to="/home?tab=opportunities">View queue</Link>
-                  </Button>
-                  <Button size="sm" asChild>
-                    <Link to="/plans">Generate campaign</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-accent" />
-                Recent activity
-              </CardTitle>
+              <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-accent" />Pulse Activity</CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
-              {!overview?.lastAutopilotRun ? (
-                <p className="text-sm text-muted-foreground">No activity yet.</p>
+            <CardContent className="pt-0 space-y-1 text-sm">
+              {overview?.lastAutopilotRun ? (
+                <>
+                  <p>Autopilot run {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
+                  <p className="text-muted-foreground">{overview.lastAutopilotRun.generatedPosts} posts prepared · {overview.lastAutopilotRun.generatedReplies} replies drafted.</p>
+                </>
               ) : (
-                <div className="space-y-1 text-sm">
-                  <p className="font-medium">Run complete</p>
-                  <p>Last run {formatLastRun(overview.lastAutopilotRun.createdAt)} · {overview.lastAutopilotRun.status.replace('_', ' ')}</p>
-                  <p className="text-muted-foreground">{overview.lastAutopilotRun.generatedPosts} posts prepared · {overview.lastAutopilotRun.generatedReplies} replies drafted</p>
-                </div>
+                <p className="text-muted-foreground">No recent system actions yet.</p>
+              )}
+              {latestPulseReport?.generated_at && (
+                <p className="text-muted-foreground">Weekly brief generated {formatDistanceToNow(new Date(latestPulseReport.generated_at), { addSuffix: true })}.</p>
               )}
             </CardContent>
           </Card>
@@ -660,50 +394,6 @@ export default function Home() {
   );
 }
 
-function ApprovalRow({
-  title,
-  subtitle,
-  editTo,
-  onApprove,
-  onReject,
-  explanation,
-  disabled,
-}: {
-  title: string;
-  subtitle: string;
-  editTo: string;
-  onApprove: () => void;
-  onReject: () => void;
-  explanation: string[];
-  disabled?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-border p-3">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{subtitle}</p>
-      <div className="mt-2 rounded-md bg-muted/30 px-2 py-1.5">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why this was created</p>
-        <ul className="mt-1 list-disc pl-4 space-y-0.5">
-          {explanation.map((point) => (
-            <li key={point} className="text-xs text-muted-foreground">{point}</li>
-          ))}
-        </ul>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <Button size="sm" className="h-7 text-xs gap-1" onClick={onApprove} disabled={disabled}>
-          <CheckCircle2 className="w-3 h-3" /> Approve
-        </Button>
-        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
-          <Link to={editTo}><Pencil className="w-3 h-3" /> Edit</Link>
-        </Button>
-        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-destructive" onClick={onReject}>
-          <XCircle className="w-3 h-3" /> Dismiss
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function SummaryLine({ label, value, tone }: { label: string; value: string; tone: 'good' | 'warning' | 'neutral' }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
@@ -712,6 +402,20 @@ function SummaryLine({ label, value, tone }: { label: string; value: string; ton
         {tone === 'good' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : tone === 'warning' ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> : <Clock3 className="w-3.5 h-3.5 text-muted-foreground" />}
         <span>{value}</span>
       </p>
+    </div>
+  );
+}
+
+function ActionRow({ title, detail, to }: { title: string; detail: string; to: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+      <div>
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs text-muted-foreground">{detail}</p>
+      </div>
+      <Button size="sm" asChild>
+        <Link to={to}>Open</Link>
+      </Button>
     </div>
   );
 }

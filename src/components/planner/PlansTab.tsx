@@ -93,6 +93,8 @@ export function PlansTab() {
     const params = new URLSearchParams({
       plan_id: planId,
       brief_title: `${planTitle} image`,
+      prompt: `Create a premium marketing photo for ${planTitle}.`,
+      context: `This image supports the ${planTitle} plan. Keep it campaign-ready and on-brand.`,
     });
     return `/studio/pro-photo?${params.toString()}`;
   };

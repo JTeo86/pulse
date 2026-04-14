@@ -139,6 +139,8 @@ export function OpportunitiesTab() {
     const params = new URLSearchParams({
       event_id: event.id,
       brief_title: `${event.title} campaign image`,
+      prompt: `Create a premium campaign image for ${event.title}.`,
+      context: `${event.title} is coming up soon. Keep it brand-accurate and promotion-ready.`,
     });
     if (planId) params.set('plan_id', planId);
     return `/studio/pro-photo?${params.toString()}`;
