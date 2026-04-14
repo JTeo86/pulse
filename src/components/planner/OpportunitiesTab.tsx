@@ -135,6 +135,15 @@ export function OpportunitiesTab() {
     }
   };
 
+  const getProPhotoHref = (event: EventCatalogItem, planId?: string) => {
+    const params = new URLSearchParams({
+      event_id: event.id,
+      brief_title: `${event.title} campaign image`,
+    });
+    if (planId) params.set('plan_id', planId);
+    return `/studio/pro-photo?${params.toString()}`;
+  };
+
   const handleSkipOpen = (event: EventCatalogItem) => {
     setSkipModal({ eventId: event.id, title: event.title, event });
   };
@@ -322,6 +331,22 @@ export function OpportunitiesTab() {
                           <Plus className="w-3 h-3 mr-1" /> Create Plan
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => navigate(getProPhotoHref(event, plan?.id))}
+                      >
+                        Generate image
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs"
+                        onClick={() => navigate('/content/library?tab=queue')}
+                      >
+                        Add to content queue
+                      </Button>
                       {!hasPlan && (
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleSkipOpen(event)}>
                           <SkipForward className="w-3 h-3" />
