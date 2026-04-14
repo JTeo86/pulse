@@ -28,6 +28,7 @@ import IndustryInsights from "./pages/growth/IndustryInsights";
 import AIInsights from "./pages/AIInsights";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
+import Pricing from "./pages/Pricing";
 import PlatformAdmin from "./pages/admin/PlatformAdmin";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -141,6 +142,7 @@ function AppRoutes() {
       <Route path="/auth/reset" element={<AuthReset />} />
       <Route path="/auth/invite" element={<InviteAccept />} />
       <Route path="/create-brand" element={<CreateVenue />} />
+      <Route path="/pricing" element={<Pricing />} />
 
       {/* Redirect any signup attempts to landing */}
       <Route path="/signup" element={<Navigate to="/" replace />} />

@@ -69,6 +69,8 @@ export default function BillingPage() {
 
   const handleCheckout = async (tierId: string) => {
     if (!currentVenue) return;
+    const shouldContinue = window.confirm('Continue to secure checkout for this plan?');
+    if (!shouldContinue) return;
     const { data, error } = await supabase.functions.invoke('create-checkout-session', { body: { venue_id: currentVenue.id, subscription_tier_id: tierId } });
     if (isFunctionNotDeployedError(error)) {
       return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Checkout service is not deployed yet in this environment.' });
@@ -79,6 +81,8 @@ export default function BillingPage() {
 
   const handleTierChange = async (tierId: string) => {
     if (!currentVenue) return;
+    const shouldContinue = window.confirm('Confirm plan change? You can review billing details before final payment changes apply.');
+    if (!shouldContinue) return;
     const { error } = await supabase.functions.invoke('change-subscription-tier', { body: { venue_id: currentVenue.id, target_tier_id: tierId } });
     if (isFunctionNotDeployedError(error)) {
       return toast({ variant: 'destructive', title: 'Billing setup incomplete', description: 'Plan change service is not deployed yet in this environment.' });

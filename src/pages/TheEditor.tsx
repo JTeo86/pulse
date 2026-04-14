@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { isMissingBillingSchemaError } from '@/lib/billing-readiness';
 import { BackButton } from '@/components/navigation/BackButton';
+import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -174,6 +175,7 @@ export default function TheEditorPage() {
   });
   const proPhotoUsed = creditsData?.used ?? 0;
   const proPhotoLimit = creditsData?.limit ?? 0;
+  const isImageLimitReached = proPhotoLimit > 0 && proPhotoUsed >= proPhotoLimit;
   const billingUnavailable = Boolean(creditsData?.schemaMissing);
 
   useEffect(() => {
@@ -212,8 +214,8 @@ export default function TheEditorPage() {
 
   const handleGenerate = async () => {
     if (!currentVenue || !user || !uploadedFile) return;
-    if (proPhotoLimit > 0 && proPhotoUsed >= proPhotoLimit) {
-      toast({ variant: 'destructive', title: 'Credit limit reached', description: 'Contact admin to increase credits.' });
+    if (isImageLimitReached) {
+      toast({ title: 'Monthly image limit reached', description: 'You can keep editing existing work, or upgrade when you need more image generations.' });
       return;
     }
 
@@ -513,6 +515,15 @@ export default function TheEditorPage() {
           </span>
         )}
       </div>
+      {isImageLimitReached && (
+        <UpgradePrompt
+          title="You've reached your monthly image limit"
+          description="You can still review and download existing Pro Photo results."
+          benefit="Upgrade to keep generating fresh images this month and maintain publishing momentum."
+          ctaLabel="Upgrade plan"
+          ctaTo="/pricing"
+        />
+      )}
 
       <div className="rounded-xl border bg-card p-5 space-y-4">
         {(planId && briefTitle) || promptParam ? (
@@ -551,7 +562,7 @@ export default function TheEditorPage() {
             Context: {autoContext}
           </p>
         </div>
-        <Button onClick={handleGenerate} disabled={!uploadedFile || generating} className="w-full gap-2" size="lg">
+        <Button onClick={handleGenerate} disabled={!uploadedFile || generating || isImageLimitReached} className="w-full gap-2" size="lg">
           {generating ? <><Loader2 className="w-4 h-4 animate-spin" /> Crafting realistic Pro Photo...</> : <><Wand2 className="w-4 h-4" /> Generate Pro Photo</>}
         </Button>
       </div>
