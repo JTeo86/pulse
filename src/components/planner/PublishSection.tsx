@@ -117,6 +117,8 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
   if (availableAssets.length === 0 && availableOutputs.length > 0) hints.push('No assets linked yet — create or attach assets in the Create step.');
 
   const hasAnyPacks = publish.items.length > 0;
+  const hasReadyContent = availableOutputs.length > 0 || availableAssets.length > 0;
+  const canCreatePostPacks = hasReadyContent || hasAnyPacks;
 
   // Real posting progress
   const activePacks = publish.items.filter(i => i.status !== 'archived');
@@ -135,9 +137,11 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
             Build channel-ready posts for this campaign. Add them to your Content Calendar when ready to schedule.
           </p>
         </div>
-        <Button size="sm" className="gap-2" onClick={handleCreateBlank}>
-          <Plus className="w-3 h-3" /> Create Pack
-        </Button>
+        {canCreatePostPacks && (
+          <Button size="sm" className="gap-2" onClick={handleCreateBlank}>
+            <Plus className="w-3 h-3" /> Create Post Pack
+          </Button>
+        )}
       </div>
 
       {/* Posting progress */}
@@ -171,7 +175,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
       )}
 
       {/* Suggested packs */}
-      {suggestions.length > 0 && (
+      {canCreatePostPacks && suggestions.length > 0 && (
         <SuggestionCards
           suggestions={suggestions}
           onCreatePack={handleCreateFromSuggestion}
@@ -219,7 +223,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
               <EmptySection
                 icon={Package}
                 title="No ready post packs"
-                description="Create a post pack from the suggestions above or click 'Create Pack'"
+                description="Create a post pack from the suggestions above or click 'Create Post Pack'"
               />
             ) : (
               <div className="space-y-3">
@@ -306,9 +310,11 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
           <Package className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
           <p className="text-sm text-muted-foreground">No post packs yet.</p>
           <p className="text-xs text-muted-foreground mt-1">
-            {suggestions.length > 0
-              ? 'Click a suggestion above to get started, or create one manually.'
-              : 'Generate content in the Create step first, then build post packs for each channel.'}
+            {canCreatePostPacks
+              ? suggestions.length > 0
+                ? 'Click a suggestion above to get started, or create one manually.'
+                : 'Create a post pack to add it to your calendar and queue it for publishing.'
+              : 'Generate content or link assets in the Create step before creating post packs.'}
           </p>
         </div>
       )}
