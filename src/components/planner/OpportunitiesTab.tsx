@@ -268,6 +268,9 @@ export function OpportunitiesTab() {
             filteredEvents.map((event, i) => {
               const hasPlan = plannedEventIds.has(event.id);
               const plan = plans.find(p => p.event_id === event.id);
+              const hasExistingAiRecommendation = Boolean(plan?.ai_recommendation);
+              const aiActionLabel = hasExistingAiRecommendation ? 'Regenerate' : 'Generate';
+              const aiAriaLabel = hasExistingAiRecommendation ? 'Regenerate recommendation' : 'Generate recommendation';
               const daysAway = differenceInDays(new Date(event.starts_at), new Date());
               const isExpanded = expandedCard === event.id;
               const suggestions = getSuggestions(event, daysAway);
@@ -350,12 +353,12 @@ export function OpportunitiesTab() {
                             className="h-7 w-7 p-0"
                             onClick={() => handleAiSuggest(event)}
                             disabled={aiLoading === event.id}
-                            aria-label="Regenerate"
+                            aria-label={aiAriaLabel}
                           >
                             <Sparkles className={`w-3 h-3 ${aiLoading === event.id ? 'animate-pulse' : ''}`} />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Regenerate</TooltipContent>
+                        <TooltipContent>{aiActionLabel}</TooltipContent>
                       </Tooltip>
                     </div>
                   </div>

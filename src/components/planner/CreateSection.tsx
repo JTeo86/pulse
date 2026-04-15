@@ -150,7 +150,7 @@ function GeneratePackCard({ planId, plan, brain, workspace }: CreateSectionProps
         </div>
         <Button onClick={handleGeneratePack} disabled={generating} size="sm" className="gap-2 shrink-0">
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {generating ? 'Generating...' : workspace.hasCampaignPack ? 'Regenerate' : 'Generate Content'}
+          {generating ? 'Generating...' : workspace.hasCampaignPack ? 'Regenerate Content' : 'Generate Content'}
         </Button>
       </div>
 
