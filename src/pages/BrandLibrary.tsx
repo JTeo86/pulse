@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, format, isAfter, isBefore, startOfDay } from 'date-fns';
 import {
-  Archive, ArrowLeft, CalendarDays, Clock3, Edit3, Image as ImageIcon, Layers, List, Loader2,
-  Sparkles, Trash2, Wand2, Link2, Eye, RefreshCw, AlertTriangle, MoreHorizontal, Check, Maximize2
+  Archive, ArrowLeft, Clock3, Edit3, Image as ImageIcon, Loader2,
+  Sparkles, Trash2, Wand2, MoreHorizontal, Check, Maximize2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -29,7 +28,6 @@ import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl, isSignedUrl } from '@/hooks/use-resolved-media';
 import { MediaImage } from '@/components/ui/media-image';
 import { generateExplanation } from '@/lib/explanations';
-import { getPostPerformanceLabel } from '@/lib/performance-feedback';
 
 interface LibraryItem {
   id: string;
@@ -73,9 +71,7 @@ interface SelectableVenueAsset {
   resolvedUrl: string | null;
 }
 
-type LibraryTab = 'all' | 'ready' | 'pulse_suggested' | 'scheduled' | 'archived';
-type TopLevelTab = 'queue' | 'suggestions' | 'library_uploads';
-type InventoryStateFilter = 'all' | 'ready_to_post' | 'needs_image' | 'needs_caption';
+type TopLevelTab = 'ready' | 'ideas' | 'photos';
 type ReadinessState = 'ready_to_post' | 'needs_image' | 'needs_caption' | 'unformed';
 type ConversionResult = { ok: true; payload: Record<string, unknown> } | { ok: false; reason: string };
 
@@ -89,11 +85,7 @@ export default function BrandLibraryPage() {
 
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>((searchParams.get('tab') as TopLevelTab) || 'queue');
-  const [libraryTab, setLibraryTab] = useState<LibraryTab>((searchParams.get('source') === 'autopilot' ? 'pulse_suggested' : 'all') as LibraryTab);
-  const [inventoryFilter, setInventoryFilter] = useState<InventoryStateFilter>('all');
-  const [view, setView] = useState<'card' | 'list'>('card');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>((searchParams.get('tab') as TopLevelTab) || 'ready');
   const [scheduleTarget, setScheduleTarget] = useState<LibraryItem | null>(null);
   const [scheduleDateTime, setScheduleDateTime] = useState('');
   const [editTarget, setEditTarget] = useState<LibraryItem | null>(null);
@@ -110,16 +102,17 @@ export default function BrandLibraryPage() {
 
   const autopilotRunIdFilter = searchParams.get('autopilotRunId');
   const topLevelTabParam = searchParams.get('tab');
-  const resolvedTopLevelTab: TopLevelTab = topLevelTabParam === 'suggestions' || topLevelTabParam === 'library_uploads' ? topLevelTabParam : 'queue';
+  const resolvedTopLevelTab: TopLevelTab = topLevelTabParam === 'ideas' || topLevelTabParam === 'photos' ? topLevelTabParam : 'ready';
+
   useEffect(() => {
     setTopLevelTab(resolvedTopLevelTab);
   }, [resolvedTopLevelTab]);
 
   const handleTopLevelTabChange = (value: string) => {
-    const nextTab: TopLevelTab = value === 'suggestions' || value === 'library_uploads' ? value : 'queue';
+    const nextTab: TopLevelTab = value === 'ideas' || value === 'photos' ? value : 'ready';
     setTopLevelTab(nextTab);
     const nextParams = new URLSearchParams(searchParams);
-    if (nextTab === 'queue') nextParams.delete('tab');
+    if (nextTab === 'ready') nextParams.delete('tab');
     else nextParams.set('tab', nextTab);
     setSearchParams(nextParams, { replace: true });
   };
@@ -164,9 +157,9 @@ export default function BrandLibraryPage() {
       .from('content_assets')
       .select('id, venue_id, source_type, status, title, public_url, thumbnail_url, storage_path, storage_bucket, asset_type, created_at')
       .eq('venue_id', currentVenue.id)
-      .eq('pool', 'content_library')
+      .in('pool', ['content_library', 'asset_pool'])
       .order('created_at', { ascending: false })
-      .limit(250);
+      .limit(300);
 
     const ciIds = new Set(unified.map((i) => i.id));
     (caData || []).forEach((row: any) => {
@@ -319,74 +312,64 @@ export default function BrandLibraryPage() {
     }
   }
 
-  const visibleItems = useMemo(() => {
-    return items.filter((item) => {
+  const contentItems = useMemo(() => items.filter((item) => item.origin === 'content_item'), [items]);
+  const photoItems = useMemo(() => items.filter((item) => item.origin === 'content_asset'), [items]);
+
+  const filteredContentItems = useMemo(() => {
+    return contentItems.filter((item) => {
       if (autopilotRunIdFilter && item.autopilot_run_id !== autopilotRunIdFilter) return false;
       if (contentItemIdsFilter && !contentItemIdsFilter.has(item.id)) return false;
-
-      const readiness = getReadinessState(item);
-
-      if (libraryTab === 'archived') {
-        if (item.status !== 'archived') return false;
-      } else if (libraryTab === 'scheduled') {
-        if (!['scheduled', 'published'].includes(item.status)) return false;
-      } else {
-        if (['scheduled', 'published'].includes(item.status)) return false;
-        if (item.status === 'archived') return false;
-        if (libraryTab === 'ready' && readiness !== 'ready_to_post') return false;
-        if (libraryTab === 'pulse_suggested' && item.source !== 'autopilot') return false;
-      }
-
-      if (libraryTab !== 'archived' && libraryTab !== 'scheduled' && readiness === 'unformed') return false;
-
-      if (inventoryFilter === 'ready_to_post' && readiness !== 'ready_to_post') return false;
-      if (inventoryFilter === 'needs_image' && readiness !== 'needs_image') return false;
-      if (inventoryFilter === 'needs_caption' && readiness !== 'needs_caption') return false;
+      if (item.status === 'archived' || item.status === 'published') return false;
       return true;
     });
-  }, [items, libraryTab, inventoryFilter, autopilotRunIdFilter, contentItemIdsFilter]);
+  }, [autopilotRunIdFilter, contentItemIdsFilter, contentItems]);
 
-  const performanceInput = useMemo(() => ({
-    posts: visibleItems.map((item) => ({
-      id: item.id,
-      title: item.title,
-      caption: item.caption_draft || item.caption_final,
-      scheduledFor: item.scheduled_for,
-      createdAt: item.created_at,
-      reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
-    })),
-    frequencyPerWeek: visibleItems.length,
-  }), [visibleItems]);
+  const readyItems = useMemo(() => {
+    return filteredContentItems
+      .filter((item) => item.status !== 'scheduled')
+      .filter((item) => getReadinessState(item) !== 'unformed')
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [filteredContentItems]);
 
-  const toggleSelect = (id: string, checked: boolean) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id); else next.delete(id);
-      return next;
-    });
-  };
+  const ideaItems = useMemo(() => {
+    return filteredContentItems
+      .filter((item) => item.status !== 'scheduled')
+      .filter((item) => {
+        const readiness = getReadinessState(item);
+        const needsApproval = item.source === 'autopilot' && !['approved', 'scheduled', 'published'].includes(item.status);
+        const draftStatus = ['draft', 'needs_changes'].includes(item.status);
+        return needsApproval || draftStatus || readiness === 'unformed';
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [filteredContentItems]);
 
-  const updateMany = async (ids: string[], patch: Record<string, unknown>) => {
-    if (!ids.length) return;
-    const ciIds = ids.filter((id) => items.find((i) => i.id === id)?.origin === 'content_item');
-    const caIds = ids.filter((id) => items.find((i) => i.id === id)?.origin === 'content_asset');
-    const errors: string[] = [];
+  const daysCovered = useMemo(() => {
+    const start = startOfDay(new Date());
+    const end = addDays(start, 7);
+    const coveredDays = new Set<number>();
 
-    if (ciIds.length) {
-      const { error } = await supabase.from('content_items').update(patch as any).in('id', ciIds);
-      if (error) errors.push(error.message);
-    }
-    if (caIds.length) {
-      const { error } = await supabase.from('content_assets').update(patch as any).in('id', caIds);
-      if (error) errors.push(error.message);
+    for (const item of contentItems) {
+      if (!item.scheduled_for) continue;
+      const date = new Date(item.scheduled_for);
+      if (!(isAfter(date, addDays(start, -1)) && isBefore(date, end))) continue;
+      coveredDays.add(date.getDay());
     }
 
-    if (errors.length) {
-      toast({ variant: 'destructive', title: 'Bulk update failed', description: errors.join('; ') });
+    return coveredDays.size;
+  }, [contentItems]);
+
+  const summary = useMemo(() => {
+    let readyCount = 0;
+    let needsWorkCount = 0;
+
+    for (const item of readyItems) {
+      const primaryAction = getPrimaryAction(item);
+      if (primaryAction.label === 'Add to Calendar' || primaryAction.label === 'Queue for Publishing') readyCount += 1;
+      else needsWorkCount += 1;
     }
-    setSelected(new Set());
-    fetchItems();
-  };
+
+    return { readyCount, needsWorkCount, daysCovered };
+  }, [daysCovered, readyItems]);
 
   const handleSendToCalendar = async (item: LibraryItem, forcedDate?: string | null) => {
     const eligibility = getCalendarSendEligibility(item);
@@ -434,6 +417,17 @@ export default function BrandLibraryPage() {
       return;
     }
     toast({ title: 'Sent to calendar' });
+    fetchItems();
+  };
+
+  const archiveItem = async (item: LibraryItem) => {
+    const table = item.origin === 'content_asset' ? 'content_assets' : 'content_items';
+    const { error } = await supabase.from(table).update({ status: 'archived' } as any).eq('id', item.id);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Archive failed', description: error.message });
+      return;
+    }
+    toast({ title: 'Archived' });
     fetchItems();
   };
 
@@ -598,77 +592,6 @@ export default function BrandLibraryPage() {
     });
   }, [assetSearch, venueImageAssets]);
 
-  const queueItems = useMemo(() => {
-    const now = new Date();
-    const in14Days = addDays(now, 14);
-
-    return items
-      .filter((item) => item.status !== 'archived' && item.status !== 'published')
-      .map((item) => {
-        const readiness = getReadinessState(item);
-        const queueTime = item.scheduled_for || item.suggested_scheduled_for || null;
-        const queueDate = queueTime ? new Date(queueTime) : null;
-        const statusLabel = getQueueStatusLabel(item, readiness);
-        const inWindow = queueDate
-          ? isAfter(queueDate, addDays(now, -1)) && isBefore(queueDate, addDays(in14Days, 1))
-          : true;
-        const needsApproval = statusLabel === 'Needs approval';
-        const isReadyOrScheduled = statusLabel === 'Ready' || statusLabel === 'Scheduled';
-        return { item, readiness, queueTime, queueDate, statusLabel, inWindow, needsApproval, isReadyOrScheduled };
-      })
-      .filter((entry) => entry.inWindow)
-      .sort((a, b) => {
-        if (a.queueDate && b.queueDate) return a.queueDate.getTime() - b.queueDate.getTime();
-        if (a.queueDate && !b.queueDate) return -1;
-        if (!a.queueDate && b.queueDate) return 1;
-        return new Date(b.item.created_at).getTime() - new Date(a.item.created_at).getTime();
-      });
-  }, [items]);
-
-  const queueSections = useMemo(() => {
-    const needsApproval = queueItems.filter((entry) => entry.needsApproval);
-    const readyScheduled = queueItems.filter((entry) => !entry.needsApproval && entry.isReadyOrScheduled);
-    const ideas = queueItems.filter((entry) => !entry.needsApproval && !entry.isReadyOrScheduled);
-    return { needsApproval, readyScheduled, ideas };
-  }, [queueItems]);
-
-  const coverageSummary = useMemo(() => {
-    const start = startOfDay(new Date());
-    const end = addDays(start, 7);
-    const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const coveredDays = new Set<number>();
-    let hasLunchContent = false;
-
-    for (const entry of queueItems) {
-      if (!entry.queueDate) continue;
-      if (!(isAfter(entry.queueDate, addDays(start, -1)) && isBefore(entry.queueDate, end))) continue;
-      coveredDays.add(entry.queueDate.getDay());
-      const hour = entry.queueDate.getHours();
-      if (hour >= 11 && hour <= 14) hasLunchContent = true;
-    }
-
-    const missingDayNames = Array.from({ length: 7 }, (_, offset) => addDays(start, offset))
-      .filter((date) => !coveredDays.has(date.getDay()))
-      .map((date) => weekdayNames[date.getDay()]);
-
-    const gaps: string[] = [];
-    if (missingDayNames.includes('Friday')) gaps.push('Missing Friday');
-    if (missingDayNames.includes('Saturday') || missingDayNames.includes('Sunday')) gaps.push('Missing weekend');
-    if (!hasLunchContent) gaps.push('No lunch content');
-
-    return {
-      coveredDaysCount: 7 - missingDayNames.length,
-      missingDayNames,
-      gaps,
-    };
-  }, [queueItems]);
-
-  const headerSummary = useMemo(() => {
-    const readyCount = queueItems.filter((entry) => entry.statusLabel === 'Ready' || entry.statusLabel === 'Scheduled').length;
-    const needsApprovalCount = queueItems.filter((entry) => entry.statusLabel === 'Needs approval').length;
-    return { readyCount, needsApprovalCount, gapCount: coverageSummary.gaps.length };
-  }, [queueItems, coverageSummary.gaps.length]);
-
   const approveItem = async (item: LibraryItem) => {
     if (item.origin === 'content_item') {
       const { error } = await supabase.from('content_items').update({ status: 'approved' }).eq('id', item.id);
@@ -685,6 +608,27 @@ export default function BrandLibraryPage() {
     openEdit(item);
   };
 
+  const runPrimaryAction = async (item: LibraryItem) => {
+    const action = getPrimaryAction(item);
+    if (action.key === 'approve') {
+      await approveItem(item);
+      return;
+    }
+    if (action.key === 'add_image') {
+      await openAttachImagePicker(item);
+      return;
+    }
+    if (action.key === 'write_caption') {
+      openEdit(item);
+      return;
+    }
+    if (action.key === 'schedule') {
+      await handleSendToCalendar(item);
+      return;
+    }
+    openEdit(item);
+  };
+
   return (
     <div className="space-y-6">
       {autopilotRunIdFilter && (
@@ -693,394 +637,91 @@ export default function BrandLibraryPage() {
         </Button>
       )}
       <PageHeader
-        title="Content Pipeline"
-        description="Review and approve upcoming posts."
+        title="Content"
+        description="Run your content workflow in three simple steps: post-ready items, ideas, and photos."
         action={(
-          <Button className="gap-2" onClick={() => navigate('/studio/pro-photo')}>
-            <Wand2 className="w-4 h-4" /> Create new image
+          <Button className="gap-2" onClick={() => navigate('/content/feed')}>
+            <ImageIcon className="w-4 h-4" /> Upload Photos
           </Button>
         )}
       />
+
+      <Card className="border-accent/30 bg-accent/5">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="px-2 py-1">{summary.readyCount} ready</Badge>
+            <Badge variant="outline" className="px-2 py-1 border-amber-500/40 text-amber-700 dark:text-amber-300">{summary.needsWorkCount} need work</Badge>
+            <Badge variant="outline" className="px-2 py-1">{summary.daysCovered} days covered</Badge>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs value={topLevelTab} onValueChange={handleTopLevelTabChange}>
         <TabsList>
-          <TabsTrigger value="queue">Queue</TabsTrigger>
-          <TabsTrigger value="suggestions">Suggestions</TabsTrigger>
-          <TabsTrigger value="library_uploads">Library & New Photos</TabsTrigger>
+          <TabsTrigger value="ready">Ready</TabsTrigger>
+          <TabsTrigger value="ideas">Ideas</TabsTrigger>
+          <TabsTrigger value="photos">Photos</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {topLevelTab === 'queue' && (
+      {loading ? (
+        <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+      ) : (
         <>
-          <Card className="border-accent/30 bg-accent/5">
-            <CardContent className="p-4 space-y-2">
-              <p className="text-sm font-medium">Pulse prepared your week</p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary" className="px-2 py-1">{headerSummary.readyCount} ready</Badge>
-                <Badge variant="outline" className="px-2 py-1 border-amber-500/40 text-amber-700 dark:text-amber-300">{headerSummary.needsApprovalCount} need approval</Badge>
-                <Badge variant="outline" className="px-2 py-1">{headerSummary.gapCount} gaps</Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4 space-y-2">
-              <p className="text-sm font-medium">Coverage: {coverageSummary.coveredDaysCount} / 7 days</p>
-              {coverageSummary.missingDayNames.length > 0 ? (
-                <p className="text-xs text-muted-foreground">Missing: {coverageSummary.missingDayNames.join(', ')}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">All 7 days have content lined up.</p>
-              )}
-              {coverageSummary.gaps.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {coverageSummary.gaps.map((gap) => (
-                    <Badge key={gap} variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">
-                      {gap}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <div className="space-y-4">
-            {([
-              { key: 'needsApproval', title: 'Needs approval', entries: queueSections.needsApproval, tone: 'border-amber-400/40 bg-amber-50/50 dark:bg-amber-950/10' },
-              { key: 'readyScheduled', title: 'Scheduled / Ready', entries: queueSections.readyScheduled, tone: '' },
-            ] as const).map((section) => (
-              <Card key={section.key} className={section.tone}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold">{section.title}</p>
-                    <Badge variant="outline">{section.entries.length}</Badge>
-                  </div>
-                  {section.entries.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Nothing here right now.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {section.entries.map(({ item, statusLabel, queueTime }) => {
-                        const displayImageUrl = getDisplayImageUrl(item);
-                        const sourceLabel = getSourceLabel(item);
-                        return (
-                          <div key={buildItemKey(item)} className="flex flex-col md:flex-row gap-3 rounded-lg border p-3">
-                            <MediaImage
-                              src={item.thumbnail_url || displayImageUrl}
-                              fallbackSrc={displayImageUrl}
-                              alt={item.title || 'Queue preview'}
-                              containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
-                              aspectClassName=""
-                              className="h-full w-full object-cover"
-                            />
-                            <div className="min-w-0 flex-1 space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : statusLabel === 'Scheduled' ? 'default' : 'outline'}>{statusLabel}</Badge>
-                                <Badge variant="outline">{sourceLabel}</Badge>
-                                <Badge variant={getPerformanceFeedbackVariant(getPostPerformanceLabel({
-                                  id: item.id,
-                                  title: item.title,
-                                  caption: item.caption_draft || item.caption_final,
-                                  scheduledFor: item.scheduled_for,
-                                  reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
-                                }, performanceInput))}>
-                                  {getPostPerformanceLabel({
-                                    id: item.id,
-                                    title: item.title,
-                                    caption: item.caption_draft || item.caption_final,
-                                    scheduledFor: item.scheduled_for,
-                                    reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
-                                  }, performanceInput)}
-                                </Badge>
-                                <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
-                              </div>
-                              <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled post'}</p>
-                              <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this post.'}</p>
-                              <div className="rounded-md bg-muted/30 px-2 py-1.5">
-                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
-                                <ul className="mt-1 list-disc pl-4 space-y-0.5">
-                                  {generateQueueExplanation(item, coverageSummary.gaps).map((point) => (
-                                    <li key={point} className="text-xs text-muted-foreground">{point}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
-                                <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
-                                <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>Delete</Button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </>
-      )}
-
-      {topLevelTab === 'suggestions' && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">Suggestions</p>
-              <Badge variant="outline">{queueSections.ideas.length}</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">Pulse recommendations that are not yet part of your active queue.</p>
-            {queueSections.ideas.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No suggestions right now.</p>
+          {topLevelTab === 'ready' && (
+            readyItems.length === 0 ? (
+              <EmptyState icon={Sparkles} title="Nothing ready yet" description="Add photos or review ideas to build your post-ready list." />
             ) : (
-              <div className="space-y-3">
-                {queueSections.ideas.map(({ item, statusLabel, queueTime }) => {
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {readyItems.map((item) => {
                   const displayImageUrl = getDisplayImageUrl(item);
-                  const sourceLabel = getSourceLabel(item);
+                  const readiness = getReadinessState(item);
+                  const readinessBadge = getReadinessBadge(readiness);
+                  const primaryAction = getPrimaryAction(item);
+
                   return (
-                    <div key={buildItemKey(item)} className="flex flex-col md:flex-row gap-3 rounded-lg border p-3">
-                      <MediaImage
-                        src={item.thumbnail_url || displayImageUrl}
-                        fallbackSrc={displayImageUrl}
-                        alt={item.title || 'Suggestion preview'}
-                        containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
-                        aspectClassName=""
-                        className="h-full w-full object-cover"
-                      />
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={statusLabel === 'Needs approval' ? 'secondary' : 'outline'}>{statusLabel}</Badge>
-                          <Badge variant="outline">{sourceLabel}</Badge>
-                          <Badge variant={getPerformanceFeedbackVariant(getPostPerformanceLabel({
-                            id: item.id,
-                            title: item.title,
-                            caption: item.caption_draft || item.caption_final,
-                            scheduledFor: item.scheduled_for,
-                            reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
-                          }, performanceInput))}>
-                            {getPostPerformanceLabel({
-                              id: item.id,
-                              title: item.title,
-                              caption: item.caption_draft || item.caption_final,
-                              scheduledFor: item.scheduled_for,
-                              reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
-                            }, performanceInput)}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground">{queueTime ? format(new Date(queueTime), 'EEE, MMM d · h:mm a') : 'Unscheduled'}</p>
-                        </div>
-                        <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled suggestion'}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add caption details to finish this suggestion.'}</p>
-                        <div className="rounded-md bg-muted/30 px-2 py-1.5">
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse created this</p>
-                          <ul className="mt-1 list-disc pl-4 space-y-0.5">
-                            {generateQueueExplanation(item, coverageSummary.gaps).map((point) => (
-                              <li key={point} className="text-xs text-muted-foreground">{point}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button size="sm" onClick={() => approveItem(item)} disabled={statusLabel === 'Scheduled'}>Approve</Button>
-                          <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>Delete</Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {topLevelTab === 'library_uploads' && (
-        <>
-          <Card>
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <p className="text-sm font-medium">Library & New Photos</p>
-                  <p className="text-xs text-muted-foreground">Browse assets, uploads, and historical content.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant={view === 'card' ? 'default' : 'outline'} size="sm" onClick={() => setView('card')}><Layers className="w-4 h-4 mr-1" />Cards</Button>
-                  <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}><List className="w-4 h-4 mr-1" />List</Button>
-                </div>
-              </div>
-
-              <Tabs value={libraryTab} onValueChange={(v) => setLibraryTab(v as LibraryTab)}>
-                <TabsList>
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="ready">Ready</TabsTrigger>
-                  <TabsTrigger value="pulse_suggested">Pulse Suggested</TabsTrigger>
-                  <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
-                  <TabsTrigger value="archived">Archived</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              {libraryTab !== 'archived' && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs text-muted-foreground mr-1">Inventory filter:</p>
-                  {([
-                    { value: 'all', label: 'All inventory' },
-                    { value: 'ready_to_post', label: 'Ready to Post' },
-                    { value: 'needs_image', label: 'Needs Image' },
-                    { value: 'needs_caption', label: 'Needs Caption' },
-                  ] as const).map((option) => (
-                    <Button
-                      key={option.value}
-                      size="sm"
-                      variant={inventoryFilter === option.value ? 'default' : 'outline'}
-                      onClick={() => setInventoryFilter(option.value)}
-                      className="h-8"
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {selected.size > 0 && (
-            <div className="rounded-lg border p-3 flex flex-wrap items-center gap-2">
-              <p className="text-sm text-muted-foreground mr-2">{selected.size} selected</p>
-              <Button size="sm" variant="outline" onClick={() => updateMany(Array.from(selected), { status: 'archived' })}><Archive className="w-4 h-4 mr-1" />Archive</Button>
-              <Button size="sm" variant="destructive" onClick={() => Promise.all(Array.from(selected).map(handleDelete)).then(() => setSelected(new Set()))}><Trash2 className="w-4 h-4 mr-1" />Delete</Button>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="py-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
-          ) : visibleItems.length === 0 ? (
-            <EmptyState icon={Sparkles} title="No content items yet" description="Pulse will prepare suggestions as activity comes in. You can also upload photos to start the queue." />
-          ) : view === 'card' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleItems.map((item) => {
-            const displayImageUrl = getDisplayImageUrl(item);
-            const hasAsset = !!displayImageUrl;
-            const readiness = getReadinessState(item);
-            const readinessBadge = getReadinessBadge(readiness);
-            const autopilotSource = getAutopilotSourceLabel(item);
-
-            return (
-              <Card key={buildItemKey(item)} className="overflow-hidden">
-                {hasAsset ? (
-                  <button
-                    type="button"
-                    className="group/image relative block w-full h-40 bg-muted cursor-pointer overflow-hidden"
-                    onClick={() => openPreview(item)}
-                    aria-label={`Preview ${item.title || 'content image'}`}
-                  >
-                    <img
-                      src={displayImageUrl!}
-                      alt={item.title || 'Content preview'}
-                      className="h-40 w-full object-cover transition-transform duration-200 group-hover/image:scale-[1.02]"
-                      loading="lazy"
-                      onError={() => markImageBroken(item)}
-                    />
-                    <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-200 group-hover/image:bg-black/20" />
-                    <div className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover/image:opacity-100">
-                      <Maximize2 className="h-3.5 w-3.5" />
-                    </div>
-                  </button>
-                ) : (
-                  <div className="h-40 bg-muted/50 flex flex-col items-center justify-center text-center px-4">
-                    <ImageIcon className="w-8 h-8 text-muted-foreground/40 mb-2" />
-                    <p className="text-sm font-medium">No asset yet</p>
-                    <p className="text-xs text-muted-foreground">Add an image to make this post-ready.</p>
-                  </div>
-                )}
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <div>
-                      <p className="font-medium text-sm line-clamp-1">{item.title || 'Untitled'}</p>
-                      <p className="text-xs text-muted-foreground">{format(new Date(item.created_at), 'MMM d, yyyy')}</p>
-                    </div>
-                    <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
-                  </div>
-
-                  <div className="flex flex-wrap gap-1">
-                    <Badge variant={readinessBadge.variant}>{readinessBadge.label}</Badge>
-                    <Badge variant="outline">{getSourceLabel(item)}</Badge>
-                    <Badge variant={getPerformanceFeedbackVariant(getPostPerformanceLabel({
-                      id: item.id,
-                      title: item.title,
-                      caption: item.caption_draft || item.caption_final,
-                      scheduledFor: item.scheduled_for,
-                      reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
-                    }, performanceInput))}>
-                      {getPostPerformanceLabel({
-                        id: item.id,
-                        title: item.title,
-                        caption: item.caption_draft || item.caption_final,
-                        scheduledFor: item.scheduled_for,
-                        reused: (item.badges || []).some((badge) => badge.toLowerCase().includes('reuse')),
-                      }, performanceInput)}
-                    </Badge>
-                    {item.source === 'autopilot' && <Badge variant="secondary">Needs approval</Badge>}
-                    {item.run_type && <Badge variant="outline">{item.run_type.replace('_', ' ')}</Badge>}
-                    {item.origin === 'content_asset' && <Badge variant="outline">Asset</Badge>}
-                  </div>
-
-                  {autopilotSource && (
-                    <p className="text-xs text-muted-foreground">{autopilotSource}</p>
-                  )}
-
-                  {item.caption_draft && <p className="text-sm line-clamp-3">{item.caption_draft}</p>}
-
-                  {item.origin === 'content_item' && !hasAsset && item.asset_type && (
-                    <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-800">Asset expected ({item.asset_type}) but missing.</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    {readiness === 'ready_to_post' && (
-                      <>
-                        {getCalendarSendEligibility(item).ok ? (
-                          <Button size="sm" className="w-full" onClick={() => handleSendToCalendar(item)}>
-                            <CalendarDays className="w-4 h-4 mr-1" />Send to Calendar
-                          </Button>
-                        ) : (
-                          <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-100/40 p-2">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-800">{(getCalendarSendEligibility(item) as any).reason}</p>
+                    <Card key={buildItemKey(item)} className="overflow-hidden">
+                      {displayImageUrl ? (
+                        <button
+                          type="button"
+                          className="group/image relative block w-full h-40 bg-muted cursor-pointer overflow-hidden"
+                          onClick={() => openPreview(item)}
+                          aria-label={`Preview ${item.title || 'content image'}`}
+                        >
+                          <img
+                            src={displayImageUrl}
+                            alt={item.title || 'Content preview'}
+                            className="h-40 w-full object-cover transition-transform duration-200 group-hover/image:scale-[1.02]"
+                            loading="lazy"
+                            onError={() => markImageBroken(item)}
+                          />
+                          <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-200 group-hover/image:bg-black/20" />
+                          <div className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity duration-200 group-hover/image:opacity-100">
+                            <Maximize2 className="h-3.5 w-3.5" />
                           </div>
-                        )}
-                        <div className="grid grid-cols-[1fr_auto] gap-1.5">
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                            <Edit3 className="w-4 h-4 mr-1" />Edit
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" aria-label="More actions">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
-                                <Archive className="w-4 h-4 mr-2" />Archive
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => handleDelete(item.id)}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                        </button>
+                      ) : (
+                        <div className="h-40 bg-muted/50 flex flex-col items-center justify-center text-center px-4">
+                          <ImageIcon className="w-8 h-8 text-muted-foreground/40 mb-2" />
+                          <p className="text-sm font-medium">No image yet</p>
                         </div>
-                      </>
-                    )}
+                      )}
+                      <CardContent className="p-4 space-y-3">
+                        <div className="space-y-1">
+                          <p className="font-medium text-sm line-clamp-1">{item.title || 'Untitled post'}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Add details to complete this post.'}</p>
+                        </div>
 
-                    {readiness === 'needs_image' && (
-                      <>
-                        <Button size="sm" className="w-full" onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=generate`)}>
-                          <Wand2 className="w-4 h-4 mr-1" />Generate Image
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={readinessBadge.variant}>{readinessBadge.label}</Badge>
+                          <Badge variant="outline">{getSourceLabel(item)}</Badge>
+                        </div>
+
+                        <Button size="sm" className="w-full" onClick={() => runPrimaryAction(item)}>
+                          {primaryAction.label}
                         </Button>
-                        <div className="grid grid-cols-[1fr_auto] gap-1.5">
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                            <Edit3 className="w-4 h-4 mr-1" />Edit
-                          </Button>
+
+                        <div className="flex justify-end">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button size="icon" variant="ghost" aria-label="More actions">
@@ -1088,19 +729,13 @@ export default function BrandLibraryPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openAttachImagePicker(item)}>
-                                <Link2 className="w-4 h-4 mr-2" />Attach Image
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}`)}>
-                                <Eye className="w-4 h-4 mr-2" />Open in Pro Photo
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}&action=regenerate`)}>
-                                <RefreshCw className="w-4 h-4 mr-2" />Regenerate
-                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openEdit(item)}>
                                 <Edit3 className="w-4 h-4 mr-2" />Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
+                              <DropdownMenuItem onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}`)}>
+                                <Wand2 className="w-4 h-4 mr-2" />Open Pro Photo
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => archiveItem(item)}>
                                 <Archive className="w-4 h-4 mr-2" />Archive
                               </DropdownMenuItem>
                               <DropdownMenuItem
@@ -1112,78 +747,127 @@ export default function BrandLibraryPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </>
-                    )}
-
-                    {readiness === 'needs_caption' && (
-                      <>
-                        <Button size="sm" className="w-full" onClick={() => openEdit(item)}>
-                          <Edit3 className="w-4 h-4 mr-1" />Write Caption
-                        </Button>
-                        <div className="grid grid-cols-[1fr_auto] gap-1.5">
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                            <Edit3 className="w-4 h-4 mr-1" />Edit
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" aria-label="More actions">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => updateMany([item.id], { status: 'archived' })}>
-                                <Archive className="w-4 h-4 mr-2" />Archive
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => handleDelete(item.id)}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-          ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <div className="grid grid-cols-[32px_1fr_1fr_140px_140px] gap-2 p-3 text-xs font-medium text-muted-foreground border-b">
-            <div />
-            <div>Title</div>
-            <div>Readiness</div>
-            <div>Source</div>
-            <div>Next action</div>
-          </div>
-          {visibleItems.map((item) => {
-            const displayImageUrl = getDisplayImageUrl(item);
-            const readiness = getReadinessState(item);
-            const readinessBadge = getReadinessBadge(readiness);
-            return (
-              <div key={buildItemKey(item)} className="grid grid-cols-[32px_1fr_1fr_140px_140px] gap-2 p-3 items-center border-b last:border-b-0 text-sm">
-                <Checkbox checked={selected.has(item.id)} onCheckedChange={(v) => toggleSelect(item.id, !!v)} />
-                <div className="flex items-center gap-2 min-w-0">
-                  {displayImageUrl ? (
-                    <button type="button" onClick={() => openPreview(item)} className="w-8 h-8 rounded overflow-hidden">
-                      <img src={displayImageUrl} alt="" className="w-8 h-8 rounded object-cover" onError={() => markImageBroken(item)} />
-                    </button>
-                  ) : (
-                    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center"><ImageIcon className="w-4 h-4 text-muted-foreground/60" /></div>
-                  )}
-                  <span className="line-clamp-1">{item.title || 'Untitled'}</span>
-                </div>
-                <Badge variant={readinessBadge.variant} className="w-fit">{readinessBadge.label}</Badge>
-                <Badge variant="outline" className="w-fit">{getSourceLabel(item)}</Badge>
-                <span className="text-xs text-muted-foreground">{getNextActionLabel(readiness)}</span>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+            )
+          )}
+
+          {topLevelTab === 'ideas' && (
+            ideaItems.length === 0 ? (
+              <EmptyState icon={Sparkles} title="No ideas right now" description="Pulse suggestions and drafts will show up here." />
+            ) : (
+              <div className="space-y-3">
+                {ideaItems.map((item) => {
+                  const displayImageUrl = getDisplayImageUrl(item);
+                  return (
+                    <Card key={buildItemKey(item)}>
+                      <CardContent className="p-4 flex flex-col md:flex-row gap-3">
+                        <MediaImage
+                          src={item.thumbnail_url || displayImageUrl}
+                          fallbackSrc={displayImageUrl}
+                          alt={item.title || 'Idea preview'}
+                          containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
+                          aspectClassName=""
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline">{getSourceLabel(item)}</Badge>
+                            <p className="text-xs text-muted-foreground">{format(new Date(item.created_at), 'EEE, MMM d')}</p>
+                          </div>
+                          <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled idea'}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'Draft concept waiting for your review.'}</p>
+                          <div className="rounded-md bg-muted/30 px-2 py-1.5">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse suggested this</p>
+                            <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                              {generateQueueExplanation(item, []).map((point) => (
+                                <li key={point} className="text-xs text-muted-foreground">{point}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" onClick={() => approveItem(item)}>Approve</Button>
+                            <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" aria-label="More actions">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => archiveItem(item)}>
+                                  <Archive className="w-4 h-4 mr-2" />Archive
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDelete(item.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )
+          )}
+
+          {topLevelTab === 'photos' && (
+            <Card>
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <p className="text-sm font-medium">Photos</p>
+                    <p className="text-xs text-muted-foreground">Upload, browse, and reuse your raw photo bank.</p>
+                  </div>
+                  <Button size="sm" className="gap-2" onClick={() => navigate('/content/feed')}>
+                    <ImageIcon className="w-4 h-4" /> Upload Photos
+                  </Button>
+                </div>
+
+                {photoItems.length === 0 ? (
+                  <EmptyState icon={ImageIcon} title="No photos yet" description="Upload photos to start building your bank." />
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {photoItems.map((item) => {
+                      const displayImageUrl = getDisplayImageUrl(item);
+                      return (
+                        <button
+                          key={buildItemKey(item)}
+                          type="button"
+                          onClick={() => openPreview(item)}
+                          className="group rounded-md border overflow-hidden text-left bg-muted/20"
+                        >
+                          {displayImageUrl ? (
+                            <img
+                              src={displayImageUrl}
+                              alt={item.title || 'Photo'}
+                              className="w-full aspect-square object-cover"
+                              onError={() => markImageBroken(item)}
+                            />
+                          ) : (
+                            <div className="w-full aspect-square bg-muted flex items-center justify-center">
+                              <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
+                            </div>
+                          )}
+                          <div className="p-2">
+                            <p className="text-xs font-medium line-clamp-1">{item.title || 'Untitled photo'}</p>
+                            <p className="text-[11px] text-muted-foreground">{format(new Date(item.created_at), 'MMM d, yyyy')}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
         </>
       )}
@@ -1203,9 +887,9 @@ export default function BrandLibraryPage() {
       <Dialog open={!!attachTarget} onOpenChange={(open) => !open && setAttachTarget(null)}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
-            <DialogTitle>Attach Existing Image</DialogTitle>
+            <DialogTitle>Add Image</DialogTitle>
             <DialogDescription>
-              Choose an image to instantly attach to “{attachTarget?.title || 'Untitled'}”.
+              Choose a photo to attach to “{attachTarget?.title || 'Untitled'}”.
             </DialogDescription>
           </DialogHeader>
 
@@ -1219,7 +903,7 @@ export default function BrandLibraryPage() {
             {assetPickerLoading ? (
               <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
             ) : filteredAttachAssets.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">No venue images found to attach.</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">No venue photos found.</p>
             ) : (
               <div className="max-h-[460px] overflow-y-auto rounded-md border p-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -1426,17 +1110,14 @@ function getReadinessBadge(readiness: ReadinessState): { label: string; variant:
   return { label: 'Needs Caption', variant: 'secondary' };
 }
 
-function getQueueStatusLabel(item: LibraryItem, readiness: ReadinessState): 'Needs approval' | 'Ready' | 'Scheduled' {
-  if (item.status === 'scheduled' && item.scheduled_for) return 'Scheduled';
-  if (item.source === 'autopilot' && !['approved', 'scheduled', 'published'].includes(item.status)) return 'Needs approval';
-  if (readiness === 'ready_to_post') return 'Ready';
-  return 'Needs approval';
-}
-
-function getNextActionLabel(readiness: ReadinessState): string {
-  if (readiness === 'ready_to_post') return 'Send to Calendar';
-  if (readiness === 'needs_image') return 'Generate or attach image';
-  return 'Write or generate caption';
+function getPrimaryAction(item: LibraryItem): { key: 'approve' | 'add_image' | 'write_caption' | 'schedule' | 'edit'; label: string } {
+  const readiness = getReadinessState(item);
+  const needsApproval = item.source === 'autopilot' && !['approved', 'scheduled', 'published'].includes(item.status);
+  if (needsApproval) return { key: 'approve', label: 'Approve' };
+  if (readiness === 'needs_image') return { key: 'add_image', label: 'Add Image' };
+  if (readiness === 'needs_caption') return { key: 'write_caption', label: 'Write Caption' };
+  if (readiness === 'ready_to_post') return { key: 'schedule', label: 'Add to Calendar' };
+  return { key: 'edit', label: 'Edit' };
 }
 
 function hasUsableCaption(value: string | null | undefined): boolean {
@@ -1573,12 +1254,6 @@ function generateQueueExplanation(item: LibraryItem, coverageGaps: string[]): st
     timing: timingDay ? { day_of_week: timingDay } : undefined,
     asset_usage: { reuse_frequency: item.source === 'autopilot' ? 'low' : 'balanced' },
   });
-}
-
-function getPerformanceFeedbackVariant(label: 'Performing well' | 'Average' | 'Needs improvement'): 'default' | 'secondary' | 'destructive' {
-  if (label === 'Performing well') return 'default';
-  if (label === 'Needs improvement') return 'destructive';
-  return 'secondary';
 }
 
 function extractFirstUrl(value: unknown): string | null {
