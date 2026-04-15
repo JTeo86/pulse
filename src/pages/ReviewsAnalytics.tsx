@@ -1099,23 +1099,15 @@ function ResponseWriterModal({
   onDraftSaved: () => void;
 }) {
   const [notes, setNotes] = useState('');
-  const [strategy, setStrategy] = useState('neutral');
+  const [tone, setTone] = useState<'auto' | 'warm' | 'firm'>('auto');
   const [generating, setGenerating] = useState(false);
   const [draft, setDraft] = useState(task.draft_response || '');
-
-  const strategies = [
-    { key: 'apologise', label: 'Apologise + explain', icon: '🙏' },
-    { key: 'resolution', label: 'Offer resolution (offline)', icon: '📞' },
-    { key: 'defend', label: 'Correct misinformation', icon: '📋' },
-    { key: 'thank', label: 'Thank + invite back', icon: '💚' },
-    { key: 'neutral', label: 'Neutral / compliance-safe', icon: '🛡️' },
-  ];
 
   const handleGenerate = async () => {
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-review-response-draft', {
-        body: { task_id: task.id, investigation_notes: notes, strategy },
+        body: { task_id: task.id, investigation_notes: notes, strategy: tone === 'auto' ? undefined : tone === 'warm' ? 'thank' : 'resolution' },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -1193,19 +1185,18 @@ function ResponseWriterModal({
             />
           </div>
 
-          {/* Strategy selection */}
           <div>
-            <Label className="text-sm font-medium">Response strategy</Label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {strategies.map(s => (
+            <Label className="text-sm font-medium">Tone (optional)</Label>
+            <div className="flex gap-2 mt-2">
+              {(['auto', 'warm', 'firm'] as const).map((option) => (
                 <Button
-                  key={s.key}
+                  key={option}
                   size="sm"
-                  variant={strategy === s.key ? 'default' : 'outline'}
-                  onClick={() => setStrategy(s.key)}
-                  className="text-xs"
+                  variant={tone === option ? 'default' : 'outline'}
+                  onClick={() => setTone(option)}
+                  className="text-xs capitalize"
                 >
-                  {s.icon} {s.label}
+                  {option === 'auto' ? 'Auto' : option}
                 </Button>
               ))}
             </div>
@@ -1239,20 +1230,6 @@ function ResponseWriterModal({
           <Button variant="outline" size="sm" onClick={handleCopy} disabled={!draft}>
             <Copy className="w-3 h-3 mr-1" /> Copy response
           </Button>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button size="sm" variant="outline" disabled className="opacity-50">
-                    <Send className="w-3 h-3 mr-1" /> Post reply
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs max-w-[200px]">Auto-posting requires connecting Google Business Profile / OpenTable partner access. Coming soon.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           <Button size="sm" onClick={handleApprove} disabled={!draft}>
             <ThumbsUp className="w-3 h-3 mr-1" /> Approve response
           </Button>
@@ -1489,20 +1466,6 @@ function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTi
                         }}>
                           <Copy className="w-3 h-3 mr-1" /> Copy
                         </Button>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Button size="sm" variant="outline" disabled className="opacity-50">
-                                  <Send className="w-3 h-3 mr-1" /> Post
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">Auto-posting coming soon.</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
                       </>
                     )}
 
@@ -1578,118 +1541,196 @@ function NeedsResponseTab({ venueId, venueTimezone }: { venueId: string; venueTi
 
 // ── Automation Status Card ──────────────────────────────────────────────
 
-function AutomationStatusCard({ venueId, venueTimezone }: { venueId: string; venueTimezone: string }) {
+function AutomationStatusCard({ venueId, venueTimezone, onOpenSetup }: { venueId: string; venueTimezone: string; onOpenSetup?: () => void }) {
+  const queryClient = useQueryClient();
   const cycle = getCompletedReviewWeekRange(new Date(), venueTimezone);
 
-  const { data: lastRun, isLoading, isError, error } = useQuery({
-    queryKey: ['automation-runs', venueId, cycle.weekStart],
+  const { data, isLoading } = useQuery({
+    queryKey: ['reviews-health', venueId, cycle.weekStart, cycle.weekEnd],
     queryFn: async () => {
-      const { data: latestRun, error: latestError } = await supabase
-        .from('review_automation_runs' as any)
-        .select('*')
-        .eq('venue_id', venueId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (latestError) throw latestError;
-
-      const { data: cycleRun, error: cycleError } = await supabase
-        .from('review_automation_runs' as any)
-        .select('*')
-        .eq('venue_id', venueId)
-        .eq('week_start', cycle.weekStart)
-        .maybeSingle();
-      if (cycleError) throw cycleError;
-
-      const { count: reportCount, error: reportError } = await supabase
-        .from('weekly_review_reports')
-        .select('id', { count: 'exact', head: true })
-        .eq('venue_id', venueId)
-        .eq('week_start', cycle.weekStart)
-        .eq('week_end', cycle.weekEnd);
-      if (reportError) throw reportError;
-
-      const { count: triageCount, error: triageError } = await supabase
-        .from('review_response_tasks')
-        .select('id', { count: 'exact', head: true })
-        .eq('venue_id', venueId)
-        .gte('review_date', cycle.weekStart)
-        .lte('review_date', `${cycle.weekEnd}T23:59:59Z`);
-      if (triageError) throw triageError;
+      const [{ data: latestRun }, { data: lastSuccess }, { data: sources }, { count: pendingCount }, { count: draftCount }, { count: fetchedThisWeek }] = await Promise.all([
+        supabase.from('review_automation_runs' as any).select('*').eq('venue_id', venueId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('review_automation_runs' as any).select('*').eq('venue_id', venueId).eq('status', 'success').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('review_sources' as any).select('id, is_enabled').eq('venue_id', venueId),
+        supabase.from('review_response_tasks' as any).select('id', { count: 'exact', head: true }).eq('venue_id', venueId).eq('status', 'pending'),
+        supabase.from('review_response_tasks' as any).select('id', { count: 'exact', head: true }).eq('venue_id', venueId).eq('status', 'pending').not('draft_response', 'is', null),
+        supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('venue_id', venueId).gte('review_date', cycle.weekStart).lte('review_date', `${cycle.weekEnd}T23:59:59Z`),
+      ]);
 
       return {
         latestRun: latestRun as any,
-        cycleRun: cycleRun as any,
-        hasReport: (reportCount || 0) > 0,
-        hasTriage: (triageCount || 0) > 0,
+        lastSuccess: lastSuccess as any,
+        connectedSources: (sources || []).filter((s: any) => s.is_enabled).length,
+        pendingCount: pendingCount || 0,
+        draftCount: draftCount || 0,
+        fetchedThisWeek: fetchedThisWeek || 0,
       };
     },
   });
 
-  const cycleRun = lastRun?.cycleRun;
-  const latestRun = lastRun?.latestRun;
-  const latestRunDate = latestRun?.created_at ? new Date(latestRun.created_at) : null;
-  const daysSinceLatestRun = latestRunDate
-    ? Math.floor((Date.now() - latestRunDate.getTime()) / (1000 * 60 * 60 * 24))
-    : null;
-  const isLikelyStale = daysSinceLatestRun !== null && daysSinceLatestRun > 10;
-  const runStatus = cycleRun?.status === 'success'
-    ? 'Completed for current cycle'
-    : cycleRun?.status === 'running'
-      ? 'Run in progress'
-      : cycleRun?.status
-        ? 'Failed on last attempt'
-        : 'Missed this week';
+  const runWeeklyNow = useMutation({
+    mutationFn: async () => {
+      const nowIso = new Date().toISOString();
+      const { data: runRow, error: runError } = await supabase
+        .from('review_automation_runs' as any)
+        .upsert({
+          venue_id: venueId,
+          week_start: cycle.weekStart,
+          week_end: cycle.weekEnd,
+          scheduled_for: nowIso,
+          status: 'running',
+          steps_completed: [],
+          error_message: null,
+        } as any, { onConflict: 'venue_id,week_start' })
+        .select('*')
+        .single();
+      if (runError) throw runError;
+
+      const completedSteps: string[] = [];
+      const errors: string[] = [];
+
+      const ingest = await supabase.functions.invoke('ingest-reviews', { body: { venue_id: venueId } });
+      if (ingest.error || ingest.data?.error) {
+        errors.push(`Ingest failed: ${ingest.error?.message || ingest.data?.error}`);
+      } else {
+        completedSteps.push('ingest');
+      }
+
+      const report = await supabase.functions.invoke('generate-weekly-review-report', {
+        body: { venue_id: venueId, week_start: cycle.weekStart, week_end: cycle.weekEnd },
+      });
+      if (report.error || report.data?.error) {
+        errors.push(`Report failed: ${report.error?.message || report.data?.error}`);
+      } else {
+        completedSteps.push(report.data?.no_reviews ? 'report_no_reviews' : 'report');
+      }
+
+      const triage = await supabase.functions.invoke('generate-review-response-tasks', {
+        body: { venue_id: venueId, week_start: cycle.weekStart, week_end: cycle.weekEnd },
+      });
+      if (triage.error || triage.data?.error) {
+        errors.push(`Triage failed: ${triage.error?.message || triage.data?.error}`);
+      } else {
+        completedSteps.push('triage');
+      }
+
+      const finalStatus = errors.length === 0 ? 'success' : completedSteps.length > 0 ? 'partial' : 'failed';
+
+      await supabase
+        .from('review_automation_runs' as any)
+        .update({
+          status: finalStatus,
+          steps_completed: completedSteps,
+          error_message: errors.length ? errors.join(' ') : null,
+          scheduled_for: nowIso,
+        } as any)
+        .eq('id', runRow.id);
+
+      if (errors.length) throw new Error(errors.join(' '));
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews-health', venueId] });
+      queryClient.invalidateQueries({ queryKey: ['response-tasks-workflow', venueId] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-report', venueId] });
+      toast({ title: 'Weekly review cycle completed' });
+    },
+    onError: (e: any) => {
+      queryClient.invalidateQueries({ queryKey: ['reviews-health', venueId] });
+      toast({ title: 'Weekly cycle finished with issues', description: e.message, variant: 'destructive' });
+    },
+  });
+
+  const fetchNow = useMutation({
+    mutationFn: async () => {
+      const { data: result, error } = await supabase.functions.invoke('ingest-reviews', {
+        body: { venue_id: venueId },
+      });
+      if (error) throw error;
+      if (result?.errors?.length) throw new Error(result.errors.join(' '));
+      return result;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['reviews-health', venueId] });
+      queryClient.invalidateQueries({ queryKey: ['reviews-workflow', venueId] });
+      toast({ title: 'Reviews fetched', description: `${result?.fetched_count || 0} reviews imported.` });
+    },
+    onError: (e: any) => toast({ title: 'Fetch failed', description: e.message, variant: 'destructive' }),
+  });
+
+  const latestRun = data?.latestRun;
+  const connected = data?.connectedSources || 0;
+  const hasFailed = ['failed', 'error', 'partial'].includes(String(latestRun?.status || ''));
+  const lastRunDate = latestRun?.created_at ? new Date(latestRun.created_at) : null;
+  const lastSuccessDate = data?.lastSuccess?.created_at ? new Date(data.lastSuccess.created_at) : null;
+  const isStale = lastSuccessDate ? (Date.now() - lastSuccessDate.getTime()) > 8 * 24 * 60 * 60 * 1000 : false;
+
+  const healthLabel = connected === 0
+    ? 'not connected'
+    : !latestRun
+      ? 'never run'
+      : hasFailed
+        ? 'failed'
+        : isStale
+          ? 'stale'
+          : 'up to date';
+
+  const ctaLabel = connected === 0
+    ? 'Connect sources'
+    : hasFailed || isStale || !latestRun
+      ? 'Run now'
+      : 'Fetch reviews now';
+
+  const onPrimaryAction = () => {
+    if (connected === 0) {
+      onOpenSetup?.();
+      return;
+    }
+    if (hasFailed || isStale || !latestRun) {
+      runWeeklyNow.mutate();
+      return;
+    }
+    fetchNow.mutate();
+  };
 
   return (
-    <Card className="bg-muted/30 border-dashed">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Zap className="w-4 h-4 text-accent" />
-          <span className="text-sm font-medium">Weekly Automation</span>
+    <Card className="border-accent/20 bg-accent/5">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">Review automation health</p>
+          <Button size="sm" onClick={onPrimaryAction} disabled={isLoading || runWeeklyNow.isPending || fetchNow.isPending}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${(runWeeklyNow.isPending || fetchNow.isPending) ? 'animate-spin' : ''}`} />
+            {ctaLabel}
+          </Button>
         </div>
-        <div className="space-y-1 text-xs text-muted-foreground">
-          <p>⏰ Runs every Monday at 08:00 (venue local time)</p>
-          <p>📋 Auto-fetches reviews → generates report → triages responses</p>
-          <p>🎯 Expected target week: {cycle.weekStart} → {cycle.weekEnd}</p>
-          {isLoading && <p>Loading automation diagnostics…</p>}
-          {isError && (
-            <p className="text-destructive">
-              Unable to load automation diagnostics: {error instanceof Error ? error.message : 'Unknown error'}
-            </p>
-          )}
-          <p>📌 Current cycle status: {runStatus}</p>
-          <p>🗂️ Report for target week: {lastRun?.hasReport ? 'Present' : 'Missing'}</p>
-          <p>🧠 Triage for target week: {lastRun?.hasTriage ? 'Present' : 'Missing'}</p>
-          {latestRun ? (
-            <p className="flex items-center gap-1">
-              {latestRun.status === 'success' ? (
-                <CheckCircle2 className="w-3 h-3 text-accent" />
-              ) : (
-                <AlertCircle className="w-3 h-3 text-yellow-500" />
-              )}
-              Last automated run: {format(new Date(latestRun.created_at), 'MMM d, yyyy HH:mm')}
-              {latestRun.steps_completed && ` (${(latestRun.steps_completed as string[]).join(', ')})`}
-            </p>
-          ) : (
-            <p>No automated runs yet. First run will happen next Monday.</p>
-          )}
-          {isLikelyStale && (
-            <p className="text-yellow-600 dark:text-yellow-500">
-              Automation may be stale: last run was {daysSinceLatestRun} days ago.
-            </p>
-          )}
-          {cycleRun?.error_message && (
-            <p className="text-destructive">
-              Latest cycle error: {cycleRun.error_message}
-            </p>
-          )}
-          {latestRun?.status && latestRun.status !== 'success' && !latestRun?.error_message && (
-            <p className="text-yellow-600 dark:text-yellow-500">
-              Last run did not complete successfully. Review ingestion and report generation panels for step-level details.
-            </p>
-          )}
+
+        <div className="grid gap-2 md:grid-cols-5 text-xs">
+          <div className="rounded-md border bg-background p-2">
+            <p className="text-muted-foreground">Reviews connected</p>
+            <p className="font-medium">{connected > 0 ? 'Yes' : 'No'}</p>
+          </div>
+          <div className="rounded-md border bg-background p-2">
+            <p className="text-muted-foreground">Last run</p>
+            <p className="font-medium">{lastRunDate ? format(lastRunDate, 'MMM d, HH:mm') : 'Never'}</p>
+          </div>
+          <div className="rounded-md border bg-background p-2">
+            <p className="text-muted-foreground">Status</p>
+            <p className="font-medium capitalize">{healthLabel}</p>
+          </div>
+          <div className="rounded-md border bg-background p-2">
+            <p className="text-muted-foreground">Needs reply</p>
+            <p className="font-medium">{data?.pendingCount || 0}</p>
+          </div>
+          <div className="rounded-md border bg-background p-2">
+            <p className="text-muted-foreground">Ready to approve</p>
+            <p className="font-medium">{data?.draftCount || 0}</p>
+          </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Reviews fetched this week: {data?.fetchedThisWeek || 0}
+          {latestRun?.error_message ? ` • Last error: ${latestRun.error_message}` : ''}
+        </p>
       </CardContent>
     </Card>
   );
@@ -1738,14 +1779,10 @@ function WeeklyReport({ venueId, venueTimezone }: { venueId: string; venueTimezo
 
   return (
     <div className="space-y-6">
-      <AutomationStatusCard venueId={venueId} venueTimezone={venueTimezone} />
-
-      <div className="flex gap-2 flex-wrap">
-        <IngestionPanel venueId={venueId} />
-        <Separator />
-        <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending}>
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={() => generate.mutate()} disabled={generate.isPending}>
           <FileText className={`w-4 h-4 mr-2 ${generate.isPending ? 'animate-spin' : ''}`} />
-          Generate Report ({cycle.weekStart} → {cycle.weekEnd})
+          Refresh this week
         </Button>
       </div>
 
@@ -1831,12 +1868,46 @@ function WeeklyReport({ venueId, venueTimezone }: { venueId: string; venueTimezo
   );
 }
 
+function ReviewsSetupTab({ venueId }: { venueId: string }) {
+  return (
+    <div className="space-y-4">
+      <ReviewSourcesSetup venueId={venueId} />
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Manual fetch</CardTitle>
+          <CardDescription>Use this if you just changed source settings.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <IngestionPanel venueId={venueId} />
+        </CardContent>
+      </Card>
+
+      <Collapsible>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between">
+              <span className="text-sm font-medium">Advanced diagnostics & raw feed</span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <ReviewFeed venueId={venueId} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+    </div>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────────────────────────
 
 export default function ReviewsAnalytics() {
+
   const { currentVenue } = useVenue();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'workflow';
+  const activeTab = searchParams.get('tab') || 'inbox';
 
   const handleTabChange = (value: string) => {
     setSearchParams({ tab: value }, { replace: true });
@@ -1850,23 +1921,27 @@ export default function ReviewsAnalytics() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <PageHeader
         title="Reviews & Feedback"
-        description="Pulse prepares your weekly reputation workload so your team can respond fast and spot what to amplify."
+        description="Pulse prepares your replies, highlights what needs attention, and keeps weekly automation healthy."
       />
+
+      <div className="mb-6">
+        <AutomationStatusCard
+          venueId={currentVenue.id}
+          venueTimezone={currentVenue.timezone || 'Europe/London'}
+          onOpenSetup={() => handleTabChange('setup')}
+        />
+      </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="workflow" className="gap-2"><Sparkles className="w-4 h-4" />Reputation Workflow</TabsTrigger>
-          <TabsTrigger value="respond" className="gap-2"><ShieldAlert className="w-4 h-4" />All Reply Tasks</TabsTrigger>
-          <TabsTrigger value="report" className="gap-2"><FileText className="w-4 h-4" />Weekly Report</TabsTrigger>
-          <TabsTrigger value="feed" className="gap-2"><MessageSquare className="w-4 h-4" />Raw Review Feed</TabsTrigger>
-          <TabsTrigger value="setup" className="gap-2"><Settings2 className="w-4 h-4" />Sources Setup</TabsTrigger>
+          <TabsTrigger value="inbox" className="gap-2"><Sparkles className="w-4 h-4" />Inbox</TabsTrigger>
+          <TabsTrigger value="insights" className="gap-2"><FileText className="w-4 h-4" />Insights</TabsTrigger>
+          <TabsTrigger value="setup" className="gap-2"><Settings2 className="w-4 h-4" />Setup</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="workflow"><ReputationWorkflowTab venueId={currentVenue.id} /></TabsContent>
-        <TabsContent value="respond"><NeedsResponseTab venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
-        <TabsContent value="report"><WeeklyReport venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
-        <TabsContent value="feed"><ReviewFeed venueId={currentVenue.id} /></TabsContent>
-        <TabsContent value="setup"><ReviewSourcesSetup venueId={currentVenue.id} /></TabsContent>
+        <TabsContent value="inbox"><ReputationWorkflowTab venueId={currentVenue.id} /></TabsContent>
+        <TabsContent value="insights"><WeeklyReport venueId={currentVenue.id} venueTimezone={currentVenue.timezone || 'Europe/London'} /></TabsContent>
+        <TabsContent value="setup"><ReviewsSetupTab venueId={currentVenue.id} /></TabsContent>
       </Tabs>
     </motion.div>
   );
