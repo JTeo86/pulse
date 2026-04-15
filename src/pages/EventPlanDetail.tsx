@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Sparkles, CheckCircle2, Circle, Plus, Trash2,
@@ -48,6 +48,10 @@ const WORKFLOW_STEPS = [
 ] as const;
 
 type WorkflowStep = typeof WORKFLOW_STEPS[number]['id'];
+
+function isWorkflowStep(value: string | null): value is WorkflowStep {
+  return value === 'plan' || value === 'create' || value === 'post';
+}
 
 function getStepStatus(
   step: WorkflowStep,
@@ -108,6 +112,7 @@ function getNextBestAction(
 export default function EventPlanDetailPage() {
   const { planId } = useParams<{ planId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentVenue } = useVenue();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -136,6 +141,25 @@ export default function EventPlanDetailPage() {
   useEffect(() => {
     if (plan) setTitleDraft(plan.title);
   }, [plan?.title]);
+
+  useEffect(() => {
+    const requestedStep = searchParams.get('step');
+    if (isWorkflowStep(requestedStep)) {
+      setActiveStep(requestedStep);
+      setShowRevenue(false);
+    }
+  }, [searchParams]);
+
+  const setActiveStepWithQuery = useCallback((step: WorkflowStep) => {
+    setActiveStep(step);
+    const nextParams = new URLSearchParams(searchParams);
+    if (step === 'plan') {
+      nextParams.delete('step');
+    } else {
+      nextParams.set('step', step);
+    }
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   if (loading || workspace.loading) {
     return (
@@ -210,7 +234,7 @@ export default function EventPlanDetailPage() {
             return (
               <button
                 key={step.id}
-                onClick={() => { setActiveStep(step.id); setShowRevenue(false); }}
+                onClick={() => { setActiveStepWithQuery(step.id); setShowRevenue(false); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors text-sm ${
                   isActive && !showRevenue
                     ? 'bg-accent/10 text-foreground font-medium border border-accent/20'
@@ -259,7 +283,7 @@ export default function EventPlanDetailPage() {
           {nextAction && !showRevenue && (
             <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
               <button
-                onClick={() => { setActiveStep(nextAction.target); setShowRevenue(false); }}
+                onClick={() => { setActiveStepWithQuery(nextAction.target); setShowRevenue(false); }}
                 className="w-full flex items-center gap-4 p-4 rounded-xl border border-accent/20 bg-accent/5 hover:bg-accent/10 transition-colors text-left group"
               >
                 <div className="p-2 rounded-lg bg-accent/15 shrink-0">

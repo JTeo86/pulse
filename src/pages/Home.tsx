@@ -337,7 +337,6 @@ export default function Home() {
             <CardContent className="pt-0 space-y-2">
               <ActionRow title="Review posts" detail={`${overview?.pendingContent.length ?? 0} posts are ready for approval`} to="/content/library?tab=queue" />
               <ActionRow title="Add photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
-              <ActionRow title="Generate image" detail="Create a new Pro Photo now" to="/studio/pro-photo" />
               <ActionRow title="Reply to reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=respond" />
             </CardContent>
           </Card>
@@ -355,13 +354,11 @@ export default function Home() {
                     <p className="text-sm font-medium">{opportunity.title}</p>
                     <p className="text-xs text-muted-foreground">{opportunity.description}</p>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" asChild>
-                        <Link to={`/studio/pro-photo?prompt=${encodeURIComponent(`Create a premium social image for: ${opportunity.title}`)}&context=${encodeURIComponent(opportunity.description || '')}`}>
-                          Generate image
-                        </Link>
+                      <Button size="sm" asChild>
+                        <Link to="/home?tab=plans">Create plan</Link>
                       </Button>
                       <Button size="sm" variant="outline" asChild>
-                        <Link to="/home?tab=plans">Create plan</Link>
+                        <Link to="/home?tab=opportunities">Open opportunities</Link>
                       </Button>
                     </div>
                   </div>

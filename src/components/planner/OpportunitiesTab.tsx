@@ -135,17 +135,6 @@ export function OpportunitiesTab() {
     }
   };
 
-  const getProPhotoHref = (event: EventCatalogItem, planId?: string) => {
-    const params = new URLSearchParams({
-      event_id: event.id,
-      brief_title: `${event.title} campaign image`,
-      prompt: `Create a premium campaign image for ${event.title}.`,
-      context: `${event.title} is coming up soon. Keep it brand-accurate and promotion-ready.`,
-    });
-    if (planId) params.set('plan_id', planId);
-    return `/studio/pro-photo?${params.toString()}`;
-  };
-
   const handleSkipOpen = (event: EventCatalogItem) => {
     setSkipModal({ eventId: event.id, title: event.title, event });
   };
@@ -326,21 +315,13 @@ export function OpportunitiesTab() {
                     <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
                       {hasPlan && plan ? (
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate(`/content/planner/plan/${plan.id}`)}>
-                          Open Plan
+                          Open plan
                         </Button>
                       ) : (
                         <Button size="sm" className="h-7 text-xs" onClick={() => handleCreatePlan(event)}>
-                          <Plus className="w-3 h-3 mr-1" /> Create Plan
+                          <Plus className="w-3 h-3 mr-1" /> Build plan
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        onClick={() => navigate(getProPhotoHref(event, plan?.id))}
-                      >
-                        Generate image
-                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"

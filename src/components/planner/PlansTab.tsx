@@ -41,7 +41,7 @@ export function PlansTab() {
   const { currentVenue } = useVenue();
   const { toast } = useToast();
   const {
-    plans, loading, fetchPlans,
+    plans, loading,
     archivePlan, restorePlan, deletePlan,
   } = useVenueEventPlans();
 
@@ -89,15 +89,14 @@ export function PlansTab() {
     setDeleteConfirm(null);
   };
 
-  const getGenerateImageHref = (planId: string, planTitle: string) => {
-    const params = new URLSearchParams({
-      plan_id: planId,
-      brief_title: `${planTitle} image`,
-      prompt: `Create a premium marketing photo for ${planTitle}.`,
-      context: `This image supports the ${planTitle} plan. Keep it campaign-ready and on-brand.`,
-    });
-    return `/studio/pro-photo?${params.toString()}`;
+
+  const openPlan = (planId: string) => navigate(`/content/planner/plan/${planId}`);
+
+  const openPlanCreateStep = (planId: string) => {
+    navigate(`/content/planner/plan/${planId}?step=create`);
   };
+
+
 
   if (loading) {
     return (
@@ -188,7 +187,7 @@ export function PlansTab() {
               >
                 <div
                   className="flex items-center gap-4 min-w-0 flex-1 cursor-pointer"
-                  onClick={() => navigate(`/content/planner/plan/${plan.id}`)}
+                  onClick={() => openPlan(plan.id)}
                 >
                   <div className="text-center shrink-0 w-12">
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -229,9 +228,9 @@ export function PlansTab() {
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs hidden lg:inline-flex"
-                    onClick={() => navigate(getGenerateImageHref(plan.id, plan.title))}
+                    onClick={() => openPlan(plan.id)}
                   >
-                    Generate image
+                    Open plan
                   </Button>
                   <Button
                     size="sm"
@@ -251,11 +250,11 @@ export function PlansTab() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={() => navigate(`/content/planner/plan/${plan.id}`)}>
+                      <DropdownMenuItem onClick={() => openPlan(plan.id)}>
                         Open Plan
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(getGenerateImageHref(plan.id, plan.title))}>
-                        Generate image
+                      <DropdownMenuItem onClick={() => openPlanCreateStep(plan.id)}>
+                        Open Create step
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => navigate('/content/library?tab=queue')}>
                         Add to content queue
@@ -305,7 +304,7 @@ export function PlansTab() {
                     <div
                       key={plan.id}
                       className="p-3 rounded-lg border border-border/50 bg-card/60 cursor-pointer hover:border-accent/20 transition-colors"
-                      onClick={() => navigate(`/content/planner/plan/${plan.id}`)}
+                      onClick={() => openPlan(plan.id)}
                     >
                       <p className="text-sm font-medium truncate">{plan.title}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">
@@ -318,10 +317,10 @@ export function PlansTab() {
                           className="h-7 text-[11px]"
                           onClick={(event) => {
                             event.stopPropagation();
-                            navigate(getGenerateImageHref(plan.id, plan.title));
+                            openPlan(plan.id);
                           }}
                         >
-                          Generate image
+                          Open plan
                         </Button>
                       </div>
                     </div>
