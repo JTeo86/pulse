@@ -38,7 +38,7 @@ invoke_fn() {
   rm -f "$body"
 }
 
-echo "[1/4] Checking scheduler entry function is deployed/callable"
+echo "[1/4] Checking scheduler entry function is deployed/callable (hourly trigger, Monday 08:00-18:00 local catch-up window)"
 invoke_fn "run-weekly-reviews-schedule" "{}"
 
 echo
@@ -71,3 +71,4 @@ echo
 echo "[4/4] Stale deployment checks"
 echo "If any function returned 404, the hosted function is missing."
 echo "If auth/validation errors are returned (401/400), the function is present and running current auth/path logic."
+echo "Run records now use success/partial/failed semantics; verify failures do not block retries for the same week."

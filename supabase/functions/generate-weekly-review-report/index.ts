@@ -108,7 +108,44 @@ serve(async (req) => {
     }
 
     if (reviews.length === 0) {
-      return new Response(JSON.stringify({ error: "No reviews found for this period. Try fetching reviews first from the Sources Setup tab." }), {
+      const emptyReport = {
+        venue_id,
+        week_start,
+        week_end,
+        summary_md: "No guest reviews were found for this week.",
+        stats: {
+          total_reviews: 0,
+          avg_rating: null,
+          five_star_count: 0,
+          one_two_star_count: 0,
+          sources: {},
+        },
+        action_items: {
+          headline: "No review activity this week",
+          what_went_well: [],
+          what_to_fix: [],
+          items: [],
+        },
+        reply_templates: [],
+      };
+
+      await supabaseAdmin
+        .from("weekly_review_reports")
+        .upsert(emptyReport, { onConflict: "venue_id,week_start,week_end" });
+
+      return new Response(JSON.stringify({
+        saved: true,
+        no_reviews: true,
+        report: {
+          headline: "No review activity this week",
+          summary_md: emptyReport.summary_md,
+          stats: emptyReport.stats,
+          what_went_well: [],
+          what_to_fix: [],
+          action_items: [],
+          reply_templates: [],
+        },
+      }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

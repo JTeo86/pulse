@@ -64,3 +64,15 @@ export function getCompletedReviewWeekRange(now: Date, venueTimeZone: string) {
     localHour: local.hour,
   };
 }
+
+export const REVIEW_WEEKLY_WINDOW = {
+  weekday: 1,
+  startHour: 8,
+  endHour: 18,
+};
+
+export function isInWeeklyRunWindow(localWeekday: number, localHour: number) {
+  return localWeekday === REVIEW_WEEKLY_WINDOW.weekday
+    && localHour >= REVIEW_WEEKLY_WINDOW.startHour
+    && localHour <= REVIEW_WEEKLY_WINDOW.endHour;
+}
