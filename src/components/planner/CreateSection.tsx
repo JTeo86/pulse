@@ -143,14 +143,14 @@ function GeneratePackCard({ planId, plan, brain, workspace }: CreateSectionProps
           <Sparkles className="w-5 h-5 text-accent" />
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-semibold text-foreground">Generate Content</h3>
+          <h3 className="text-sm font-semibold text-foreground">Create campaign assets</h3>
           <p className="text-xs text-muted-foreground">
-            Create captions, hooks, headlines, CTAs, email, SMS copy, and creative briefs for assets.
+            This is your production workspace for this plan: generate copy, briefs, and campaign-ready assets in one place.
           </p>
         </div>
         <Button onClick={handleGeneratePack} disabled={generating} size="sm" className="gap-2 shrink-0">
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {generating ? 'Generating...' : workspace.hasCampaignPack ? 'Regenerate' : 'Generate'}
+          {generating ? 'Generating...' : workspace.hasCampaignPack ? 'Regenerate' : 'Generate Content'}
         </Button>
       </div>
 
@@ -417,7 +417,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
   return (
     <div className="space-y-6">
       <p className="text-xs text-muted-foreground">
-        Create or attach assets for your campaign. Star your preferred ones — Pulse will use starred assets first in Post Packs.
+        Build assets in context for this plan. Create in Studio or attach existing assets, then star preferred options for Post Packs.
       </p>
 
       {/* Creative Briefs */}
