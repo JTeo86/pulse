@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { EventCatalogItem, VenueEventPlan } from '@/hooks/use-events';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const DEFAULT_LEAD_TIME = 21;
 
@@ -265,16 +266,21 @@ export function LilyRecommendations({
                       >
                         Skip
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
-                        onClick={() => handleSnooze(candidate)}
-                        disabled={snoozing === candidate.event.id}
-                        title="Snooze 7 days"
-                      >
-                        <Clock className="w-3 h-3" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleSnooze(candidate)}
+                            disabled={snoozing === candidate.event.id}
+                            aria-label="Dismiss"
+                          >
+                            <Clock className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Dismiss</TooltipContent>
+                      </Tooltip>
                     </div>
                   </motion.div>
                 );

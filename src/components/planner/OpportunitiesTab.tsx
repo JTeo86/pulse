@@ -17,6 +17,7 @@ import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { LilyRecommendations } from '@/components/events/LilyRecommendations';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const STATUS_LABELS: Record<string, string> = {
   not_started: 'Not Started', planned: 'Planned', in_production: 'In Production',
@@ -331,19 +332,31 @@ export function OpportunitiesTab() {
                         Add to content queue
                       </Button>
                       {!hasPlan && (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleSkipOpen(event)}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs gap-1.5"
+                          onClick={() => handleSkipOpen(event)}
+                        >
                           <SkipForward className="w-3 h-3" />
+                          Skip
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs"
-                        onClick={() => handleAiSuggest(event)}
-                        disabled={aiLoading === event.id}
-                      >
-                        <Sparkles className={`w-3 h-3 ${aiLoading === event.id ? 'animate-pulse' : ''}`} />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => handleAiSuggest(event)}
+                            disabled={aiLoading === event.id}
+                            aria-label="Regenerate"
+                          >
+                            <Sparkles className={`w-3 h-3 ${aiLoading === event.id ? 'animate-pulse' : ''}`} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Regenerate</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
 

@@ -14,6 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -244,11 +245,21 @@ export function PlansTab() {
                     {format(new Date(plan.created_at), 'MMM d')}
                   </span>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <MoreHorizontal className="w-3.5 h-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="More actions"
+                          >
+                            <MoreHorizontal className="w-3.5 h-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>More actions</TooltipContent>
+                    </Tooltip>
                     <DropdownMenuContent align="end" className="w-52">
                       <DropdownMenuItem onClick={() => openPlan(plan.id)}>
                         Open Plan
