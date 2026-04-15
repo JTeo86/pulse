@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  CalendarDays, LayoutGrid, RefreshCw, Sparkles, SkipForward, Plus, Filter,
+  CalendarDays, LayoutGrid, RefreshCw, Sparkles, Plus, Filter,
   Image, Video, Play, Gift, Clock
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
@@ -326,22 +326,13 @@ export function OpportunitiesTab() {
                           <Plus className="w-3 h-3 mr-1" /> Build plan
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs"
-                        onClick={() => navigate('/content/library?tab=queue')}
-                      >
-                        Add to content queue
-                      </Button>
                       {!hasPlan && (
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-xs gap-1.5"
+                          className="h-7 text-xs"
                           onClick={() => handleSkipOpen(event)}
                         >
-                          <SkipForward className="w-3 h-3" />
                           Skip
                         </Button>
                       )}

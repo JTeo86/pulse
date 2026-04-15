@@ -93,12 +93,6 @@ export function PlansTab() {
 
   const openPlan = (planId: string) => navigate(`/content/planner/plan/${planId}`);
 
-  const openPlanCreateStep = (planId: string) => {
-    navigate(`/content/planner/plan/${planId}?step=create`);
-  };
-
-
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -233,14 +227,6 @@ export function PlansTab() {
                   >
                     Open plan
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs hidden xl:inline-flex"
-                    onClick={() => navigate('/content/library?tab=queue')}
-                  >
-                    Add to content queue
-                  </Button>
                   <span className="text-xs text-muted-foreground">
                     {format(new Date(plan.created_at), 'MMM d')}
                   </span>
@@ -263,12 +249,6 @@ export function PlansTab() {
                     <DropdownMenuContent align="end" className="w-52">
                       <DropdownMenuItem onClick={() => openPlan(plan.id)}>
                         Open Plan
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openPlanCreateStep(plan.id)}>
-                        Open Create step
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate('/content/library?tab=queue')}>
-                        Add to content queue
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {plan.is_archived ? (
