@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { MediaImage } from '@/components/ui/media-image';
 import { PlanPublishItem, PACK_STATUS_CONFIG, PUBLISH_CHANNELS } from '@/hooks/use-plan-publish';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PostPackCardProps {
   item: PlanPublishItem;
@@ -235,9 +236,20 @@ export function PostPackCard({
                 <Archive className="w-3 h-3" /> Archive
               </Button>
             )}
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive/60 hover:text-destructive" onClick={onRemove}>
-              <Trash2 className="w-3 h-3" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 text-destructive/60 hover:text-destructive"
+                  onClick={onRemove}
+                  aria-label="Delete"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
