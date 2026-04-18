@@ -12,8 +12,8 @@ export default function PlannerPage() {
   return (
     <>
       <PageHeader
-        title="Planner"
-        description="Plan campaigns and themes before scheduling them on your Calendar."
+        title="Plans"
+        description="Create focused campaigns, prepare posts, then send them to Ready and Calendar."
       />
 
       <motion.div

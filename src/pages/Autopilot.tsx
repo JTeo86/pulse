@@ -116,7 +116,7 @@ export default function AutopilotPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Autopilot" description="Autopilot status and activity." />
+        <PageHeader title="Autopilot" description="Automation status, health, and recent activity." />
         <Skeleton className="h-20 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -125,7 +125,7 @@ export default function AutopilotPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Autopilot" description="See what I’m handling for you and what I need next." />
+      <PageHeader title="Autopilot" description="Monitor automation health and see what Pulse needs from you to keep content flowing." />
 
       <Card>
         <CardContent className="p-4 space-y-4">

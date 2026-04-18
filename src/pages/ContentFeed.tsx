@@ -191,7 +191,7 @@ export default function ContentFeed() {
         queryClient.invalidateQueries({ queryKey: ['content-feed-onboarding-drafts', currentVenue.id] }),
         queryClient.invalidateQueries({ queryKey: ['content-feed-approved-onboarding', currentVenue.id] }),
       ]);
-      toast({ title: 'Photos added', description: `${files.length} photo${files.length > 1 ? 's' : ''} added to New Photos.` });
+      toast({ title: 'Photos added', description: `${files.length} photo${files.length > 1 ? 's' : ''} added. Pulse is preparing posts now.` });
     } catch (error: any) {
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
     } finally {
@@ -223,7 +223,7 @@ export default function ContentFeed() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={assets.length === 0 ? "Let's get your content flowing" : 'New Photos'}
+        title={assets.length === 0 ? "Let's get your content flowing" : 'Photos'}
         description={assets.length === 0 ? 'Start with photos. I’ll prepare posts right away.' : 'Upload everyday photos. Pulse uses these to create content automatically.'}
         action={
           <Button onClick={handleAddPhotosClick} disabled={isUploading}>
@@ -250,9 +250,14 @@ export default function ContentFeed() {
               {summary.lastUploadDate ? `Last upload ${formatDistanceToNow(new Date(summary.lastUploadDate), { addSuffix: true })}` : 'No uploads yet'}
             </p>
           </div>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/autopilot">Open Autopilot</Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/content/library">Open Ready</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/autopilot">Automation status</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -269,14 +274,14 @@ export default function ContentFeed() {
         <div className="space-y-4">
           <Card className="border-accent/30 bg-accent/5">
             <CardContent className="p-4 space-y-3">
-              <p className="text-sm font-medium">I’ve prepared posts from your new photos.</p>
+              <p className="text-sm font-medium">Pulse is preparing posts from your photos.</p>
               {draftsLoading || autopilotTrigger.isPending ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Preparing content...
                 </div>
               ) : onboardingDrafts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">I’m still preparing your first posts. Check back in a moment.</p>
+                <p className="text-sm text-muted-foreground">I’m still preparing your first posts. Open Ready in a moment.</p>
               ) : (
                 <div className="space-y-3">
                   {onboardingDrafts.map((item: any) => (
@@ -285,7 +290,7 @@ export default function ContentFeed() {
                         <p className="text-sm font-medium line-clamp-1">{item.title || 'New post ready'}</p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || 'Caption ready to review.'}</p>
                       </div>
-                      <Button size="sm" onClick={() => approvePost(item.id)}>Approve</Button>
+                      <Button size="sm" onClick={() => approvePost(item.id)}>Approve to Ready</Button>
                     </div>
                   ))}
                 </div>
@@ -295,9 +300,14 @@ export default function ContentFeed() {
                   Nice — Autopilot will keep preparing posts automatically.
                 </p>
               )}
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/studio/pro-photo">Generate image</Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/content/library">View Ready</Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/content/calendar">Open Calendar</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

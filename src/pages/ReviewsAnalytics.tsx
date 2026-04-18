@@ -1921,7 +1921,7 @@ export default function ReviewsAnalytics() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       <PageHeader
         title="Reviews & Feedback"
-        description="Pulse prepares your replies, highlights what needs attention, and keeps weekly automation healthy."
+        description="Work from Inbox, check Insights, and manage Setup in one operational reviews flow."
       />
 
       <div className="mb-6">
