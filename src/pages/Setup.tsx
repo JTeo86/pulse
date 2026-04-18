@@ -826,11 +826,11 @@ export default function SetupPage() {
               </div>
               <div className="rounded-md border bg-muted/20 p-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium">Diagnostics and run history</p>
-                  <p className="text-xs text-muted-foreground">Use this when you need deeper troubleshooting details.</p>
+                  <p className="text-sm font-medium">Automation details</p>
+                  <p className="text-xs text-muted-foreground">Open Pulse automation status, diagnostics, and run history.</p>
                 </div>
                 <Button variant="outline" onClick={() => window.location.assign('/autopilot')}>
-                  View run history
+                  View automation
                 </Button>
               </div>
             </CardContent></Card>
