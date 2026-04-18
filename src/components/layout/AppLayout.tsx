@@ -61,7 +61,6 @@ const workflowNavigation: NavItem[] = [
 
 const setupNavigation: NavItem[] = [
   { name: 'Setup', href: '/setup', icon: Settings },
-  { name: 'Automation', href: '/autopilot', icon: Zap, badge: 'Status' },
 ];
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
