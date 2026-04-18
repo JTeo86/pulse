@@ -45,13 +45,14 @@ export function PlansTab() {
     plans, loading,
     archivePlan, restorePlan, deletePlan,
   } = useVenueEventPlans();
+  const safePlans = plans ?? [];
 
   const [view, setView] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<string>('active');
   const [search, setSearch] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const filteredPlans = plans.filter(p => {
+  const filteredPlans = safePlans.filter(p => {
     // Archived filter
     if (statusFilter === 'archived') return p.is_archived;
     if (p.is_archived) return false; // hide archived from all other filters
@@ -131,12 +132,14 @@ export function PlansTab() {
           <div className="flex items-center border border-border/50 rounded-md overflow-hidden">
             <button
               onClick={() => setView('list')}
+              aria-label="List view"
               className={`p-1.5 transition-colors ${view === 'list' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <List className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setView('board')}
+              aria-label="Board view"
               className={`p-1.5 transition-colors ${view === 'board' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />

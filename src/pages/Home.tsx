@@ -100,6 +100,7 @@ export default function Home() {
 
   const [activeTab, setActiveTab] = useState<HomeTab>(initialTab);
   const { opportunities: marketOpportunities, isLoading: opportunitiesLoading } = useMarketOpportunities(5);
+  const safeOpportunities = marketOpportunities ?? [];
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -292,7 +293,8 @@ export default function Home() {
   };
 
   const greeting = getGreeting();
-  const headerTitle = currentVenue ? `${greeting}, ${currentVenue.name}` : `${greeting}`;
+  const venueName = currentVenue?.name?.trim() || 'there';
+  const headerTitle = currentVenue ? `${greeting}, ${venueName}` : `${greeting}`;
 
   return (
     <motion.div
@@ -326,8 +328,8 @@ export default function Home() {
             <CardHeader className="pb-2"><CardTitle className="text-base">This Week summary</CardTitle></CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 pt-0">
               <SummaryLine label="Posts ready" value={`${overview?.preparedContentCount ?? 0}`} tone="good" />
-              <SummaryLine label="Needs approval" value={`${overview?.pendingContent.length ?? 0}`} tone={(overview?.pendingContent.length ?? 0) > 0 ? 'warning' : 'neutral'} />
-              <SummaryLine label="Missing content" value={`${overview?.coverageGaps.length ?? 0}`} tone={(overview?.coverageGaps.length ?? 0) > 0 ? 'warning' : 'neutral'} />
+              <SummaryLine label="Needs approval" value={`${overview?.pendingContent?.length ?? 0}`} tone={(overview?.pendingContent?.length ?? 0) > 0 ? 'warning' : 'neutral'} />
+              <SummaryLine label="Missing content" value={`${overview?.coverageGaps?.length ?? 0}`} tone={(overview?.coverageGaps?.length ?? 0) > 0 ? 'warning' : 'neutral'} />
               <SummaryLine label="Reviews" value={`${overview?.pendingRepliesCount ?? 0} to reply`} tone={(overview?.pendingRepliesCount ?? 0) > 0 ? 'warning' : 'neutral'} />
             </CardContent>
           </Card>
@@ -335,7 +337,7 @@ export default function Home() {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Next steps</CardTitle></CardHeader>
             <CardContent className="pt-0 space-y-2">
-              <ActionRow title="Review Ready posts" detail={`${overview?.pendingContent.length ?? 0} posts are ready for approval`} to="/content/library" />
+              <ActionRow title="Review Ready posts" detail={`${overview?.pendingContent?.length ?? 0} posts are ready for approval`} to="/content/library" />
               <ActionRow title="Add Photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
               <ActionRow title="Reply to Reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=inbox" />
             </CardContent>
@@ -346,10 +348,10 @@ export default function Home() {
             <CardContent className="pt-0 space-y-3">
               {opportunitiesLoading ? (
                 <Skeleton className="h-20 rounded-lg" />
-              ) : marketOpportunities.length === 0 ? (
+              ) : safeOpportunities.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No open opportunities right now.</p>
               ) : (
-                marketOpportunities.slice(0, 4).map((opportunity) => (
+                safeOpportunities.slice(0, 4).map((opportunity) => (
                   <div key={opportunity.title} className="rounded-lg border p-3 space-y-2">
                     <p className="text-sm font-medium">{opportunity.title}</p>
                     <p className="text-xs text-muted-foreground">{opportunity.description}</p>
