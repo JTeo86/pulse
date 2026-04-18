@@ -55,6 +55,11 @@ interface TodayOverview {
     generatedPosts: number;
     generatedReplies: number;
   } | null;
+  autopilotSettings: {
+    frequency: 'daily' | '3x_week' | 'weekly' | null;
+    runTime: string | null;
+    isEnabled: boolean;
+  } | null;
 }
 
 interface ContentHealthSummary {
@@ -122,6 +127,7 @@ export default function Home() {
         recentContentItems,
         recentReviews,
         latestAutopilotRun,
+        autopilotSettings,
       ] = await Promise.all([
         supabase
           .from('review_response_tasks')
@@ -162,6 +168,11 @@ export default function Home() {
           .eq('venue_id', currentVenue.id)
           .order('created_at', { ascending: false })
           .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('venue_autopilot_settings')
+          .select('frequency, run_time, is_enabled')
+          .eq('venue_id', currentVenue.id)
           .maybeSingle(),
       ]);
 
@@ -210,6 +221,13 @@ export default function Home() {
               createdAt: run.created_at,
               generatedPosts,
               generatedReplies,
+            }
+          : null,
+        autopilotSettings: autopilotSettings.data
+          ? {
+              frequency: (autopilotSettings.data.frequency as 'daily' | '3x_week' | 'weekly' | null) ?? null,
+              runTime: autopilotSettings.data.run_time ?? null,
+              isEnabled: autopilotSettings.data.is_enabled ?? false,
             }
           : null,
       };
@@ -305,7 +323,7 @@ export default function Home() {
     >
       <PageHeader
         title={headerTitle}
-        description="One place to run your week: Photos, Ready, Calendar, Plans, and Reviews."
+        description="One place to run your week: Reviews, Photos, Ready, Calendar, and campaign plans."
       />
 
       <ReferralHomeCards />
@@ -337,6 +355,7 @@ export default function Home() {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Next steps</CardTitle></CardHeader>
             <CardContent className="pt-0 space-y-2">
+              <ActionRow title="Open campaign plans" detail="Build and manage plans from Home" to="/home?tab=plans" />
               <ActionRow title="Review Ready posts" detail={`${overview?.pendingContent?.length ?? 0} posts are ready for approval`} to="/content/library" />
               <ActionRow title="Add Photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
               <ActionRow title="Reply to Reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=inbox" />
@@ -373,18 +392,30 @@ export default function Home() {
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-accent" />Pulse automation</CardTitle>
             </CardHeader>
-            <CardContent className="pt-0 space-y-1 text-sm">
+            <CardContent className="pt-0 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-muted-foreground">Status</p>
+                <Badge variant="outline">{getAutomationHealth(overview?.lastAutopilotRun?.status, overview?.lastAutopilotRun?.createdAt)}</Badge>
+              </div>
               {overview?.lastAutopilotRun ? (
                 <>
-                  <p>I prepared content {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
+                  <p>Last run {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
                   <p className="text-muted-foreground">{overview.lastAutopilotRun.generatedPosts} posts prepared · {overview.lastAutopilotRun.generatedReplies} replies drafted.</p>
                 </>
               ) : (
                 <p className="text-muted-foreground">No recent activity yet.</p>
               )}
+              <p className="text-muted-foreground">
+                Next run {getNextRunLabel(overview?.autopilotSettings?.frequency, overview?.autopilotSettings?.runTime, overview?.autopilotSettings?.isEnabled ?? false)}.
+              </p>
               {latestPulseReport?.generated_at && (
                 <p className="text-muted-foreground">Weekly brief generated {formatDistanceToNow(new Date(latestPulseReport.generated_at), { addSuffix: true })}.</p>
               )}
+              <div>
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/autopilot">View automation</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -471,6 +502,40 @@ function buildCoverageSummary(scheduledItems: Array<{ scheduled_for: string | nu
 function formatLastRun(timestamp: string) {
   const date = new Date(timestamp);
   return `${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} • ${formatDistanceToNow(date, { addSuffix: true })}`;
+}
+
+function getNextRunLabel(
+  frequency?: 'daily' | '3x_week' | 'weekly' | null,
+  runTime?: string | null,
+  isEnabled?: boolean,
+) {
+  if (!isEnabled) return 'disabled';
+  if (!frequency || !runTime) return 'is set in Setup';
+
+  const now = new Date();
+  const [hour, minute] = runTime.split(':').map(Number);
+  const next = new Date(now);
+  next.setHours(hour || 9, minute || 0, 0, 0);
+
+  if (frequency === 'daily') {
+    if (next <= now) next.setDate(next.getDate() + 1);
+  } else if (frequency === 'weekly') {
+    next.setDate(next.getDate() + 7);
+  } else {
+    next.setDate(next.getDate() + 2);
+  }
+
+  return formatDistanceToNow(next, { addSuffix: true });
+}
+
+function getAutomationHealth(status?: string, createdAt?: string) {
+  if (!status || !createdAt) return 'Stale';
+  if (status.toLowerCase() === 'failed') return 'Needs attention';
+
+  const ageMs = Date.now() - new Date(createdAt).getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  if (ageDays > 10) return 'Stale';
+  return 'Healthy';
 }
 
 function getGreeting() {

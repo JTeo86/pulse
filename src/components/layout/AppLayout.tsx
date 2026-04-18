@@ -57,12 +57,11 @@ const workflowNavigation: NavItem[] = [
   { name: 'Photos', href: '/content/feed', icon: Images },
   { name: 'Ready', href: '/content/library', icon: FolderOpen },
   { name: 'Calendar', href: '/content/calendar', icon: CalendarCheck2 },
-  { name: 'Plans', href: '/home?tab=plans', icon: PenSquare },
-  { name: 'Autopilot', href: '/autopilot', icon: Zap, badge: 'Status' },
 ];
 
 const setupNavigation: NavItem[] = [
   { name: 'Setup', href: '/setup', icon: Settings },
+  { name: 'Automation', href: '/autopilot', icon: Zap, badge: 'Status' },
 ];
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
