@@ -364,7 +364,7 @@ export default function BrandLibraryPage() {
 
     for (const item of readyItems) {
       const primaryAction = getPrimaryAction(item);
-      if (primaryAction.label === 'Add to Calendar' || primaryAction.label === 'Queue for Publishing') readyCount += 1;
+      if (primaryAction.label === 'Add to Calendar') readyCount += 1;
       else needsWorkCount += 1;
     }
 
@@ -637,11 +637,11 @@ export default function BrandLibraryPage() {
         </Button>
       )}
       <PageHeader
-        title="Content"
-        description="Run your content workflow in three simple steps: post-ready items, ideas, and photos."
+        title="Ready"
+        description="Review what Pulse prepared, finish anything missing, then send to Calendar."
         action={(
           <Button className="gap-2" onClick={() => navigate('/content/feed')}>
-            <ImageIcon className="w-4 h-4" /> Upload Photos
+            <ImageIcon className="w-4 h-4" /> Add Photos
           </Button>
         )}
       />
@@ -670,7 +670,7 @@ export default function BrandLibraryPage() {
         <>
           {topLevelTab === 'ready' && (
             readyItems.length === 0 ? (
-              <EmptyState icon={Sparkles} title="Nothing ready yet" description="Add photos or review ideas to build your post-ready list." />
+              <EmptyState icon={Sparkles} title="Nothing ready yet" description="Add photos or create a plan, then come back here to review ready posts." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {readyItems.map((item) => {

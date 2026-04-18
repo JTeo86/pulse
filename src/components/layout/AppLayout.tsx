@@ -16,7 +16,6 @@ import {
   Plus,
   PenSquare,
   Upload,
-  Wand2,
   Zap
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -55,10 +54,11 @@ interface AppLayoutProps {
 const workflowNavigation: NavItem[] = [
   { name: 'Home', href: '/home', icon: Home },
   { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
-  { name: 'New Photos', href: '/content/feed', icon: Images },
-  { name: 'Autopilot', href: '/autopilot', icon: Zap },
-  { name: 'Content', href: '/content/library', icon: FolderOpen },
-  { name: 'Publishing', href: '/content/calendar', icon: CalendarCheck2, badge: 'Soon' },
+  { name: 'Photos', href: '/content/feed', icon: Images },
+  { name: 'Ready', href: '/content/library', icon: FolderOpen },
+  { name: 'Calendar', href: '/content/calendar', icon: CalendarCheck2 },
+  { name: 'Plans', href: '/home?tab=plans', icon: PenSquare },
+  { name: 'Autopilot', href: '/autopilot', icon: Zap, badge: 'Status' },
 ];
 
 const setupNavigation: NavItem[] = [
@@ -70,22 +70,22 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 // Quick manual entry actions for the global manual actions menu
 const quickActions = [
   {
-    name: 'Generate Pro Photo',
-    description: 'Intentionally create a campaign-ready image',
-    href: '/studio/pro-photo',
-    icon: Wand2,
-  },
-  {
-    name: 'Add Photo',
-    description: 'Add photos that fuel Autopilot content generation',
+    name: 'Add Photos',
+    description: 'Add photos that fuel automatic post prep',
     href: '/content/feed',
     icon: Upload,
   },
   {
-    name: 'New Campaign',
-    description: 'Create a new campaign or content push',
-    href: '/copywriter',
+    name: 'New Plan',
+    description: 'Create an intentional campaign plan',
+    href: '/home?tab=plans',
     icon: PenSquare,
+  },
+  {
+    name: 'Run Pulse Now',
+    description: 'Open automation status and run diagnostics',
+    href: '/autopilot',
+    icon: Zap,
   },
 ];
 
@@ -120,7 +120,14 @@ function AppSidebar() {
   };
 
   const NavItemComponent = ({ item }: { item: NavItem }) => {
-    const isActive = location.pathname === item.href;
+    const [itemPath, itemQuery] = item.href.split('?');
+    const isPathMatch = location.pathname === itemPath;
+    const currentParams = new URLSearchParams(location.search);
+    const itemParams = new URLSearchParams(itemQuery || '');
+    const hasMatchingQuery = Array.from(itemParams.entries()).every(
+      ([key, value]) => currentParams.get(key) === value,
+    );
+    const isActive = isPathMatch && (itemParams.toString().length === 0 || hasMatchingQuery);
     
     const linkContent = (
       <Link
@@ -282,6 +289,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { dueCount: mobileDueCount } = useTodaysActions();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const isNavItemActive = (href: string) => {
+    const [itemPath, itemQuery] = href.split('?');
+    if (location.pathname !== itemPath) return false;
+    const itemParams = new URLSearchParams(itemQuery || '');
+    if (itemParams.toString().length === 0) return true;
+    const currentParams = new URLSearchParams(location.search);
+    return Array.from(itemParams.entries()).every(([key, value]) => currentParams.get(key) === value);
+  };
+
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
@@ -351,7 +367,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       key={item.name}
                       to={item.href}
                       className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                        location.pathname === item.href
+                        isNavItemActive(item.href)
                           ? 'bg-accent/10 text-accent'
                           : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                       }`}
@@ -370,7 +386,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       key={item.name}
                       to={item.href}
                       className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                        location.pathname === item.href
+                        isNavItemActive(item.href)
                           ? 'bg-accent/10 text-accent'
                           : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                       }`}

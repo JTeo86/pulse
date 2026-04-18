@@ -157,6 +157,10 @@ function AppRoutes() {
         <Route path="/reviews" element={<Navigate to="/reputation/reviews" replace />} />
         <Route path="/content" element={<Navigate to="/content/library" replace />} />
         <Route path="/publishing" element={<Navigate to="/content/calendar" replace />} />
+        <Route path="/photos" element={<Navigate to="/content/feed" replace />} />
+        <Route path="/ready" element={<Navigate to="/content/library" replace />} />
+        <Route path="/calendar" element={<Navigate to="/content/calendar" replace />} />
+        <Route path="/plans" element={<Navigate to="/home?tab=plans" replace />} />
         
         {/* Studio Section - Creative workspace */}
         <Route path="/studio" element={<Studio />} />

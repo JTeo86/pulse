@@ -132,14 +132,14 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
       {/* Section header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-serif font-medium">Post Packs</h2>
+          <h2 className="text-lg font-serif font-medium">Prepare Posts</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Build channel-ready posts for this campaign. Add them to your Content Calendar when ready to schedule.
+            Build channel-ready posts for this campaign. Add them to your Calendar when ready to schedule.
           </p>
         </div>
         {canCreatePostPacks && (
           <Button size="sm" className="gap-2" onClick={handleCreateBlank}>
-            <Plus className="w-3 h-3" /> Create Post Pack
+            <Plus className="w-3 h-3" /> Create Post
           </Button>
         )}
       </div>
@@ -190,7 +190,7 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
             <p className="text-sm font-medium">{format(new Date(plan.starts_at), 'MMM dd, yyyy')}</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Post Packs</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Prepared Posts</p>
             <p className="text-sm font-medium">{publish.items.filter(i => i.status !== 'archived').length} created</p>
           </div>
           <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
@@ -222,8 +222,8 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
             {publish.readyPacks.length === 0 ? (
               <EmptySection
                 icon={Package}
-                title="No ready post packs"
-                description="Create a post pack from the suggestions above or click 'Create Post Pack'"
+                title="No ready posts"
+                description="Create a post from the suggestions above or click 'Create Post'"
               />
             ) : (
               <div className="space-y-3">

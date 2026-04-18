@@ -303,7 +303,7 @@ export default function Home() {
     >
       <PageHeader
         title={headerTitle}
-        description="Command Centre · premium weekly overview"
+        description="One place to run your week: Photos, Ready, Calendar, Plans, and Reviews."
       />
 
       <ReferralHomeCards />
@@ -311,7 +311,7 @@ export default function Home() {
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="bg-muted/30 border border-border/50">
           <TabsTrigger value="today" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <HomeIcon className="w-4 h-4" /> Command Centre
+            <HomeIcon className="w-4 h-4" /> Today
           </TabsTrigger>
           <TabsTrigger value="opportunities" className="gap-2 opacity-70 data-[state=active]:opacity-100 data-[state=active]:bg-card data-[state=active]:text-foreground">
             <CalendarDays className="w-4 h-4" /> Opportunities
@@ -333,11 +333,11 @@ export default function Home() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Needs Attention</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Next steps</CardTitle></CardHeader>
             <CardContent className="pt-0 space-y-2">
-              <ActionRow title="Review posts" detail={`${overview?.pendingContent.length ?? 0} posts are ready for approval`} to="/content/library?tab=queue" />
-              <ActionRow title="Add photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
-              <ActionRow title="Reply to reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=respond" />
+              <ActionRow title="Review Ready posts" detail={`${overview?.pendingContent.length ?? 0} posts are ready for approval`} to="/content/library" />
+              <ActionRow title="Add Photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
+              <ActionRow title="Reply to Reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=inbox" />
             </CardContent>
           </Card>
 
@@ -369,7 +369,7 @@ export default function Home() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-accent" />Pulse Activity</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-accent" />Pulse automation</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-1 text-sm">
               {overview?.lastAutopilotRun ? (

@@ -6,8 +6,8 @@ export default function PublishingPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-6">
       <PageHeader
-        title="Publishing"
-        description="Approve content, send to Buffer, and track queue/scheduled status from one place."
+        title="Calendar"
+        description="Schedule, publish, and track everything from one shared calendar flow."
       />
       <InternalPublishingQueue />
     </motion.div>
