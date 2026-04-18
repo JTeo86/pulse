@@ -724,7 +724,7 @@ export default function BrandLibraryPage() {
                         <div className="flex justify-end">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" aria-label="More actions">
+                              <Button size="icon" variant="ghost" aria-label="More actions" title="More actions">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -793,7 +793,7 @@ export default function BrandLibraryPage() {
                             <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button size="icon" variant="ghost" aria-label="More actions">
+                                <Button size="icon" variant="ghost" aria-label="More actions" title="More actions">
                                   <MoreHorizontal className="w-4 h-4" />
                                 </Button>
                               </DropdownMenuTrigger>
