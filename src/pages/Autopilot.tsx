@@ -112,11 +112,15 @@ export default function AutopilotPage() {
   const latestCoverage = (latestRun?.output_summary as any)?.coverage_summary || null;
   const missingCoverage = Array.isArray(latestCoverage?.missing_categories) ? latestCoverage.missing_categories : [];
   const coveredCoverage = Array.isArray(latestCoverage?.covered_categories) ? latestCoverage.covered_categories : [];
+  const simpleStatus = getSimpleStatus({
+    isEnabled: settings?.is_enabled ?? false,
+    latestRunStatus: latestRun?.status,
+  });
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Autopilot" description="Automation status, health, and recent activity." />
+        <PageHeader title="Autopilot" description="Pulse is handling your content in the background." />
         <Skeleton className="h-20 w-full" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -125,12 +129,12 @@ export default function AutopilotPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Autopilot" description="Monitor automation health and see what Pulse needs from you to keep content flowing." />
+      <PageHeader title="Autopilot" description="Your content is being handled automatically by Pulse." />
 
       <Card>
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Autopilot status</span>
+            <span className="text-sm font-medium">Status</span>
             <div className="flex items-center gap-2">
               <Badge variant={settings?.is_enabled ? 'default' : 'secondary'}>{settings?.is_enabled ? 'On' : 'Off'}</Badge>
               <Switch
@@ -146,11 +150,16 @@ export default function AutopilotPage() {
           </div>
 
           <div className="rounded-md border p-3 space-y-1.5">
-            <p className="text-xs uppercase text-muted-foreground">Coverage summary</p>
+            <p className="text-xs uppercase text-muted-foreground">Current status</p>
+            <p className="text-sm font-medium">{simpleStatus}</p>
+          </div>
+
+          <div className="rounded-md border p-3 space-y-1.5">
+            <p className="text-xs uppercase text-muted-foreground">What Pulse is doing</p>
             <p className="text-sm">
               {latestCoverage
-                ? `Missing: ${missingCoverage.length > 0 ? missingCoverage.join(', ') : 'none'} · Covered: ${coveredCoverage.length > 0 ? coveredCoverage.join(', ') : 'none'}`
-                : 'No coverage summary yet. Run Autopilot once to see gaps and coverage.'}
+                ? `Pulse is generating content, using your photos, and filling calendar gaps. Current coverage: ${coveredCoverage.length > 0 ? coveredCoverage.join(', ') : 'building now'}${missingCoverage.length > 0 ? ` · Still needed: ${missingCoverage.join(', ')}` : ''}.`
+                : 'Pulse is generating content, using your photos, and filling gaps in your calendar.'}
             </p>
           </div>
         </CardContent>
@@ -169,8 +178,8 @@ export default function AutopilotPage() {
             <ul className="space-y-2">
               {needsFromYou.map((item) => (
                 <li key={item.id} className="flex items-start justify-between gap-3 text-sm">
-                  <span>{item.title}</span>
-                  <Button asChild size="sm" variant="outline"><Link to={item.ctaTo}>{item.ctaLabel}</Link></Button>
+                  <span>{toFriendlyNeedTitle(item.title)}</span>
+                  <Button asChild size="sm" variant="outline"><Link to={item.ctaTo}>{toPreferredActionLabel(item.ctaLabel)}</Link></Button>
                 </li>
               ))}
             </ul>
@@ -180,7 +189,7 @@ export default function AutopilotPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Recent activity</CardTitle>
+          <CardTitle className="text-sm text-muted-foreground font-medium">Recent activity</CardTitle>
         </CardHeader>
         <CardContent className="pt-0 space-y-2">
           {runsLoading ? (
@@ -192,7 +201,7 @@ export default function AutopilotPage() {
               <div key={run.id} className="flex items-center justify-between border rounded-md p-3 text-sm">
                 <div className="flex items-center gap-2">
                   {run.status === 'completed' ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : run.status === 'failed' ? <XCircle className="w-4 h-4 text-red-500" /> : <Clock3 className="w-4 h-4 text-muted-foreground" />}
-                  <span className="capitalize">{run.run_type.replace('_', ' ')}</span>
+                  <span className="capitalize">{toFriendlyRunType(run.run_type)}</span>
                 </div>
                 <span className="text-muted-foreground">{formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}</span>
               </div>
@@ -230,4 +239,30 @@ function getNextRunLabel(frequency?: 'daily' | '3x_week' | 'weekly', runTime?: s
   }
 
   return formatDistanceToNow(next, { addSuffix: true });
+}
+
+function getSimpleStatus({ isEnabled, latestRunStatus }: { isEnabled: boolean; latestRunStatus?: string }) {
+  if (!isEnabled) return 'Not connected';
+  if (latestRunStatus === 'failed') return 'Needs attention';
+  return 'Working';
+}
+
+function toFriendlyRunType(runType: string) {
+  return runType.replaceAll('_', ' ').replace('scheduled', 'weekly update');
+}
+
+function toFriendlyNeedTitle(title: string) {
+  const lower = title.toLowerCase();
+  if (lower.includes('photo') || lower.includes('image')) return 'Add more photos';
+  if (lower.includes('calendar') || lower.includes('schedule')) return 'Add to Calendar';
+  if (lower.includes('review')) return 'Review content';
+  return title;
+}
+
+function toPreferredActionLabel(label: string) {
+  const lower = label.toLowerCase();
+  if (lower.includes('photo') || lower.includes('upload')) return 'Add Photos';
+  if (lower.includes('ready') || lower.includes('draft') || lower.includes('review')) return 'View Ready';
+  if (lower.includes('calendar') || lower.includes('schedule')) return 'Add to Calendar';
+  return label;
 }
