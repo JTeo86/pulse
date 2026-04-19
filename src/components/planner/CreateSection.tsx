@@ -30,6 +30,7 @@ interface CreateSectionProps {
   plan: any;
   brain: any;
   workspace: ReturnType<typeof usePlanWorkspace>;
+  onGoToPreparePosts?: () => void;
 }
 
 const ASSET_STATUS_LABELS: Record<string, string> = {
@@ -46,17 +47,35 @@ const STATUS_COLORS: Record<string, string> = {
   scheduled: 'bg-accent/10 text-accent',
 };
 
-export function CreateSection({ planId, plan, brain, workspace }: CreateSectionProps) {
+export function CreateSection({ planId, plan, brain, workspace, onGoToPreparePosts }: CreateSectionProps) {
   const [activeTab, setActiveTab] = useState('copy');
+  const hasGeneratedContent = workspace.outputs.length > 0;
+  const hasUsableAsset = workspace.assets.some(a => !!a.content_asset_id);
 
   return (
     <div className="space-y-6">
       {/* Generate campaign pack CTA */}
       <GeneratePackCard planId={planId} plan={plan} brain={brain} workspace={workspace} />
 
+      {hasGeneratedContent && (
+        <div className="rounded-xl border border-success/20 bg-success/5 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Content ready</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Next: prepare your post{hasUsableAsset ? ' and add it to Calendar.' : ' once you attach an image.'}
+              </p>
+            </div>
+            <Button size="sm" className="shrink-0" onClick={onGoToPreparePosts}>
+              Go to Prepare Posts
+            </Button>
+          </div>
+        </div>
+      )}
+
       {workspace.hasCampaignPack || workspace.briefs.length > 0 ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="bg-muted/30 border border-border/50">
+          <TabsList className="bg-muted/20 border border-border/40">
             <TabsTrigger value="copy" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
               <FileText className="w-3.5 h-3.5" /> Copy
               {workspace.outputs.length > 0 && (
@@ -70,6 +89,7 @@ export function CreateSection({ planId, plan, brain, workspace }: CreateSectionP
               )}
             </TabsTrigger>
           </TabsList>
+          <p className="text-xs text-muted-foreground">Choose one area at a time to keep moving forward.</p>
 
           <TabsContent value="copy">
             <CopyWorkspace workspace={workspace} />
@@ -417,7 +437,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
   return (
     <div className="space-y-6">
       <p className="text-xs text-muted-foreground">
-        Build assets in context for this plan. Create in Studio or attach existing assets, then star preferred options for Post Packs.
+        Build assets in context for this plan. Create in Studio or Add Image, then mark preferred options for Post Packs.
       </p>
 
       {/* Creative Briefs */}
@@ -497,7 +517,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
         className="gap-2"
         onClick={() => { setPickerBriefId(null); setPickerAssetType(undefined); }}
       >
-        <Link2 className="w-3 h-3" /> Attach Asset to Plan
+        <Link2 className="w-3 h-3" /> Add Image
       </Button>
 
       <AssetPickerModal
@@ -605,7 +625,7 @@ function AssetBriefCard({
             <Plus className="w-3 h-3 shrink-0" /> Create in Studio
           </Button>
           <Button size="sm" variant="outline" className="w-full min-w-0 text-xs gap-1.5 h-8" onClick={onAttachExisting}>
-            <Link2 className="w-3 h-3 shrink-0" /> Attach Existing
+            <Link2 className="w-3 h-3 shrink-0" /> Add Image
           </Button>
         </div>
       )}

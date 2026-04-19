@@ -42,9 +42,9 @@ const STATUS_LABELS: Record<string, string> = {
    WORKFLOW STEPS — simplified 3-step model
    ══════════════════════════════════════════════════════════ */
 const WORKFLOW_STEPS = [
-  { id: 'plan', label: 'Plan', icon: Lightbulb },
-  { id: 'create', label: 'Create', icon: PenTool },
-  { id: 'post', label: 'Prepare Posts', icon: Send },
+  { id: 'plan', label: 'Plan', description: 'What are we pushing?', icon: Lightbulb },
+  { id: 'create', label: 'Create', description: 'Generate campaign content', icon: PenTool },
+  { id: 'post', label: 'Prepare Posts', description: 'Turn into posts', icon: Send },
 ] as const;
 
 type WorkflowStep = typeof WORKFLOW_STEPS[number]['id'];
@@ -252,7 +252,10 @@ export default function EventPlanDetailPage() {
                     <step.icon className="w-4 h-4" />
                   )}
                 </div>
-                <span>{step.label}</span>
+                <div className="min-w-0">
+                  <p className="truncate">{step.label}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{step.description}</p>
+                </div>
                 {status === 'ready' && (
                   <div className="ml-auto w-1.5 h-1.5 rounded-full bg-accent" />
                 )}
@@ -305,7 +308,13 @@ export default function EventPlanDetailPage() {
                 <PlanSection plan={plan} tasks={tasks} brain={brain} updateDecision={updateDecision} toggleTask={toggleTask} addTask={addTask} deleteTask={deleteTask} fetchAll={fetchAll} />
               )}
               {activeStep === 'create' && (
-                <CreateSection planId={planId!} plan={plan} brain={brain} workspace={workspace} />
+                <CreateSection
+                  planId={planId!}
+                  plan={plan}
+                  brain={brain}
+                  workspace={workspace}
+                  onGoToPreparePosts={() => setActiveStepWithQuery('post')}
+                />
               )}
               {activeStep === 'post' && (
                 <PublishSection planId={planId!} plan={plan} workspace={workspace} publish={publish} />

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import {
   Calendar, CheckCircle2, Image, Plus, Package, Bell,
-  Clock, Archive, AlertTriangle,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -126,6 +126,8 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
   const postedPacks = activePacks.filter(i => i.status === 'published').length;
   const allPosted = totalPacks > 0 && postedPacks === totalPacks;
   const progressPercent = totalPacks > 0 ? Math.round((postedPacks / totalPacks) * 100) : 0;
+  const suggestedPost = suggestions.find(s => s.suggestedCaption && s.suggestedAssetId);
+  const suggestedAsset = suggestedPost?.suggestedAssetId ? linkedAssetData[suggestedPost.suggestedAssetId] : null;
 
   return (
     <div className="space-y-6">
@@ -143,6 +145,38 @@ export function PublishSection({ planId, plan, workspace, publish }: PublishSect
           </Button>
         )}
       </div>
+
+      {suggestedPost && suggestedAsset && (
+        <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Suggested post</p>
+              <p className="text-xs text-muted-foreground">Pulse paired a caption and image to help you move faster.</p>
+            </div>
+            <Badge variant="secondary">{suggestedPost.channelLabel}</Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-[120px_1fr] gap-3">
+            {suggestedAsset._resolvedUrl ? (
+              <img
+                src={suggestedAsset._resolvedUrl}
+                alt={suggestedAsset.title || 'Suggested asset'}
+                className="w-full h-[120px] rounded-lg object-cover border border-border/50"
+              />
+            ) : (
+              <div className="w-full h-[120px] rounded-lg border border-dashed border-border flex items-center justify-center text-muted-foreground">
+                <Image className="w-4 h-4" />
+              </div>
+            )}
+            <div className="space-y-3">
+              <p className="text-sm text-foreground line-clamp-4 whitespace-pre-wrap">{suggestedPost.suggestedCaption}</p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => handleCreateFromSuggestion(suggestedPost)}>Add to Calendar</Button>
+                <Button size="sm" variant="outline" onClick={() => handleCreateFromSuggestion(suggestedPost)}>Edit</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Posting progress */}
       {totalPacks > 0 && (
