@@ -16,7 +16,8 @@ import {
   Plus,
   PenSquare,
   Upload,
-  Zap
+  Zap,
+  Handshake
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -58,6 +59,7 @@ const workflowNavigation: NavItem[] = [
   { name: 'Ready', href: '/content/library', icon: FolderOpen },
   { name: 'Calendar', href: '/content/calendar', icon: CalendarCheck2 },
   { name: 'Autopilot', href: '/autopilot', icon: Zap },
+  { name: 'Referrals', href: '/venue/referrals', icon: Handshake },
 ];
 
 const setupNavigation: NavItem[] = [
