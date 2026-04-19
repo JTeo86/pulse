@@ -89,14 +89,14 @@ export default function VenueReferralsPage() {
     queryKey: ['venue-referral-partners', currentVenue?.id],
     enabled: !!currentVenue,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('referrers')
         .select('id, full_name, referral_code, referral_slug, role_type, notes')
         .eq('venue_id', currentVenue!.id)
         .order('full_name', { ascending: true });
 
       if (error) throw error;
-      return data ?? [];
+      return (data as PartnerOption[]) ?? [];
     },
   });
 
@@ -112,7 +112,7 @@ export default function VenueReferralsPage() {
         .limit(100);
 
       if (error) throw error;
-      return data ?? [];
+      return (data as BookingRow[]) ?? [];
     },
   });
 
@@ -120,13 +120,13 @@ export default function VenueReferralsPage() {
     queryKey: ['venue-partner-referral-clicks', currentVenue?.id],
     enabled: !!currentVenue,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('partner_referral_clicks')
         .select('partner_id')
         .eq('venue_id', currentVenue!.id);
 
       if (error) throw error;
-      return (data ?? []).reduce((acc: Record<string, number>, row: { partner_id: string }) => {
+      return ((data ?? []) as { partner_id: string }[]).reduce((acc: Record<string, number>, row) => {
         acc[row.partner_id] = (acc[row.partner_id] ?? 0) + 1;
         return acc;
       }, {});
@@ -137,7 +137,7 @@ export default function VenueReferralsPage() {
     queryKey: ['venue-referral-payout-periods', currentVenue?.id],
     enabled: !!currentVenue,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('payout_periods')
         .select('id, month, status, paid_at, total_commission, total_platform_fee, total_partner_payout')
         .eq('venue_id', currentVenue!.id)
@@ -216,7 +216,7 @@ export default function VenueReferralsPage() {
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('payout_periods')
         .upsert(payload, { onConflict: 'venue_id,month' });
 
@@ -272,7 +272,7 @@ export default function VenueReferralsPage() {
       const emailFallback = `partner-${Date.now()}@placeholder.local`;
       const email = trimmedContact.includes('@') ? trimmedContact : emailFallback;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('referrers')
         .insert({
           venue_id: currentVenue.id,

@@ -169,7 +169,7 @@ export default function Home() {
           .limit(1)
           .maybeSingle(),
         supabase
-          .from('venue_autopilot_settings')
+          .from('autopilot_settings')
           .select('frequency, run_time, is_enabled')
           .eq('venue_id', currentVenue.id)
           .maybeSingle(),
@@ -224,9 +224,9 @@ export default function Home() {
           : null,
         autopilotSettings: autopilotSettings.data
           ? {
-              frequency: (autopilotSettings.data.frequency as 'daily' | '3x_week' | 'weekly' | null) ?? null,
-              runTime: autopilotSettings.data.run_time ?? null,
-              isEnabled: autopilotSettings.data.is_enabled ?? false,
+              frequency: ((autopilotSettings.data as any).frequency as 'daily' | '3x_week' | 'weekly' | null) ?? null,
+              runTime: (autopilotSettings.data as any).run_time ?? null,
+              isEnabled: (autopilotSettings.data as any).is_enabled ?? false,
             }
           : null,
       };

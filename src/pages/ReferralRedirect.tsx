@@ -14,7 +14,7 @@ export default function ReferralRedirect() {
         return;
       }
 
-      const { data: partner } = await supabase
+      const { data: partner } = await (supabase as any)
         .from('referrers')
         .select('id, venue_id, referral_code, referral_slug, referral_active, venues(website_url)')
         .eq('referral_slug', slug)
@@ -31,7 +31,7 @@ export default function ReferralRedirect() {
 
       const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
 
-      await supabase.from('partner_referral_clicks').insert({
+      await (supabase as any).from('partner_referral_clicks').insert({
         partner_id: partner.id,
         venue_id: partner.venue_id,
         referral_code: partner.referral_code,

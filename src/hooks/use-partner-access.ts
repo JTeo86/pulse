@@ -64,7 +64,7 @@ export function usePartnerReferralAccess(): PartnerReferralAccess {
     queryFn: async () => {
       if (!user?.email) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('referrers')
         .select('id, full_name, email, instagram_handle, role_type, status, venue_id, partner_referral_enabled, partner_beta_access, partner_stage_override, partner_rollout_changed_at, partner_rollout_changed_by, referral_code, referral_slug, referral_active')
         .eq('email', user.email)
@@ -75,15 +75,15 @@ export function usePartnerReferralAccess(): PartnerReferralAccess {
       if (!data) return null;
 
       return {
-        ...data,
-        partner_referral_enabled: data.partner_referral_enabled ?? false,
-        partner_beta_access: data.partner_beta_access ?? false,
-        partner_stage_override: data.partner_stage_override ?? null,
-        partner_rollout_changed_at: data.partner_rollout_changed_at ?? null,
-        partner_rollout_changed_by: data.partner_rollout_changed_by ?? null,
-        referral_code: data.referral_code,
-        referral_slug: data.referral_slug,
-        referral_active: data.referral_active ?? true,
+        ...(data as any),
+        partner_referral_enabled: (data as any).partner_referral_enabled ?? false,
+        partner_beta_access: (data as any).partner_beta_access ?? false,
+        partner_stage_override: (data as any).partner_stage_override ?? null,
+        partner_rollout_changed_at: (data as any).partner_rollout_changed_at ?? null,
+        partner_rollout_changed_by: (data as any).partner_rollout_changed_by ?? null,
+        referral_code: (data as any).referral_code,
+        referral_slug: (data as any).referral_slug,
+        referral_active: (data as any).referral_active ?? true,
       };
     },
     enabled: !!user?.email,
