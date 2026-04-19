@@ -4,142 +4,171 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MousePointerClick, CalendarCheck, BadgeDollarSign, Wallet, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
+
+
+type DashboardActivityRow = {
+  id: string;
+  billAmount: number;
+  commissionAmount: number;
+  bookingDate: string | null;
+  createdAt: string;
+  status: 'Pending' | 'Approved' | 'Paid';
+  venueName: string;
+};
+
+type DashboardData = {
+  pendingEarnings: number;
+  paidEarnings: number;
+  bookingsCount: number;
+  activity: DashboardActivityRow[];
+  monthlyHistory: Array<{
+    month: string;
+    totalEarned: number;
+    status: 'Pending' | 'Paid';
+  }>;
+};
 
 export default function PartnerDashboard() {
   const { referrer } = usePartnerAccess();
 
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['partner-dashboard-stats', referrer?.id],
-    queryFn: async () => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['partner-dashboard-mvp', referrer?.id],
+    queryFn: async (): Promise<DashboardData | null> => {
       if (!referrer?.id) return null;
 
-      const [clicksRes, referralsRes, linksRes] = await Promise.all([
-        supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('partner_id', referrer.id).eq('source_type', 'link'),
-        supabase.from('referrals').select('*').eq('partner_id', referrer.id),
-        supabase.from('referral_links').select('id', { count: 'exact', head: true }).eq('referrer_id', referrer.id).eq('status', 'active'),
-      ]);
+      const { data: commissions, error } = await supabase
+        .from('commissions')
+        .select('id, bill_amount, commission_value, created_at, status, referrals(booking_date), venues(name)')
+        .eq('partner_id', referrer.id)
+        .order('created_at', { ascending: false });
 
-      const bookings = referralsRes.data ?? [];
-      const verifiedSpend = bookings.filter(b => ['verified', 'paid'].includes(b.status)).reduce((s, b) => s + (Number(b.bill_amount) || 0), 0);
-      const estimatedEarnings = bookings.reduce((s, b) => s + (Number(b.commission) || 0), 0);
-      const paidEarnings = bookings.filter(b => b.status === 'paid').reduce((s, b) => s + (Number(b.commission) || 0), 0);
+      if (error) throw error;
+
+      const rows = (commissions ?? []).map((row: any): DashboardActivityRow => ({
+        id: row.id,
+        billAmount: Number(row.bill_amount || 0),
+        commissionAmount: Number(row.commission_value || 0),
+        bookingDate: row.referrals?.booking_date ?? null,
+        createdAt: row.created_at,
+        status: toPartnerStatus(row.status),
+        venueName: row.venues?.name ?? 'Venue booking',
+      }));
+
+      const pendingEarnings = rows
+        .filter((row) => row.status !== 'Paid')
+        .reduce((sum, row) => sum + row.commissionAmount, 0);
+
+      const paidEarnings = rows
+        .filter((row) => row.status === 'Paid')
+        .reduce((sum, row) => sum + row.commissionAmount, 0);
+
+      const monthlyMap = new Map<string, { totalEarned: number; status: 'Pending' | 'Paid' }>();
+      rows.forEach((row) => {
+        const monthKey = (row.bookingDate || row.createdAt).slice(0, 7);
+        const current = monthlyMap.get(monthKey) ?? { totalEarned: 0, status: 'Pending' as const };
+        current.totalEarned += row.commissionAmount;
+        if (row.status === 'Paid') {
+          current.status = 'Paid';
+        }
+        monthlyMap.set(monthKey, current);
+      });
+
+      const monthlyHistory = Array.from(monthlyMap.entries())
+        .map(([month, summary]) => ({
+          month,
+          totalEarned: summary.totalEarned,
+          status: summary.status,
+        }))
+        .sort((a, b) => b.month.localeCompare(a.month));
 
       return {
-        clicks: clicksRes.count ?? 0,
-        bookings: bookings.length,
-        verifiedSpend,
-        estimatedEarnings,
+        pendingEarnings,
         paidEarnings,
-        activeLinks: linksRes.count ?? 0,
-        recentBookings: bookings.slice(0, 5),
+        bookingsCount: rows.length,
+        activity: rows.slice(0, 8),
+        monthlyHistory,
       };
     },
     enabled: !!referrer?.id,
   });
 
-  const summaryCards = [
-    { label: 'Clicks', value: stats?.clicks ?? 0, icon: MousePointerClick, format: 'number' },
-    { label: 'Attributed Bookings', value: stats?.bookings ?? 0, icon: CalendarCheck, format: 'number' },
-    { label: 'Verified Spend', value: stats?.verifiedSpend ?? 0, icon: BadgeDollarSign, format: 'currency' },
-    { label: 'Estimated Earnings', value: stats?.estimatedEarnings ?? 0, icon: Wallet, format: 'currency' },
-  ];
-
   return (
     <div className="space-y-8 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">
-          {referrer?.full_name ? `Welcome, ${referrer.full_name.split(' ')[0]}` : 'Welcome'}
-        </h1>
-        <p className="text-muted-foreground mt-1">Track your referrals, earnings, and active venue offers.</p>
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold text-foreground">Your earnings</h1>
+        <p className="text-muted-foreground">Track bookings, commissions, and payouts.</p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <SummaryCard label="Pending" value={data?.pendingEarnings ?? 0} isLoading={isLoading} format="currency" />
+        <SummaryCard label="Paid" value={data?.paidEarnings ?? 0} isLoading={isLoading} format="currency" />
+        <SummaryCard label="Bookings" value={data?.bookingsCount ?? 0} isLoading={isLoading} format="number" />
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {summaryCards.map((card) => (
-          <Card key={card.label}>
-            <CardContent className="p-4">
-              {isLoading ? (
-                <Skeleton className="h-10 w-20" />
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <card.icon className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{card.label}</span>
-                  </div>
-                  <p className="text-xl font-semibold text-foreground">
-                    {card.format === 'currency' ? `£${card.value.toLocaleString('en-GB', { minimumFractionDigits: 2 })}` : card.value}
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Quick links */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Active Links</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold text-foreground">{stats?.activeLinks ?? 0}</p>
-            <Link to="/partner/links">
-              <Button variant="ghost" size="sm" className="mt-2 px-0 text-accent">
-                View links <ArrowRight className="w-3 h-3 ml-1" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Paid This Month</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold text-foreground">
-              £{(stats?.paidEarnings ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-            </p>
-            <Link to="/partner/earnings">
-              <Button variant="ghost" size="sm" className="mt-2 px-0 text-accent">
-                View earnings <ArrowRight className="w-3 h-3 ml-1" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent activity */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Recent Referral Activity</CardTitle>
+          <CardTitle className="text-base">Recent activity</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10" />)}</div>
-          ) : !stats?.recentBookings?.length ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">
-              No referral activity yet. Start sharing your links to begin tracking clicks and bookings.
-            </p>
+            <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+          ) : !data?.activity.length ? (
+            <div className="rounded-md border border-dashed border-border p-4 space-y-1">
+              <p className="text-sm font-medium text-foreground">No bookings yet</p>
+              <p className="text-sm text-muted-foreground">Once a venue logs your referrals, they’ll show up here.</p>
+            </div>
           ) : (
-            <div className="space-y-3">
-              {stats.recentBookings.map((b) => (
-                <div key={b.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="px-3 py-2 font-medium">Venue</th>
+                    <th className="px-3 py-2 font-medium">Date</th>
+                    <th className="px-3 py-2 font-medium text-right">Bill</th>
+                    <th className="px-3 py-2 font-medium text-right">Commission</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.activity.map((item) => (
+                    <tr key={item.id} className="border-b border-border last:border-0">
+                      <td className="px-3 py-3 text-foreground">{item.venueName}</td>
+                      <td className="px-3 py-3 text-foreground">{formatDate(item.bookingDate || item.createdAt)}</td>
+                      <td className="px-3 py-3 text-right text-foreground">{formatCurrency(item.billAmount)}</td>
+                      <td className="px-3 py-3 text-right text-foreground">{formatCurrency(item.commissionAmount)}</td>
+                      <td className="px-3 py-3">
+                        <Badge variant={item.status === 'Paid' ? 'default' : 'secondary'}>{item.status}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Monthly history</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!data?.monthlyHistory.length ? (
+            <div className="rounded-md border border-dashed border-border p-4 space-y-1">
+              <p className="text-sm font-medium text-foreground">Nothing paid yet</p>
+              <p className="text-sm text-muted-foreground">Approved referrals will appear here once payouts are completed.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {data.monthlyHistory.map((month) => (
+                <div key={month.month} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                   <div>
-                    <p className="text-sm text-foreground">{b.guest_name || 'Guest'}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(b.created_at), 'dd MMM yyyy')}</p>
+                    <p className="text-sm font-medium text-foreground">{formatMonth(month.month)}</p>
+                    <p className="text-xs text-muted-foreground">Total earned</p>
                   </div>
                   <div className="text-right">
-                    <Badge variant={['verified', 'paid'].includes(b.status) ? 'default' : 'secondary'} className="text-xs">
-                      {['verified', 'paid'].includes(b.status) ? 'Verified' : b.status}
-                    </Badge>
-                    {b.commission && (
-                      <p className="text-xs text-muted-foreground mt-1">£{Number(b.commission).toFixed(2)}</p>
-                    )}
+                    <p className="text-sm font-semibold text-foreground">{formatCurrency(month.totalEarned)}</p>
+                    <Badge variant={month.status === 'Paid' ? 'default' : 'secondary'}>{month.status}</Badge>
                   </div>
                 </div>
               ))}
@@ -147,6 +176,77 @@ export default function PartnerDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Partner profile</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <ProfileField label="Name" value={referrer?.full_name || '—'} />
+          <ProfileField label="Partner type" value={referrer?.role_type || 'Partner'} />
+        </CardContent>
+      </Card>
     </div>
   );
+}
+
+function SummaryCard({
+  label,
+  value,
+  isLoading,
+  format,
+}: {
+  label: string;
+  value: number;
+  isLoading: boolean;
+  format: 'currency' | 'number';
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {isLoading ? (
+          <Skeleton className="h-7 w-24 mt-2" />
+        ) : (
+          <p className="text-2xl font-semibold text-foreground mt-1">
+            {format === 'currency' ? formatCurrency(value) : value.toLocaleString('en-GB')}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProfileField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-foreground mt-1">{value}</p>
+    </div>
+  );
+}
+
+function formatCurrency(value: number) {
+  return `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatMonth(monthValue: string) {
+  return new Date(`${monthValue}-01`).toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function toPartnerStatus(status: string): 'Pending' | 'Approved' | 'Paid' {
+  if (status === 'paid') return 'Paid';
+  if (['approved', 'final', 'locked', 'adjusted'].includes(status)) return 'Approved';
+  return 'Pending';
 }
