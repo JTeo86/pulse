@@ -27,6 +27,8 @@ interface FormState {
 interface PartnerOption {
   id: string;
   full_name: string;
+  referral_code?: string | null;
+  referral_slug?: string | null;
 }
 
 interface BookingRow {
@@ -72,7 +74,7 @@ export default function VenueReferralsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('referrers')
-        .select('id, full_name')
+        .select('id, full_name, referral_code, referral_slug')
         .eq('venue_id', currentVenue!.id)
         .order('full_name', { ascending: true });
 
@@ -94,6 +96,23 @@ export default function VenueReferralsPage() {
 
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  const { data: partnerClickCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ['venue-partner-referral-clicks', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('partner_referral_clicks')
+        .select('partner_id')
+        .eq('venue_id', currentVenue!.id);
+
+      if (error) throw error;
+      return (data ?? []).reduce((acc: Record<string, number>, row: { partner_id: string }) => {
+        acc[row.partner_id] = (acc[row.partner_id] ?? 0) + 1;
+        return acc;
+      }, {});
     },
   });
 
@@ -240,6 +259,40 @@ export default function VenueReferralsPage() {
         </TabsList>
 
         <TabsContent value="bookings">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Partner referral identities</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!partners.length ? (
+                <p className="text-sm text-muted-foreground">No partners yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Partner</TableHead>
+                        <TableHead>Referral code</TableHead>
+                        <TableHead>Link identifier</TableHead>
+                        <TableHead className="text-right">Clicks</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {partners.map((partner) => (
+                        <TableRow key={partner.id}>
+                          <TableCell className="font-medium">{partner.full_name}</TableCell>
+                          <TableCell>{partner.referral_code ?? '—'}</TableCell>
+                          <TableCell>{partner.referral_slug ? `/r/${partner.referral_slug}` : '—'}</TableCell>
+                          <TableCell className="text-right">{partnerClickCounts[partner.id] ?? 0}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Bookings</CardTitle>

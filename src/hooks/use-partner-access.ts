@@ -16,6 +16,9 @@ interface PartnerProfile {
   partner_stage_override: number | null;
   partner_rollout_changed_at: string | null;
   partner_rollout_changed_by: string | null;
+  referral_code: string;
+  referral_slug: string;
+  referral_active: boolean;
 }
 
 interface PartnerReferralAccess {
@@ -63,7 +66,7 @@ export function usePartnerReferralAccess(): PartnerReferralAccess {
 
       const { data, error } = await supabase
         .from('referrers')
-        .select('id, full_name, email, instagram_handle, role_type, status, venue_id, partner_referral_enabled, partner_beta_access, partner_stage_override, partner_rollout_changed_at, partner_rollout_changed_by')
+        .select('id, full_name, email, instagram_handle, role_type, status, venue_id, partner_referral_enabled, partner_beta_access, partner_stage_override, partner_rollout_changed_at, partner_rollout_changed_by, referral_code, referral_slug, referral_active')
         .eq('email', user.email)
         .eq('status', 'active')
         .maybeSingle();
@@ -78,6 +81,9 @@ export function usePartnerReferralAccess(): PartnerReferralAccess {
         partner_stage_override: data.partner_stage_override ?? null,
         partner_rollout_changed_at: data.partner_rollout_changed_at ?? null,
         partner_rollout_changed_by: data.partner_rollout_changed_by ?? null,
+        referral_code: data.referral_code,
+        referral_slug: data.referral_slug,
+        referral_active: data.referral_active ?? true,
       };
     },
     enabled: !!user?.email,

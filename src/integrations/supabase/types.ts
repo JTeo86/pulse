@@ -2636,6 +2636,9 @@ export type Database = {
           partner_referral_enabled: boolean
           partner_rollout_changed_at: string | null
           partner_rollout_changed_by: string | null
+          referral_active: boolean
+          referral_code: string
+          referral_slug: string
           partner_stage_override: number | null
           role_type: string
           status: string
@@ -2653,6 +2656,9 @@ export type Database = {
           partner_referral_enabled?: boolean
           partner_rollout_changed_at?: string | null
           partner_rollout_changed_by?: string | null
+          referral_active?: boolean
+          referral_code?: string
+          referral_slug?: string
           partner_stage_override?: number | null
           role_type?: string
           status?: string
@@ -2670,6 +2676,9 @@ export type Database = {
           partner_referral_enabled?: boolean
           partner_rollout_changed_at?: string | null
           partner_rollout_changed_by?: string | null
+          referral_active?: boolean
+          referral_code?: string
+          referral_slug?: string
           partner_stage_override?: number | null
           role_type?: string
           status?: string
@@ -2679,6 +2688,57 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "referrers_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_referral_clicks: {
+        Row: {
+          clicked_at: string
+          created_at: string
+          destination_url: string
+          id: string
+          ip_hash: string | null
+          partner_id: string
+          referral_code: string
+          user_agent: string | null
+          venue_id: string | null
+        }
+        Insert: {
+          clicked_at?: string
+          created_at?: string
+          destination_url: string
+          id?: string
+          ip_hash?: string | null
+          partner_id: string
+          referral_code: string
+          user_agent?: string | null
+          venue_id?: string | null
+        }
+        Update: {
+          clicked_at?: string
+          created_at?: string
+          destination_url?: string
+          id?: string
+          ip_hash?: string | null
+          partner_id?: string
+          referral_code?: string
+          user_agent?: string | null
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_referral_clicks_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_referral_clicks_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
