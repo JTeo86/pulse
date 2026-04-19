@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, ClipboardList, Home as HomeIcon, Sparkles, AlertTriangle, Clock3, CheckCircle2 } from 'lucide-react';
+import { CalendarDays, ClipboardList, Home as HomeIcon, Sparkles, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,7 +12,6 @@ import { PlansTab } from '@/components/planner/PlansTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMarketOpportunities } from '@/hooks/use-market-opportunities';
 import { ReferralHomeCards } from '@/components/home/ReferralHomeCards';
@@ -323,42 +322,62 @@ export default function Home() {
     >
       <PageHeader
         title={headerTitle}
-        description="One place to run your week: Reviews, Photos, Ready, Calendar, and campaign plans."
+        description="Your calm command centre: what needs attention, what Pulse prepared, and what to do next."
       />
 
       <ReferralHomeCards />
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="bg-muted/30 border border-border/50">
+        <TabsList className="bg-muted/20 border border-border/40 p-1">
           <TabsTrigger value="today" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
             <HomeIcon className="w-4 h-4" /> Today
           </TabsTrigger>
-          <TabsTrigger value="opportunities" className="gap-2 opacity-70 data-[state=active]:opacity-100 data-[state=active]:bg-card data-[state=active]:text-foreground">
+          <TabsTrigger value="opportunities" className="gap-2 opacity-60 data-[state=active]:opacity-100 data-[state=active]:bg-card data-[state=active]:text-foreground">
             <CalendarDays className="w-4 h-4" /> Opportunities
           </TabsTrigger>
-          <TabsTrigger value="plans" className="gap-2 opacity-70 data-[state=active]:opacity-100 data-[state=active]:bg-card data-[state=active]:text-foreground">
+          <TabsTrigger value="plans" className="gap-2 opacity-60 data-[state=active]:opacity-100 data-[state=active]:bg-card data-[state=active]:text-foreground">
             <ClipboardList className="w-4 h-4" /> Plans
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="space-y-5">
-          <Card className="border-accent/30 bg-accent/5">
-            <CardHeader className="pb-2"><CardTitle className="text-base">This Week summary</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 pt-0">
-              <SummaryLine label="Posts ready" value={`${overview?.preparedContentCount ?? 0}`} tone="good" />
-              <SummaryLine label="Needs approval" value={`${overview?.pendingContent?.length ?? 0}`} tone={(overview?.pendingContent?.length ?? 0) > 0 ? 'warning' : 'neutral'} />
-              <SummaryLine label="Missing content" value={`${overview?.coverageGaps?.length ?? 0}`} tone={(overview?.coverageGaps?.length ?? 0) > 0 ? 'warning' : 'neutral'} />
-              <SummaryLine label="Reviews" value={`${overview?.pendingRepliesCount ?? 0} to reply`} tone={(overview?.pendingRepliesCount ?? 0) > 0 ? 'warning' : 'neutral'} />
+          <Card className="border-amber-400/50 bg-amber-50/40 dark:bg-amber-500/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                Needs attention
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              <ActionRow title="Posts ready to approve" detail={`${overview?.pendingContent?.length ?? 0} waiting for your approval`} to="/content/library" actionLabel="Approve" />
+              <ActionRow title="Replies needing approval" detail={`${overview?.pendingRepliesCount ?? 0} waiting to send`} to="/reputation/reviews?tab=inbox" actionLabel="Approve" />
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Next steps</CardTitle></CardHeader>
-            <CardContent className="pt-0 space-y-2">
-              <ActionRow title="Open campaign plans" detail="Build and manage plans from Home" to="/home?tab=plans" />
-              <ActionRow title="Review Ready posts" detail={`${overview?.pendingContent?.length ?? 0} posts are ready for approval`} to="/content/library" />
-              <ActionRow title="Add Photos" detail={contentHealth?.lastUploadAt ? `Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}` : 'No photos uploaded yet'} to="/content/feed" />
-              <ActionRow title="Reply to Reviews" detail={`${overview?.pendingRepliesCount ?? 0} replies are ready to send`} to="/reputation/reviews?tab=inbox" />
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent" />
+                Pulse prepared
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2 text-sm">
+              {overview?.lastAutopilotRun ? (
+                <>
+                  <p>Pulse prepared {overview.lastAutopilotRun.generatedPosts} posts and drafted {overview.lastAutopilotRun.generatedReplies} replies.</p>
+                  <p className="text-muted-foreground">Last run: {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
+                </>
+              ) : (
+                <p className="text-muted-foreground">Pulse is standing by and ready to prepare your next week.</p>
+              )}
+              <p className="text-muted-foreground">
+                {overview?.autopilotSettings?.isEnabled ? 'Pulse is running.' : 'Pulse is paused.'} Next run {getNextRunLabel(overview?.autopilotSettings?.frequency, overview?.autopilotSettings?.runTime, overview?.autopilotSettings?.isEnabled ?? false)}.
+              </p>
+              <div>
+                <Button size="sm" asChild>
+                  <Link to="/content/scheduler">Add to Calendar</Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -370,18 +389,13 @@ export default function Home() {
               ) : safeOpportunities.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No open opportunities right now.</p>
               ) : (
-                safeOpportunities.slice(0, 4).map((opportunity) => (
+                safeOpportunities.slice(0, 3).map((opportunity) => (
                   <div key={opportunity.title} className="rounded-lg border p-3 space-y-2">
                     <p className="text-sm font-medium">{opportunity.title}</p>
-                    <p className="text-xs text-muted-foreground">{opportunity.description}</p>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" asChild>
-                        <Link to="/home?tab=plans">Create plan</Link>
-                      </Button>
-                      <Button size="sm" variant="outline" asChild>
-                        <Link to="/home?tab=opportunities">Open opportunities</Link>
-                      </Button>
-                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{opportunity.description}</p>
+                    <Button size="sm" asChild>
+                      <Link to="/home?tab=plans">Create Plan</Link>
+                    </Button>
                   </div>
                 ))
               )}
@@ -389,31 +403,19 @@ export default function Home() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2"><Sparkles className="w-4 h-4 text-accent" />Pulse automation</CardTitle>
-            </CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Plans</CardTitle></CardHeader>
             <CardContent className="pt-0 space-y-2 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-muted-foreground">Status</p>
-                <Badge variant="outline">{getAutomationHealth(overview?.lastAutopilotRun?.status, overview?.lastAutopilotRun?.createdAt)}</Badge>
-              </div>
-              {overview?.lastAutopilotRun ? (
-                <>
-                  <p>Last run {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
-                  <p className="text-muted-foreground">{overview.lastAutopilotRun.generatedPosts} posts prepared · {overview.lastAutopilotRun.generatedReplies} replies drafted.</p>
-                </>
-              ) : (
-                <p className="text-muted-foreground">No recent activity yet.</p>
-              )}
               <p className="text-muted-foreground">
-                Next run {getNextRunLabel(overview?.autopilotSettings?.frequency, overview?.autopilotSettings?.runTime, overview?.autopilotSettings?.isEnabled ?? false)}.
+                {overview?.coveredDaysCount ? `${overview.coveredDaysCount} active posting days in your next two weeks.` : 'No active plans yet.'}
               </p>
-              {latestPulseReport?.generated_at && (
-                <p className="text-muted-foreground">Weekly brief generated {formatDistanceToNow(new Date(latestPulseReport.generated_at), { addSuffix: true })}.</p>
+              {overview?.coverageGaps?.length ? (
+                <p className="text-muted-foreground">Up next: {overview.coverageGaps[0]}.</p>
+              ) : (
+                <p className="text-muted-foreground">You are covered across the week.</p>
               )}
               <div>
                 <Button size="sm" variant="outline" asChild>
-                  <Link to="/autopilot">View automation</Link>
+                  <Link to="/home?tab=plans">Continue your campaign</Link>
                 </Button>
               </div>
             </CardContent>
@@ -432,19 +434,7 @@ export default function Home() {
   );
 }
 
-function SummaryLine({ label, value, tone }: { label: string; value: string; tone: 'good' | 'warning' | 'neutral' }) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium flex items-center gap-1.5 text-right">
-        {tone === 'good' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : tone === 'warning' ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> : <Clock3 className="w-3.5 h-3.5 text-muted-foreground" />}
-        <span>{value}</span>
-      </p>
-    </div>
-  );
-}
-
-function ActionRow({ title, detail, to }: { title: string; detail: string; to: string }) {
+function ActionRow({ title, detail, to, actionLabel = 'Open' }: { title: string; detail: string; to: string; actionLabel?: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
       <div>
@@ -452,7 +442,7 @@ function ActionRow({ title, detail, to }: { title: string; detail: string; to: s
         <p className="text-xs text-muted-foreground">{detail}</p>
       </div>
       <Button size="sm" asChild>
-        <Link to={to}>Open</Link>
+        <Link to={to}>{actionLabel}</Link>
       </Button>
     </div>
   );
