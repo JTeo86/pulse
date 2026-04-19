@@ -41,6 +41,7 @@ function PayoutsContent() {
   const [disputeReason, setDisputeReason] = useState('');
   const [partnerSearch, setPartnerSearch] = useState('');
   const [excludedCommissionIds, setExcludedCommissionIds] = useState<Record<string, boolean>>({});
+  const [paymentFinalising, setPaymentFinalising] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -256,6 +257,7 @@ function PayoutsContent() {
   };
 
   const payablePeriod = (payoutPeriods ?? []).find((period: any) => period.status === 'locked');
+  const latestPaidPeriod = (payoutPeriods ?? []).find((period: any) => period.status === 'paid');
 
   const createAdjustment = useMutation({
     mutationFn: async () => {
@@ -327,41 +329,39 @@ function PayoutsContent() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const confirmMonthlyPayoutPayment = useMutation({
-    mutationFn: async ({ payoutPeriodId, sessionId }: { payoutPeriodId: string; sessionId: string }) => {
-      if (!currentVenue) throw new Error('Venue is required');
-      const { data, error } = await supabase.functions.invoke('confirm-monthly-payout-payment', {
-        body: {
-          venue_id: currentVenue.id,
-          payout_period_id: payoutPeriodId,
-          session_id: sessionId,
-        },
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: async () => {
-      setPaymentCompleted(true);
-      await qc.invalidateQueries({ queryKey: ['venue-payout-periods'] });
-      toast.success('Payment complete');
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');
     const payoutPeriodId = searchParams.get('payout_period_id');
-    const sessionId = searchParams.get('session_id');
-    if (paymentStatus !== 'success' || !payoutPeriodId || !sessionId || !currentVenue?.id) return;
-    if (confirmMonthlyPayoutPayment.isPending || confirmMonthlyPayoutPayment.isSuccess) return;
+    if (paymentStatus !== 'success' || !payoutPeriodId || !currentVenue?.id) return;
 
-    confirmMonthlyPayoutPayment.mutate({ payoutPeriodId, sessionId });
+    setPaymentFinalising(true);
+    setPaymentCompleted(false);
+
+    const run = async () => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await qc.invalidateQueries({ queryKey: ['venue-payout-periods'] });
+        const refreshed = ((qc.getQueryData(['venue-payout-periods', currentVenue.id]) as any[]) ?? [])
+          .find((period: any) => period.id === payoutPeriodId);
+        if (refreshed?.status === 'paid') {
+          setPaymentFinalising(false);
+          setPaymentCompleted(true);
+          toast.success('Payment received');
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+
+      setPaymentFinalising(false);
+      toast.message('Payment received. Finalising payout…');
+    };
+
+    run();
     const next = new URLSearchParams(searchParams);
     next.delete('payment');
     next.delete('payout_period_id');
     next.delete('session_id');
     setSearchParams(next, { replace: true });
-  }, [confirmMonthlyPayoutPayment, currentVenue?.id, searchParams, setSearchParams]);
+  }, [currentVenue?.id, qc, searchParams, setSearchParams]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -381,6 +381,7 @@ function PayoutsContent() {
             <p className="text-xs text-muted-foreground">
               Pay one monthly payout period in Stripe checkout. No partner payouts are processed here.
             </p>
+            {paymentFinalising && <p className="text-xs text-amber-600">Payment received. Finalising payout…</p>}
             {paymentCompleted && <p className="text-xs text-emerald-600">Payment complete.</p>}
             {payablePeriod ? (
               <div className="flex flex-wrap items-center gap-3">
@@ -394,7 +395,11 @@ function PayoutsContent() {
                 {payablePeriod.paid_at && <span className="text-xs text-muted-foreground">Paid on {new Date(payablePeriod.paid_at).toLocaleDateString()}</span>}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">No locked payout period is ready to pay yet.</p>
+              <p className="text-xs text-muted-foreground">
+                {latestPaidPeriod
+                  ? `Paid ${latestPaidPeriod.paid_at ? new Date(latestPaidPeriod.paid_at).toLocaleDateString() : 'recently'}${latestPaidPeriod.stripe_payment_id ? ` • Ref ${latestPaidPeriod.stripe_payment_id}` : ''}`
+                  : 'No locked payout period is ready to pay yet.'}
+              </p>
             )}
           </div>
 
