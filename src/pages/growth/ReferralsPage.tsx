@@ -68,6 +68,25 @@ function ReferralsContent() {
     enabled: !!currentVenue,
   });
 
+  const { data: latestPayoutPeriod } = useQuery({
+    queryKey: ['referrals-latest-payout-period', currentVenue?.id],
+    queryFn: async () => {
+      if (!currentVenue) return null;
+      const { data, error } = await (supabase as any)
+        .from('payout_periods')
+        .select('id, status')
+        .eq('venue_id', currentVenue.id)
+        .order('month', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentVenue,
+  });
+
+  const editingLocked = ['locked', 'final', 'paid', 'overdue'].includes(latestPayoutPeriod?.status ?? '');
+
   const { data: stats } = useQuery({
     queryKey: ['unified-referral-stats', currentVenue?.id],
     queryFn: async () => {
@@ -171,7 +190,7 @@ function ReferralsContent() {
         <CardContent className="p-0 overflow-x-auto">
           <div className="p-4 border-b border-border">
             <h3 className="font-semibold">Partner Earnings</h3>
-            <p className="text-xs text-muted-foreground mt-1">Clear payout progress by partner: pending → approved → payable → paid.</p>
+            <p className="text-xs text-muted-foreground mt-1">Clear payout progress by partner: Pending → Approved → Paid.</p>
           </div>
           {!earningsSummary.length ? (
             <div className="p-6 text-sm text-muted-foreground">No partner earnings yet. Commissions appear after a referral is verified.</div>
@@ -231,17 +250,17 @@ function ReferralsContent() {
                     <TableCell>{(c.referrals as any)?.guest_name || 'Guest booking'}</TableCell>
                     <TableCell>£{Number(c.bill_amount || 0).toFixed(2)}</TableCell>
                     <TableCell>£{Number(c.commission_value || 0).toFixed(2)}</TableCell>
-                    <TableCell><Badge variant="secondary" className="capitalize text-xs">{c.status}</Badge></TableCell>
+                    <TableCell><Badge variant="secondary" className="capitalize text-xs">{getSimpleCommissionStatus(c.status)}</Badge></TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {c.status === 'pending' && (
-                          <Button size="sm" variant="outline" onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'approved' })}>Approve</Button>
+                          <Button size="sm" variant="outline" disabled={editingLocked} onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'approved' })}>Approve</Button>
                         )}
                         {c.status === 'approved' && (
-                          <Button size="sm" variant="outline" onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'payable' })}>Mark Payable</Button>
+                          <Button size="sm" variant="outline" disabled={editingLocked} onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'payable' })}>Include</Button>
                         )}
                         {c.status === 'payable' && (
-                          <Button size="sm" variant="outline" onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'paid' })}>Mark Paid</Button>
+                          <Button size="sm" variant="outline" disabled={editingLocked} onClick={() => updateCommissionStatus.mutate({ id: c.id, status: 'paid' })}>Mark Paid</Button>
                         )}
                       </div>
                     </TableCell>
@@ -302,13 +321,25 @@ function ReferralsContent() {
                     <TableCell className="text-xs text-muted-foreground">{new Date(r.booking_date || r.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-sm font-medium">{(r.referrers as any)?.full_name || '—'}</TableCell>
                     <TableCell><Badge variant="outline" className="capitalize text-xs">{r.source_type}</Badge></TableCell>
-                    <TableCell><Badge variant="secondary" className="capitalize text-xs">{r.status}</Badge></TableCell>
+                    <TableCell><Badge variant="secondary" className="capitalize text-xs">{getSimpleReferralStatus(r.status)}</Badge></TableCell>
                     <TableCell><ConfidenceBadge confidence={r.attribution_confidence} /></TableCell>
                     <TableCell>{r.party_size ?? '—'}</TableCell>
-                    <TableCell>{r.bill_amount != null ? `£${Number(r.bill_amount).toFixed(2)}` : '—'}</TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <p className="font-medium">{r.bill_amount != null ? `£${Number(r.bill_amount).toFixed(2)}` : '—'}</p>
+                        <p className="text-xs text-muted-foreground">{(r.referrers as any)?.full_name || 'Partner unavailable'}</p>
+                        {r.bill_image_url ? (
+                          <a href={r.bill_image_url} target="_blank" rel="noreferrer" className="text-xs underline text-primary">
+                            Preview image
+                          </a>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No image</p>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{r.commission != null ? `£${Number(r.commission).toFixed(2)}` : '—'}</TableCell>
                     <TableCell className="text-right">
-                      <Select value={r.status} onValueChange={(status: UnifiedStatus) => updateStatus.mutate({ id: r.id, status })}>
+                      <Select value={r.status} onValueChange={(status: UnifiedStatus) => updateStatus.mutate({ id: r.id, status })} disabled={editingLocked}>
                         <SelectTrigger className="w-[170px] ml-auto h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {editableStatuses.map((status) => <SelectItem key={status} value={status} className="capitalize">{status}</SelectItem>)}
@@ -321,6 +352,9 @@ function ReferralsContent() {
             </Table>
           </CardContent>
         </Card>
+      )}
+      {editingLocked && (
+        <p className="text-xs text-muted-foreground">Editing is disabled because the latest payout period is locked or paid.</p>
       )}
     </motion.div>
   );
@@ -344,4 +378,32 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
   if (confidence === 'high') return <Badge className="bg-success/10 text-success text-xs"><CheckCircle2 className="w-3 h-3 mr-1" />High</Badge>;
   if (confidence === 'medium') return <Badge className="bg-info/10 text-info text-xs">Medium</Badge>;
   return <Badge variant="outline" className="text-xs">Low</Badge>;
+}
+
+function getSimpleReferralStatus(status: string) {
+  const map: Record<string, string> = {
+    created: 'Pending',
+    submitted: 'Pending',
+    clicked: 'Pending',
+    booking_confirmed: 'Approved',
+    visited: 'Approved',
+    bill_entered: 'Approved',
+    verified: 'Approved',
+    paid: 'Paid',
+    rejected: 'Rejected',
+  };
+  return map[status] ?? status;
+}
+
+function getSimpleCommissionStatus(status: string) {
+  const map: Record<string, string> = {
+    pending: 'Pending',
+    approved: 'Approved',
+    payable: 'Included',
+    final: 'Included',
+    disputed: 'Excluded',
+    paid: 'Paid',
+    rejected: 'Rejected',
+  };
+  return map[status] ?? status;
 }
