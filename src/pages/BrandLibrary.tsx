@@ -71,7 +71,7 @@ interface SelectableVenueAsset {
   resolvedUrl: string | null;
 }
 
-type TopLevelTab = 'ready' | 'ideas' | 'photos';
+type TopLevelTab = 'ready' | 'needs_work' | 'ideas';
 type ReadinessState = 'ready_to_post' | 'needs_image' | 'needs_caption' | 'unformed';
 type ConversionResult = { ok: true; payload: Record<string, unknown> } | { ok: false; reason: string };
 
@@ -102,14 +102,14 @@ export default function BrandLibraryPage() {
 
   const autopilotRunIdFilter = searchParams.get('autopilotRunId');
   const topLevelTabParam = searchParams.get('tab');
-  const resolvedTopLevelTab: TopLevelTab = topLevelTabParam === 'ideas' || topLevelTabParam === 'photos' ? topLevelTabParam : 'ready';
+  const resolvedTopLevelTab: TopLevelTab = topLevelTabParam === 'ideas' || topLevelTabParam === 'needs_work' ? topLevelTabParam : 'ready';
 
   useEffect(() => {
     setTopLevelTab(resolvedTopLevelTab);
   }, [resolvedTopLevelTab]);
 
   const handleTopLevelTabChange = (value: string) => {
-    const nextTab: TopLevelTab = value === 'ideas' || value === 'photos' ? value : 'ready';
+    const nextTab: TopLevelTab = value === 'ideas' || value === 'needs_work' ? value : 'ready';
     setTopLevelTab(nextTab);
     const nextParams = new URLSearchParams(searchParams);
     if (nextTab === 'ready') nextParams.delete('tab');
@@ -313,8 +313,6 @@ export default function BrandLibraryPage() {
   }
 
   const contentItems = useMemo(() => items.filter((item) => item.origin === 'content_item'), [items]);
-  const photoItems = useMemo(() => items.filter((item) => item.origin === 'content_asset'), [items]);
-
   const filteredContentItems = useMemo(() => {
     return contentItems.filter((item) => {
       if (autopilotRunIdFilter && item.autopilot_run_id !== autopilotRunIdFilter) return false;
@@ -342,6 +340,21 @@ export default function BrandLibraryPage() {
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [filteredContentItems]);
+
+  const needsWorkItems = useMemo(() => {
+    return readyItems
+      .filter((item) => {
+        const readiness = getReadinessState(item);
+        return readiness === 'needs_image' || readiness === 'needs_caption';
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [readyItems]);
+
+  const readyNowItems = useMemo(() => {
+    return readyItems
+      .filter((item) => getReadinessState(item) === 'ready_to_post')
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [readyItems]);
 
   const daysCovered = useMemo(() => {
     const start = startOfDay(new Date());
@@ -638,10 +651,10 @@ export default function BrandLibraryPage() {
       )}
       <PageHeader
         title="Ready"
-        description="Review what Pulse prepared, finish anything missing, then send to Calendar."
+        description="Pulse has prepared content for you. Review what is ready now, finish one missing step, then add it to Calendar."
         action={(
-          <Button className="gap-2" onClick={() => navigate('/content/feed')}>
-            <ImageIcon className="w-4 h-4" /> Add Photos
+          <Button variant="outline" className="gap-2" onClick={() => navigate('/content/feed')}>
+            <ImageIcon className="w-4 h-4" /> Open Photos
           </Button>
         )}
       />
@@ -659,8 +672,8 @@ export default function BrandLibraryPage() {
       <Tabs value={topLevelTab} onValueChange={handleTopLevelTabChange}>
         <TabsList>
           <TabsTrigger value="ready">Ready</TabsTrigger>
+          <TabsTrigger value="needs_work">Needs work</TabsTrigger>
           <TabsTrigger value="ideas">Ideas</TabsTrigger>
-          <TabsTrigger value="photos">Photos</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -669,11 +682,11 @@ export default function BrandLibraryPage() {
       ) : (
         <>
           {topLevelTab === 'ready' && (
-            readyItems.length === 0 ? (
+            readyNowItems.length === 0 ? (
               <EmptyState icon={Sparkles} title="Nothing ready yet" description="Add photos or create a plan, then come back here to review ready posts." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {readyItems.map((item) => {
+                {readyNowItems.map((item) => {
                   const displayImageUrl = getDisplayImageUrl(item);
                   const readiness = getReadinessState(item);
                   const readinessBadge = getReadinessBadge(readiness);
@@ -755,6 +768,72 @@ export default function BrandLibraryPage() {
             )
           )}
 
+          {topLevelTab === 'needs_work' && (
+            needsWorkItems.length === 0 ? (
+              <EmptyState icon={Sparkles} title="No missing steps" description="Anything needing one more step will appear here." />
+            ) : (
+              <div className="space-y-3">
+                {needsWorkItems.map((item) => {
+                  const displayImageUrl = getDisplayImageUrl(item);
+                  return (
+                    <Card key={buildItemKey(item)}>
+                      <CardContent className="p-4 flex flex-col md:flex-row gap-3">
+                        <MediaImage
+                          src={item.thumbnail_url || displayImageUrl}
+                          fallbackSrc={displayImageUrl}
+                          alt={item.title || 'Idea preview'}
+                          containerClassName="h-20 w-full md:w-28 shrink-0 rounded-md"
+                          aspectClassName=""
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline">{getSourceLabel(item)}</Badge>
+                            <p className="text-xs text-muted-foreground">{format(new Date(item.created_at), 'EEE, MMM d')}</p>
+                          </div>
+                          <p className="text-sm font-medium line-clamp-1">{item.title || 'Untitled idea'}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{item.caption_draft || item.caption_final || 'This post needs one more step before it is ready.'}</p>
+                          <div className="rounded-md bg-muted/30 px-2 py-1.5">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Why Pulse suggested this</p>
+                            <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                              {generateQueueExplanation(item, []).map((point) => (
+                                <li key={point} className="text-xs text-muted-foreground">{point}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" onClick={() => runPrimaryAction(item)}>{getPrimaryAction(item).label}</Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" aria-label="More actions" title="More actions">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEdit(item)}>
+                                  <Edit3 className="w-4 h-4 mr-2" />Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => archiveItem(item)}>
+                                  <Archive className="w-4 h-4 mr-2" />Archive
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDelete(item.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )
+          )}
+
           {topLevelTab === 'ideas' && (
             ideaItems.length === 0 ? (
               <EmptyState icon={Sparkles} title="No ideas right now" description="Pulse suggestions and drafts will show up here." />
@@ -789,8 +868,7 @@ export default function BrandLibraryPage() {
                             </ul>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <Button size="sm" onClick={() => approveItem(item)}>Approve</Button>
-                            <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>
+                            <Button size="sm" onClick={() => runPrimaryAction(item)}>{getPrimaryAction(item).label}</Button>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button size="icon" variant="ghost" aria-label="More actions" title="More actions">
@@ -798,6 +876,9 @@ export default function BrandLibraryPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEdit(item)}>
+                                  <Edit3 className="w-4 h-4 mr-2" />Edit
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => archiveItem(item)}>
                                   <Archive className="w-4 h-4 mr-2" />Archive
                                 </DropdownMenuItem>
@@ -817,57 +898,6 @@ export default function BrandLibraryPage() {
                 })}
               </div>
             )
-          )}
-
-          {topLevelTab === 'photos' && (
-            <Card>
-              <CardContent className="p-4 space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <p className="text-sm font-medium">Photos</p>
-                    <p className="text-xs text-muted-foreground">Upload, browse, and reuse your raw photo bank.</p>
-                  </div>
-                  <Button size="sm" className="gap-2" onClick={() => navigate('/content/feed')}>
-                    <ImageIcon className="w-4 h-4" /> Upload Photos
-                  </Button>
-                </div>
-
-                {photoItems.length === 0 ? (
-                  <EmptyState icon={ImageIcon} title="No photos yet" description="Upload photos to start building your bank." />
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {photoItems.map((item) => {
-                      const displayImageUrl = getDisplayImageUrl(item);
-                      return (
-                        <button
-                          key={buildItemKey(item)}
-                          type="button"
-                          onClick={() => openPreview(item)}
-                          className="group rounded-md border overflow-hidden text-left bg-muted/20"
-                        >
-                          {displayImageUrl ? (
-                            <img
-                              src={displayImageUrl}
-                              alt={item.title || 'Photo'}
-                              className="w-full aspect-square object-cover"
-                              onError={() => markImageBroken(item)}
-                            />
-                          ) : (
-                            <div className="w-full aspect-square bg-muted flex items-center justify-center">
-                              <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
-                            </div>
-                          )}
-                          <div className="p-2">
-                            <p className="text-xs font-medium line-clamp-1">{item.title || 'Untitled photo'}</p>
-                            <p className="text-[11px] text-muted-foreground">{format(new Date(item.created_at), 'MMM d, yyyy')}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           )}
         </>
       )}
