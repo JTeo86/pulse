@@ -204,7 +204,7 @@ export default function EventsPlannerPage() {
             ) : filteredEvents.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <CalendarDays className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p>No upcoming events found. Click "Sync Events" to populate.</p>
+                <p>No events yet. Tap “Sync events” to load them.</p>
               </div>
             ) : (
               filteredEvents.map(event => {
@@ -253,7 +253,7 @@ export default function EventsPlannerPage() {
                       ) : (
                         <>
                           <Button size="sm" onClick={() => handlePlan(event)}>
-                            <Plus className="w-3 h-3 mr-1" /> Plan
+                            <Plus className="w-3 h-3 mr-1" /> Add
                           </Button>
                           <Button
                             size="sm"
@@ -349,7 +349,7 @@ export default function EventsPlannerPage() {
               ))}
             </div>
             <Textarea
-              placeholder="Optional notes..."
+              placeholder="Optional note..."
               value={skipReason}
               onChange={e => setSkipReason(e.target.value)}
               rows={2}
@@ -357,7 +357,7 @@ export default function EventsPlannerPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSkipModal(null)}>Cancel</Button>
-            <Button onClick={handleSkip}>Skip Event</Button>
+            <Button onClick={handleSkip}>Skip</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
