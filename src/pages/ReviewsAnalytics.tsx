@@ -1521,11 +1521,11 @@ function AutomationStatusCard({ venueId, venueTimezone, onOpenSetup }: { venueId
     queryKey: ['reviews-health', venueId, cycle.weekStart, cycle.weekEnd],
     queryFn: async () => {
       const [{ data: latestRun }, { data: lastSuccess }, { data: sources }, { count: pendingCount }, { count: draftCount }, { count: fetchedThisWeek }] = await Promise.all([
-        supabase.from('review_automation_runs' as any).select('*').eq('venue_id', venueId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('review_automation_runs' as any).select('*').eq('venue_id', venueId).eq('status', 'success').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('review_sources' as any).select('id, is_enabled').eq('venue_id', venueId),
-        supabase.from('review_response_tasks' as any).select('id', { count: 'exact', head: true }).eq('venue_id', venueId).eq('status', 'pending'),
-        supabase.from('review_response_tasks' as any).select('id', { count: 'exact', head: true }).eq('venue_id', venueId).eq('status', 'pending').not('draft_response', 'is', null),
+        supabase.from('review_automation_runs').select('*').eq('venue_id', venueId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('review_automation_runs').select('*').eq('venue_id', venueId).eq('status', 'success').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('review_sources').select('id, is_enabled').eq('venue_id', venueId),
+        supabase.from('review_response_tasks').select('id', { count: 'exact', head: true }).eq('venue_id', venueId).eq('status', 'pending'),
+        supabase.from('review_response_tasks').select('id', { count: 'exact', head: true }).eq('venue_id', venueId).eq('status', 'pending').not('draft_response', 'is', null),
         supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('venue_id', venueId).gte('review_date', cycle.weekStart).lte('review_date', `${cycle.weekEnd}T23:59:59Z`),
       ]);
 
