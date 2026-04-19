@@ -44,6 +44,21 @@ Deno.serve(async (req) => {
     const type = event?.type as string;
     const obj = event?.data?.object;
 
+
+    const markMonthlyPayoutPaid = async (payoutPeriodId: string, paymentId: string) => {
+      await (supabase as any)
+        .from('payout_periods')
+        .update({ status: 'paid', paid_at: new Date().toISOString(), stripe_payment_id: paymentId })
+        .eq('id', payoutPeriodId)
+        .in('status', ['locked', 'paid']);
+
+      await (supabase as any)
+        .from('payout_items')
+        .update({ status: 'paid' })
+        .eq('payout_period_id', payoutPeriodId)
+        .neq('status', 'paid');
+    };
+
     const upsertFromSubscription = async (subscription: any, overrideTierId?: string | null, venueIdOverride?: string | null) => {
       const venueId = venueIdOverride ?? subscription?.metadata?.venue_id;
       if (!venueId) return;
@@ -65,13 +80,20 @@ Deno.serve(async (req) => {
     };
 
     if (type === 'checkout.session.completed') {
-      const venueId = obj?.metadata?.venue_id;
-      const tierId = obj?.metadata?.subscription_tier_id;
-      if (venueId && obj?.subscription) {
-        const stripeKey = await getStripeSecretKey();
-        const res = await fetch(`https://api.stripe.com/v1/subscriptions/${obj.subscription}`, { headers: { Authorization: `Bearer ${stripeKey}` } });
-        const sub = await res.json();
-        if (res.ok) await upsertFromSubscription(sub, tierId, venueId);
+      const paymentType = obj?.metadata?.payment_type;
+      if (paymentType === 'monthly_payout') {
+        const payoutPeriodId = obj?.metadata?.payout_period_id;
+        const paymentId = obj?.payment_intent ?? obj?.id;
+        if (payoutPeriodId && paymentId) await markMonthlyPayoutPaid(payoutPeriodId, paymentId);
+      } else {
+        const venueId = obj?.metadata?.venue_id;
+        const tierId = obj?.metadata?.subscription_tier_id;
+        if (venueId && obj?.subscription) {
+          const stripeKey = await getStripeSecretKey();
+          const res = await fetch(`https://api.stripe.com/v1/subscriptions/${obj.subscription}`, { headers: { Authorization: `Bearer ${stripeKey}` } });
+          const sub = await res.json();
+          if (res.ok) await upsertFromSubscription(sub, tierId, venueId);
+        }
       }
     }
 

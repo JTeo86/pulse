@@ -91,3 +91,9 @@ verify_jwt = false
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.create-monthly-payout-checkout-session]
+verify_jwt = false
+
+[functions.confirm-monthly-payout-payment]
+verify_jwt = false

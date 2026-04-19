@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Wallet, CheckCircle2, DollarSign, Clock, AlertCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 export default function PayoutsPage() {
   return (
@@ -41,6 +41,8 @@ function PayoutsContent() {
   const [disputeReason, setDisputeReason] = useState('');
   const [partnerSearch, setPartnerSearch] = useState('');
   const [excludedCommissionIds, setExcludedCommissionIds] = useState<Record<string, boolean>>({});
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const { data: payoutPeriods } = useQuery({
     queryKey: ['venue-payout-periods', currentVenue?.id],
@@ -253,7 +255,7 @@ function PayoutsContent() {
     total: payouts?.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0) ?? 0,
   };
 
-  const payablePeriod = (payoutPeriods ?? []).find((period: any) => ['final', 'overdue'].includes(period.status));
+  const payablePeriod = (payoutPeriods ?? []).find((period: any) => period.status === 'locked');
 
   const createAdjustment = useMutation({
     mutationFn: async () => {
@@ -306,10 +308,10 @@ function PayoutsContent() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
-  const createStripePayoutIntent = useMutation({
+  const createStripeCheckoutSession = useMutation({
     mutationFn: async () => {
       if (!currentVenue || !payablePeriod) throw new Error('No final payout period ready for payment.');
-      const { data, error } = await supabase.functions.invoke('create-monthly-payout-intent', {
+      const { data, error } = await supabase.functions.invoke('create-monthly-payout-checkout-session', {
         body: {
           venue_id: currentVenue.id,
           payout_period_id: payablePeriod.id,
@@ -319,11 +321,47 @@ function PayoutsContent() {
       return data;
     },
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['venue-payout-periods'] });
-      toast.success(`Stripe PaymentIntent created (${data?.payment_intent_id ?? 'pending'})`);
+      if (!data?.url) throw new Error('Stripe checkout URL missing');
+      window.location.href = data.url;
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const confirmMonthlyPayoutPayment = useMutation({
+    mutationFn: async ({ payoutPeriodId, sessionId }: { payoutPeriodId: string; sessionId: string }) => {
+      if (!currentVenue) throw new Error('Venue is required');
+      const { data, error } = await supabase.functions.invoke('confirm-monthly-payout-payment', {
+        body: {
+          venue_id: currentVenue.id,
+          payout_period_id: payoutPeriodId,
+          session_id: sessionId,
+        },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async () => {
+      setPaymentCompleted(true);
+      await qc.invalidateQueries({ queryKey: ['venue-payout-periods'] });
+      toast.success('Payment complete');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    const payoutPeriodId = searchParams.get('payout_period_id');
+    const sessionId = searchParams.get('session_id');
+    if (paymentStatus !== 'success' || !payoutPeriodId || !sessionId || !currentVenue?.id) return;
+    if (confirmMonthlyPayoutPayment.isPending || confirmMonthlyPayoutPayment.isSuccess) return;
+
+    confirmMonthlyPayoutPayment.mutate({ payoutPeriodId, sessionId });
+    const next = new URLSearchParams(searchParams);
+    next.delete('payment');
+    next.delete('payout_period_id');
+    next.delete('session_id');
+    setSearchParams(next, { replace: true });
+  }, [confirmMonthlyPayoutPayment, currentVenue?.id, searchParams, setSearchParams]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -341,20 +379,22 @@ function PayoutsContent() {
           <div className="rounded-md border border-border p-3 space-y-2">
             <h3 className="font-semibold text-sm">Monthly Stripe batch payout</h3>
             <p className="text-xs text-muted-foreground">
-              Commissions are locked monthly, held for dispute buffer, and paid in a single Stripe Connect batch.
+              Pay one monthly payout period in Stripe checkout. No partner payouts are processed here.
             </p>
+            {paymentCompleted && <p className="text-xs text-emerald-600">Payment complete.</p>}
             {payablePeriod ? (
               <div className="flex flex-wrap items-center gap-3">
-                <Badge variant={payablePeriod.status === 'overdue' ? 'destructive' : 'secondary'} className="capitalize">{payablePeriod.status}</Badge>
+                <Badge variant="secondary" className="capitalize">{payablePeriod.status}</Badge>
                 <span className="text-xs text-muted-foreground">
                   {new Date(payablePeriod.month).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })} • £{Number(payablePeriod.total_commission || 0).toFixed(2)}
                 </span>
-                <Button size="sm" onClick={() => createStripePayoutIntent.mutate()} disabled={createStripePayoutIntent.isPending}>
-                  Pay with Stripe
+                <Button size="sm" onClick={() => createStripeCheckoutSession.mutate()} disabled={createStripeCheckoutSession.isPending}>
+                  Pay now
                 </Button>
+                {payablePeriod.paid_at && <span className="text-xs text-muted-foreground">Paid on {new Date(payablePeriod.paid_at).toLocaleDateString()}</span>}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">No final payout period is ready to pay yet.</p>
+              <p className="text-xs text-muted-foreground">No locked payout period is ready to pay yet.</p>
             )}
           </div>
 
