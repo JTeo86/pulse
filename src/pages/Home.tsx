@@ -327,8 +327,8 @@ export default function Home() {
 
       <ReferralHomeCards />
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="bg-muted/20 border border-border/40 p-1">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
+        <TabsList className="bg-muted/20 p-1">
           <TabsTrigger value="today" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
             <HomeIcon className="w-4 h-4" /> Today
           </TabsTrigger>
@@ -340,7 +340,7 @@ export default function Home() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="today" className="space-y-5">
+        <TabsContent value="today" className="space-y-6">
           <Card className="border-amber-400/50 bg-amber-50/40 dark:bg-amber-500/5">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -361,7 +361,7 @@ export default function Home() {
                 Pulse prepared
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0 space-y-2 text-sm">
+            <CardContent className="pt-0 space-y-3 text-sm">
               {overview?.lastAutopilotRun ? (
                 <>
                   <p>Pulse prepared {overview.lastAutopilotRun.generatedPosts} posts and drafted {overview.lastAutopilotRun.generatedReplies} replies.</p>
@@ -375,7 +375,7 @@ export default function Home() {
               </p>
               <div>
                 <Button size="sm" asChild>
-                  <Link to="/content/scheduler">Add to Calendar</Link>
+                  <Link to="/content/scheduler">Calendar</Link>
                 </Button>
               </div>
             </CardContent>
@@ -390,11 +390,11 @@ export default function Home() {
                 <p className="text-sm text-muted-foreground">No open opportunities right now.</p>
               ) : (
                 safeOpportunities.slice(0, 3).map((opportunity) => (
-                  <div key={opportunity.title} className="rounded-lg border p-3 space-y-2">
+                  <div key={opportunity.title} className="rounded-lg bg-muted/20 p-3 space-y-2">
                     <p className="text-sm font-medium">{opportunity.title}</p>
                     <p className="text-xs text-muted-foreground line-clamp-2">{opportunity.description}</p>
-                    <Button size="sm" asChild>
-                      <Link to="/home?tab=plans">Create Plan</Link>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to="/home?tab=plans">Plan</Link>
                     </Button>
                   </div>
                 ))
@@ -415,7 +415,7 @@ export default function Home() {
               )}
               <div>
                 <Button size="sm" variant="outline" asChild>
-                  <Link to="/home?tab=plans">Continue your campaign</Link>
+                  <Link to="/home?tab=plans">Continue</Link>
                 </Button>
               </div>
             </CardContent>
@@ -436,12 +436,12 @@ export default function Home() {
 
 function ActionRow({ title, detail, to, actionLabel = 'Open' }: { title: string; detail: string; to: string; actionLabel?: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-      <div>
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/20 p-3">
+      <div className="space-y-1">
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground">{detail}</p>
       </div>
-      <Button size="sm" asChild>
+      <Button size="sm" variant="outline" asChild>
         <Link to={to}>{actionLabel}</Link>
       </Button>
     </div>
