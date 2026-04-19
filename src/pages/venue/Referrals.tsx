@@ -24,11 +24,19 @@ interface FormState {
   date: string;
 }
 
+interface PartnerFormState {
+  name: string;
+  type: string;
+  contact: string;
+}
+
 interface PartnerOption {
   id: string;
   full_name: string;
   referral_code?: string | null;
   referral_slug?: string | null;
+  role_type?: string | null;
+  notes?: string | null;
 }
 
 interface BookingRow {
@@ -58,14 +66,23 @@ const defaultFormState: FormState = {
   date: new Date().toISOString().slice(0, 10),
 };
 
+const defaultPartnerFormState: PartnerFormState = {
+  name: '',
+  type: '',
+  contact: '',
+};
+
 const monthFormat = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' });
 const PLATFORM_FEE_RATE = 0.1;
 
 export default function VenueReferralsPage() {
   const { currentVenue } = useVenue();
   const queryClient = useQueryClient();
+  const [isAddPartnerOpen, setIsAddPartnerOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [form, setForm] = useState<FormState>(defaultFormState);
+  const [partnerForm, setPartnerForm] = useState<PartnerFormState>(defaultPartnerFormState);
+  const [createdPartner, setCreatedPartner] = useState<PartnerOption | null>(null);
   const [activeTab, setActiveTab] = useState<'bookings' | 'payouts'>('bookings');
 
   const { data: partners = [] } = useQuery<PartnerOption[]>({
@@ -74,7 +91,7 @@ export default function VenueReferralsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('referrers')
-        .select('id, full_name, referral_code, referral_slug')
+        .select('id, full_name, referral_code, referral_slug, role_type, notes')
         .eq('venue_id', currentVenue!.id)
         .order('full_name', { ascending: true });
 
@@ -242,6 +259,65 @@ export default function VenueReferralsPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const createPartner = useMutation({
+    mutationFn: async () => {
+      if (!currentVenue) return null;
+      const trimmedName = partnerForm.name.trim();
+      if (!trimmedName) {
+        throw new Error('Partner name is required.');
+      }
+
+      const trimmedType = partnerForm.type.trim();
+      const trimmedContact = partnerForm.contact.trim();
+      const emailFallback = `partner-${Date.now()}@placeholder.local`;
+      const email = trimmedContact.includes('@') ? trimmedContact : emailFallback;
+
+      const { data, error } = await supabase
+        .from('referrers')
+        .insert({
+          venue_id: currentVenue.id,
+          full_name: trimmedName,
+          role_type: trimmedType || 'other',
+          notes: trimmedContact ? `Contact: ${trimmedContact}` : null,
+          status: 'active',
+          referral_active: true,
+          email,
+        })
+        .select('id, full_name, referral_code, referral_slug, role_type, notes')
+        .single();
+
+      if (error) throw error;
+      return data as PartnerOption;
+    },
+    onSuccess: (partner) => {
+      if (!partner) return;
+      setCreatedPartner(partner);
+      setPartnerForm(defaultPartnerFormState);
+      queryClient.invalidateQueries({ queryKey: ['venue-referral-partners'] });
+      toast.success('Partner ready');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const copyText = async (value: string, label: string) => {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copied`);
+  };
+
+  const resetAddPartnerDialog = (open: boolean) => {
+    setIsAddPartnerOpen(open);
+    if (!open) {
+      setPartnerForm(defaultPartnerFormState);
+      setCreatedPartner(null);
+    }
+  };
+
+  const createdPartnerLink = createdPartner?.referral_slug ? `${window.location.origin}/r/${createdPartner.referral_slug}` : '';
+  const shareText = createdPartner
+    ? `Here’s your referral link: ${createdPartnerLink}\nUse code: ${createdPartner.referral_code ?? ''}`
+    : '';
+
   return (
     <div className="space-y-6">
       <PageHeader title="Referrals" description="Track booking revenue and owed commissions from your referral partners." />
@@ -260,8 +336,91 @@ export default function VenueReferralsPage() {
 
         <TabsContent value="bookings">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Partner referral identities</CardTitle>
+              <Dialog open={isAddPartnerOpen} onOpenChange={resetAddPartnerDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">Add partner</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  {!createdPartner ? (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle>Add partner</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="partner-name">Name</Label>
+                          <Input
+                            id="partner-name"
+                            value={partnerForm.name}
+                            onChange={(event) => setPartnerForm((prev) => ({ ...prev, name: event.target.value }))}
+                            placeholder="Partner name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="partner-type">Type (optional)</Label>
+                          <Input
+                            id="partner-type"
+                            value={partnerForm.type}
+                            onChange={(event) => setPartnerForm((prev) => ({ ...prev, type: event.target.value }))}
+                            placeholder="Creator, concierge, etc."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="partner-contact">Contact (optional)</Label>
+                          <Input
+                            id="partner-contact"
+                            value={partnerForm.contact}
+                            onChange={(event) => setPartnerForm((prev) => ({ ...prev, contact: event.target.value }))}
+                            placeholder="Email or phone"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => resetAddPartnerDialog(false)}>Cancel</Button>
+                        <Button onClick={() => createPartner.mutate()} disabled={createPartner.isPending}>Create partner</Button>
+                      </DialogFooter>
+                    </>
+                  ) : (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle>Partner ready</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Name</p>
+                          <p className="font-medium">{createdPartner.full_name}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Referral link</Label>
+                          <div className="flex items-center gap-2">
+                            <Input value={createdPartnerLink} readOnly />
+                            <Button variant="outline" onClick={() => copyText(createdPartnerLink, 'Referral link')}>Copy</Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Referral code</Label>
+                          <div className="flex items-center gap-2">
+                            <Input value={createdPartner.referral_code ?? ''} readOnly />
+                            <Button variant="outline" onClick={() => copyText(createdPartner.referral_code ?? '', 'Referral code')}>Copy</Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Share text</Label>
+                          <div className="flex items-center gap-2">
+                            <Input value={shareText} readOnly />
+                            <Button variant="outline" onClick={() => copyText(shareText, 'Share text')}>Copy</Button>
+                          </div>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button onClick={() => resetAddPartnerDialog(false)}>Done</Button>
+                      </DialogFooter>
+                    </>
+                  )}
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               {!partners.length ? (
