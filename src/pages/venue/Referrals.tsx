@@ -272,7 +272,7 @@ export default function VenueReferralsPage() {
       const emailFallback = `partner-${Date.now()}@placeholder.local`;
       const email = trimmedContact.includes('@') ? trimmedContact : emailFallback;
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('referrers')
         .insert({
           venue_id: currentVenue.id,
