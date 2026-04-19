@@ -22,4 +22,12 @@ This project currently keeps payouts manual/ledger-based.
 2. System creates/updates a `payments` record for that payout period.
 3. Platform fee is retained from period totals.
 4. Partner-level payout references are recorded on `payout_items`.
+
+## Current Stripe Checkout implementation (monthly venue payment only)
+
+- `create-monthly-payout-checkout-session` creates a Stripe Checkout Session and stores/updates one `payments` row as `pending` for the payout period.
+- `stripe-payout-webhook` is the source of truth for marking a payout as paid; client redirects do not mark records as paid.
+- Webhook processing is idempotent via `stripe_webhook_events.event_id` uniqueness and safe re-application logic.
+- One payment is supported per payout period.
+- Partner payout execution (e.g., Stripe Connect transfers) is intentionally **not** implemented yet.
 5. Period is finalized with auditable timestamps/references.

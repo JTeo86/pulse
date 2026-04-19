@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     const supabase = createServiceClient();
     const { data: period, error: periodError } = await (supabase as any)
       .from('payout_periods')
-      .select('id, venue_id, status, month, total_commission, stripe_payment_id')
+      .select('id, venue_id, status, month, total_commission, total_platform_fee, total_partner_payout, stripe_payment_id, paid_at')
       .eq('id', payout_period_id)
       .eq('venue_id', venue_id)
       .maybeSingle();
@@ -26,7 +26,17 @@ Deno.serve(async (req) => {
     if (periodError) throw periodError;
     if (!period) throw new Error('Payout period not found');
     if (period.status !== 'locked') throw new Error('Only locked payout periods can be paid');
-    if (period.stripe_payment_id) throw new Error('This payout period is already paid');
+    if (period.stripe_payment_id || period.paid_at || period.status === 'paid') throw new Error('This payout period is already paid');
+
+    const { data: paidPayment, error: paidPaymentError } = await (supabase as any)
+      .from('payments')
+      .select('id')
+      .eq('payout_period_id', payout_period_id)
+      .eq('venue_id', venue_id)
+      .eq('status', 'paid')
+      .maybeSingle();
+    if (paidPaymentError) throw paidPaymentError;
+    if (paidPayment) throw new Error('A completed payment already exists for this payout period');
 
     const amount = Number(period.total_commission || 0);
     if (amount <= 0) throw new Error('Payout period total must be greater than 0');
@@ -56,6 +66,22 @@ Deno.serve(async (req) => {
 
     const checkout = await checkoutRes.json();
     if (!checkoutRes.ok) throw new Error(checkout?.error?.message ?? 'Stripe checkout error');
+
+    const nowIso = new Date().toISOString();
+    const { error: paymentError } = await (supabase as any)
+      .from('payments')
+      .upsert({
+        payout_period_id,
+        venue_id,
+        total_amount: Number(period.total_commission || 0),
+        platform_fee_amount: Number(period.total_platform_fee || 0),
+        partner_payout_amount: Number(period.total_partner_payout || 0),
+        status: 'pending',
+        provider: 'stripe',
+        external_payment_id: checkout.id,
+        updated_at: nowIso,
+      }, { onConflict: 'payout_period_id' });
+    if (paymentError) throw paymentError;
 
     return new Response(JSON.stringify({ url: checkout.url, session_id: checkout.id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {

@@ -97,3 +97,6 @@ verify_jwt = false
 
 [functions.confirm-monthly-payout-payment]
 verify_jwt = false
+
+[functions.stripe-payout-webhook]
+verify_jwt = false
