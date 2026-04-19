@@ -39,6 +39,7 @@ export default function ContentFeed() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
+  const [lastUploadCount, setLastUploadCount] = useState<number | null>(null);
   const autopilotTrigger = useAutopilotTrigger();
 
   const { data, isLoading } = useQuery({
@@ -191,6 +192,7 @@ export default function ContentFeed() {
         queryClient.invalidateQueries({ queryKey: ['content-feed-onboarding-drafts', currentVenue.id] }),
         queryClient.invalidateQueries({ queryKey: ['content-feed-approved-onboarding', currentVenue.id] }),
       ]);
+      setLastUploadCount(files.length);
       toast({ title: 'Photos added', description: `${files.length} photo${files.length > 1 ? 's' : ''} added. Pulse is preparing posts now.` });
     } catch (error: any) {
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
@@ -260,6 +262,27 @@ export default function ContentFeed() {
           </div>
         </CardContent>
       </Card>
+
+      {lastUploadCount !== null && (
+        <Card className="border-emerald-500/30 bg-emerald-500/5">
+          <CardContent className="p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold">Photos added</p>
+              <p className="text-sm text-muted-foreground">
+                Pulse is preparing posts from your latest upload of {lastUploadCount} photo{lastUploadCount === 1 ? '' : 's'}.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/content/library">View Ready</Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/content/calendar">View Calendar</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
