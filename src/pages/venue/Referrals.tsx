@@ -137,7 +137,7 @@ export default function VenueReferralsPage() {
     queryKey: ['venue-referral-payout-periods', currentVenue?.id],
     enabled: !!currentVenue,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('payout_periods')
         .select('id, month, status, paid_at, total_commission, total_platform_fee, total_partner_payout')
         .eq('venue_id', currentVenue!.id)
@@ -216,7 +216,7 @@ export default function VenueReferralsPage() {
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('payout_periods')
         .upsert(payload, { onConflict: 'venue_id,month' });
 

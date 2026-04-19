@@ -1596,7 +1596,7 @@ function AutomationStatusCard({ venueId, venueTimezone, onOpenSetup }: { venueId
           error_message: errors.length ? errors.join(' ') : null,
           scheduled_for: nowIso,
         } as any)
-        .eq('id', runRow.id);
+        .eq('id', (runRow as any).id);
 
       if (errors.length) throw new Error(errors.join(' '));
       return true;
