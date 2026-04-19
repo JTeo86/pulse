@@ -44,6 +44,9 @@ interface PayoutPeriodRow {
   month: string;
   status: PayoutPeriodStatus;
   paid_at: string | null;
+  total_commission: number | null;
+  total_platform_fee: number | null;
+  total_partner_payout: number | null;
 }
 
 const defaultFormState: FormState = {
@@ -54,6 +57,7 @@ const defaultFormState: FormState = {
 };
 
 const monthFormat = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' });
+const PLATFORM_FEE_RATE = 0.1;
 
 export default function VenueReferralsPage() {
   const { currentVenue } = useVenue();
@@ -99,7 +103,7 @@ export default function VenueReferralsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payout_periods')
-        .select('id, month, status, paid_at')
+        .select('id, month, status, paid_at, total_commission, total_platform_fee, total_partner_payout')
         .eq('venue_id', currentVenue!.id)
         .order('month', { ascending: false })
         .limit(12);
@@ -140,9 +144,14 @@ export default function VenueReferralsPage() {
       return sum + Number(booking.commission ?? 0);
     }, 0);
 
+    const totalPlatformFee = Number((totalCommissionDue * PLATFORM_FEE_RATE).toFixed(2));
+    const totalPartnerPayout = Number((totalCommissionDue - totalPlatformFee).toFixed(2));
+
     return {
       monthLabel: monthFormat.format(new Date(`${currentMonthKey}-01T00:00:00Z`)),
       totalCommissionDue,
+      totalPlatformFee,
+      totalPartnerPayout,
       bookingsCount: currentMonthBookings.length,
       partnersCount: partnersToPay.size,
     };
@@ -164,6 +173,9 @@ export default function VenueReferralsPage() {
         venue_id: currentVenue.id,
         month: monthDate,
         status,
+        total_commission: currentMonthPayout.totalCommissionDue,
+        total_platform_fee: currentMonthPayout.totalPlatformFee,
+        total_partner_payout: currentMonthPayout.totalPartnerPayout,
         paid_at: status === 'paid' ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       };
@@ -339,9 +351,10 @@ export default function VenueReferralsPage() {
         </TabsContent>
 
         <TabsContent value="payouts" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <StatCard label="Due this month" value={`£${currentMonthPayout.totalCommissionDue.toFixed(2)}`} />
-            <StatCard label="Partners to pay" value={currentMonthPayout.partnersCount.toString()} />
+            <StatCard label="Platform fee" value={`£${currentMonthPayout.totalPlatformFee.toFixed(2)}`} />
+            <StatCard label="Partner payout total" value={`£${currentMonthPayout.totalPartnerPayout.toFixed(2)}`} />
             <StatCard
               label="Last payout"
               value={lastPaidPeriod ? monthFormat.format(new Date(lastPaidPeriod.month)) : 'No payouts yet'}
@@ -353,11 +366,13 @@ export default function VenueReferralsPage() {
               <CardTitle className="text-base">Current month payout</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-6">
                 <PayoutMeta label="Month" value={currentMonthPayout.monthLabel} />
                 <PayoutMeta label="Total commission due" value={`£${currentMonthPayout.totalCommissionDue.toFixed(2)}`} />
+                <PayoutMeta label="Platform fee (10%)" value={`£${currentMonthPayout.totalPlatformFee.toFixed(2)}`} />
+                <PayoutMeta label="Partner payout total" value={`£${currentMonthPayout.totalPartnerPayout.toFixed(2)}`} />
                 <PayoutMeta label="Bookings" value={currentMonthPayout.bookingsCount.toString()} />
-                <PayoutMeta label="Partners" value={currentMonthPayout.partnersCount.toString()} />
+                <PayoutMeta label="Partners to pay" value={currentMonthPayout.partnersCount.toString()} />
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -432,7 +447,9 @@ export default function VenueReferralsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Month</TableHead>
-                      <TableHead>Total</TableHead>
+                      <TableHead>Total due</TableHead>
+                      <TableHead>Platform fee</TableHead>
+                      <TableHead>Partner payout</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Paid date</TableHead>
                     </TableRow>
@@ -441,7 +458,9 @@ export default function VenueReferralsPage() {
                     {payoutPeriods.map((period) => (
                       <TableRow key={period.id}>
                         <TableCell className="font-medium">{monthFormat.format(new Date(period.month))}</TableCell>
-                        <TableCell>{period.month.slice(0, 7) === currentMonthKey ? `£${currentMonthPayout.totalCommissionDue.toFixed(2)}` : '—'}</TableCell>
+                        <TableCell>£{Number(period.total_commission ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>£{Number(period.total_platform_fee ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>£{Number(period.total_partner_payout ?? 0).toFixed(2)}</TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="capitalize">{period.status}</Badge>
                         </TableCell>
