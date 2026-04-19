@@ -4,6 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Copy, Check } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 
 type DashboardActivityRow = {
@@ -30,6 +34,7 @@ type DashboardData = {
 
 export default function PartnerDashboard() {
   const { referrer } = usePartnerAccess();
+  const [copiedField, setCopiedField] = useState<'link' | 'code' | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['partner-dashboard-mvp', referrer?.id],
@@ -179,13 +184,59 @@ export default function PartnerDashboard() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Your link</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <CopyField
+            label="Referral link"
+            value={referrer?.referral_slug ? `${window.location.origin}/r/${referrer.referral_slug}` : '—'}
+            onCopy={() => copyValue(referrer?.referral_slug ? `${window.location.origin}/r/${referrer.referral_slug}` : '', 'link', setCopiedField)}
+            copied={copiedField === 'link'}
+          />
+          <CopyField
+            label="Referral code"
+            value={referrer?.referral_code || '—'}
+            onCopy={() => copyValue(referrer?.referral_code || '', 'code', setCopiedField)}
+            copied={copiedField === 'code'}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Partner profile</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           <ProfileField label="Name" value={referrer?.full_name || '—'} />
           <ProfileField label="Partner type" value={referrer?.role_type || 'Partner'} />
+          <ProfileField label="Referral status" value={referrer?.referral_active ? 'Active' : 'Paused'} />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function CopyField({
+  label,
+  value,
+  onCopy,
+  copied,
+}: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+  copied: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-border p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <code className="text-sm text-foreground bg-muted px-2 py-1 rounded truncate block flex-1">{value}</code>
+        <Button type="button" variant="outline" size="sm" className="gap-1" onClick={onCopy}>
+          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -249,4 +300,16 @@ function toPartnerStatus(status: string): 'Pending' | 'Approved' | 'Paid' {
   if (status === 'paid') return 'Paid';
   if (['approved', 'final', 'locked', 'adjusted'].includes(status)) return 'Approved';
   return 'Pending';
+}
+
+function copyValue(
+  value: string,
+  field: 'link' | 'code',
+  setCopiedField: (value: 'link' | 'code' | null) => void,
+) {
+  if (!value) return;
+  navigator.clipboard.writeText(value);
+  setCopiedField(field);
+  toast.success(field === 'link' ? 'Referral link copied' : 'Referral code copied');
+  setTimeout(() => setCopiedField(null), 1800);
 }

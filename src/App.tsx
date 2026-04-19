@@ -57,6 +57,7 @@ import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
 import CookiePolicyPage from "./pages/legal/Cookies";
 import VenueReferralsPage from "./pages/venue/Referrals";
+import ReferralRedirect from "./pages/ReferralRedirect";
 
 const queryClient = new QueryClient();
 
@@ -150,6 +151,7 @@ function AppRoutes() {
 
       {/* Public guest upload page (no auth required) */}
       <Route path="/submit/:venueId" element={<GuestUploadPage />} />
+      <Route path="/r/:slug" element={<ReferralRedirect />} />
 
       {/* All authenticated routes share a single persistent AppLayout */}
       <Route element={<ProtectedLayout />}>
