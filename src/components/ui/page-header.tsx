@@ -8,14 +8,14 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, action }: PageHeaderProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-      <div>
-        <h1 className="heading-section text-foreground">{title}</h1>
+    <div className="ui-fade-in flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5 mb-10">
+      <div className="space-y-2">
+        <h1 className="heading-section text-foreground text-3xl md:text-4xl">{title}</h1>
         {description && (
-          <p className="mt-1 text-muted-foreground">{description}</p>
+          <p className="text-sm md:text-base text-muted-foreground/85 max-w-2xl">{description}</p>
         )}
       </div>
-      {action && <div>{action}</div>}
+      {action && <div className="sm:pt-1 sm:shrink-0">{action}</div>}
     </div>
   );
 }

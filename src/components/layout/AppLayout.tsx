@@ -445,7 +445,15 @@ export function AppLayout({ children }: AppLayoutProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <div className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">{children}</div>
+          <motion.div
+            key={location.pathname + location.search}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="flex-1 p-5 sm:p-7 lg:p-10 min-w-0 overflow-x-hidden"
+          >
+            {children}
+          </motion.div>
         </main>
       </div>
     </SidebarProvider>
