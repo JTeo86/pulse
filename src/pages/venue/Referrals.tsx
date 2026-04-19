@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 type BookingStatus = 'created' | 'booking_confirmed' | 'visited';
+type PayoutPeriodStatus = 'open' | 'locked' | 'paid';
 
 interface FormState {
   partnerId: string;
@@ -37,6 +39,13 @@ interface BookingRow {
   referrers: { full_name: string } | null;
 }
 
+interface PayoutPeriodRow {
+  id: string;
+  month: string;
+  status: PayoutPeriodStatus;
+  paid_at: string | null;
+}
+
 const defaultFormState: FormState = {
   partnerId: '',
   amount: '',
@@ -44,11 +53,14 @@ const defaultFormState: FormState = {
   date: new Date().toISOString().slice(0, 10),
 };
 
+const monthFormat = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' });
+
 export default function VenueReferralsPage() {
   const { currentVenue } = useVenue();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [form, setForm] = useState<FormState>(defaultFormState);
+  const [activeTab, setActiveTab] = useState<'bookings' | 'payouts'>('bookings');
 
   const { data: partners = [] } = useQuery<PartnerOption[]>({
     queryKey: ['venue-referral-partners', currentVenue?.id],
@@ -81,6 +93,22 @@ export default function VenueReferralsPage() {
     },
   });
 
+  const { data: payoutPeriods = [] } = useQuery<PayoutPeriodRow[]>({
+    queryKey: ['venue-referral-payout-periods', currentVenue?.id],
+    enabled: !!currentVenue,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payout_periods')
+        .select('id, month, status, paid_at')
+        .eq('venue_id', currentVenue!.id)
+        .order('month', { ascending: false })
+        .limit(12);
+
+      if (error) throw error;
+      return (data as PayoutPeriodRow[]) ?? [];
+    },
+  });
+
   const overview = useMemo(() => {
     return bookings.reduce(
       (acc, booking) => {
@@ -94,6 +122,64 @@ export default function VenueReferralsPage() {
       { revenueDriven: 0, commissionOwed: 0, bookingsCount: 0 },
     );
   }, [bookings]);
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+
+  const currentMonthBookings = useMemo(() => {
+    return bookings.filter((booking) => {
+      const bookingDate = booking.booking_date ?? booking.created_at;
+      return bookingDate.slice(0, 7) === currentMonthKey;
+    });
+  }, [bookings, currentMonthKey]);
+
+  const currentMonthPayout = useMemo(() => {
+    const partnersToPay = new Set<string>();
+    const totalCommissionDue = currentMonthBookings.reduce((sum, booking) => {
+      if (booking.status === 'paid') return sum;
+      if (booking.referrers?.full_name) partnersToPay.add(booking.referrers.full_name);
+      return sum + Number(booking.commission ?? 0);
+    }, 0);
+
+    return {
+      monthLabel: monthFormat.format(new Date(`${currentMonthKey}-01T00:00:00Z`)),
+      totalCommissionDue,
+      bookingsCount: currentMonthBookings.length,
+      partnersCount: partnersToPay.size,
+    };
+  }, [currentMonthBookings, currentMonthKey]);
+
+  const currentPeriod = useMemo(
+    () => payoutPeriods.find((period) => period.month.slice(0, 7) === currentMonthKey),
+    [currentMonthKey, payoutPeriods],
+  );
+
+  const lastPaidPeriod = useMemo(() => payoutPeriods.find((period) => period.status === 'paid'), [payoutPeriods]);
+
+  const upsertPayoutPeriod = useMutation({
+    mutationFn: async ({ status }: { status: PayoutPeriodStatus }) => {
+      if (!currentVenue) return;
+
+      const monthDate = `${currentMonthKey}-01`;
+      const payload = {
+        venue_id: currentVenue.id,
+        month: monthDate,
+        status,
+        paid_at: status === 'paid' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('payout_periods')
+        .upsert(payload, { onConflict: 'venue_id,month' });
+
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['venue-referral-payout-periods'] });
+      toast.success(variables.status === 'locked' ? 'Month locked for payout review' : 'Month marked as paid');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const addBooking = useMutation({
     mutationFn: async () => {
@@ -135,114 +221,240 @@ export default function VenueReferralsPage() {
         <StatCard label="Bookings Count" value={overview.bookingsCount.toString()} />
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Bookings</CardTitle>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>Add booking</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add booking</DialogTitle>
-              </DialogHeader>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'bookings' | 'payouts')} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="bookings">Bookings</TabsTrigger>
+          <TabsTrigger value="payouts">Payouts</TabsTrigger>
+        </TabsList>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Partner</Label>
-                  <Select value={form.partnerId} onValueChange={(value) => setForm((prev) => ({ ...prev, partnerId: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a partner" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {partners.map((partner) => (
-                        <SelectItem key={partner.id} value={partner.id}>
-                          {partner.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+        <TabsContent value="bookings">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Bookings</CardTitle>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>Add booking</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add booking</DialogTitle>
+                  </DialogHeader>
 
-                <div className="space-y-2">
-                  <Label>Amount</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.amount}
-                    onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                    placeholder="0.00"
-                  />
-                </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Partner</Label>
+                      <Select value={form.partnerId} onValueChange={(value) => setForm((prev) => ({ ...prev, partnerId: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a partner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {partners.map((partner) => (
+                            <SelectItem key={partner.id} value={partner.id}>
+                              {partner.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={(value: BookingStatus) => setForm((prev) => ({ ...prev, status: value }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="created">Created</SelectItem>
-                      <SelectItem value="booking_confirmed">Booking confirmed</SelectItem>
-                      <SelectItem value="visited">Visited</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-2">
+                      <Label>Amount</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.amount}
+                        onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                        placeholder="0.00"
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select value={form.status} onValueChange={(value: BookingStatus) => setForm((prev) => ({ ...prev, status: value }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="created">Created</SelectItem>
+                          <SelectItem value="booking_confirmed">Booking confirmed</SelectItem>
+                          <SelectItem value="visited">Visited</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        value={form.date}
+                        onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={() => addBooking.mutate()} disabled={addBooking.isPending}>Save booking</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+
+            <CardContent>
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading bookings…</p>
+              ) : bookings.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No bookings yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Partner</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bookings.map((booking) => (
+                      <TableRow key={booking.id}>
+                        <TableCell className="font-medium">{booking.referrers?.full_name ?? 'Partner'}</TableCell>
+                        <TableCell>£{Number(booking.bill_amount ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="capitalize">
+                            {String(booking.status).replaceAll('_', ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(booking.booking_date ?? booking.created_at).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payouts" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatCard label="Due this month" value={`£${currentMonthPayout.totalCommissionDue.toFixed(2)}`} />
+            <StatCard label="Partners to pay" value={currentMonthPayout.partnersCount.toString()} />
+            <StatCard
+              label="Last payout"
+              value={lastPaidPeriod ? monthFormat.format(new Date(lastPaidPeriod.month)) : 'No payouts yet'}
+            />
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Current month payout</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-4">
+                <PayoutMeta label="Month" value={currentMonthPayout.monthLabel} />
+                <PayoutMeta label="Total commission due" value={`£${currentMonthPayout.totalCommissionDue.toFixed(2)}`} />
+                <PayoutMeta label="Bookings" value={currentMonthPayout.bookingsCount.toString()} />
+                <PayoutMeta label="Partners" value={currentMonthPayout.partnersCount.toString()} />
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => addBooking.mutate()} disabled={addBooking.isPending}>Save booking</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={() => toast.message('Review the payout items list below.')}>Review</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => upsertPayoutPeriod.mutate({ status: 'locked' })}
+                  disabled={upsertPayoutPeriod.isPending || currentPeriod?.status === 'paid'}
+                >
+                  Lock month
+                </Button>
+                <Button
+                  onClick={() => upsertPayoutPeriod.mutate({ status: 'paid' })}
+                  disabled={upsertPayoutPeriod.isPending || currentMonthPayout.bookingsCount === 0}
+                >
+                  Mark as paid
+                </Button>
+                {currentPeriod?.status ? (
+                  <Badge variant="secondary" className="capitalize">{currentPeriod.status}</Badge>
+                ) : (
+                  <Badge variant="secondary">open</Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-        <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading bookings…</p>
-          ) : bookings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No bookings yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Partner</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {bookings.map((booking) => (
-                  <TableRow key={booking.id}>
-                    <TableCell className="font-medium">{booking.referrers?.full_name ?? 'Partner'}</TableCell>
-                    <TableCell>£{Number(booking.bill_amount ?? 0).toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="capitalize">
-                        {String(booking.status).replaceAll('_', ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(booking.booking_date ?? booking.created_at).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Payout items</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!currentMonthBookings.length ? (
+                <p className="text-sm text-muted-foreground">No payout items in the current month yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Partner</TableHead>
+                      <TableHead>Booking / date</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {currentMonthBookings.map((booking) => (
+                      <TableRow key={booking.id}>
+                        <TableCell className="font-medium">{booking.referrers?.full_name ?? 'Partner'}</TableCell>
+                        <TableCell>{new Date(booking.booking_date ?? booking.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>£{Number(booking.commission ?? 0).toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {currentPeriod?.status ?? 'open'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Payout history</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!payoutPeriods.length ? (
+                <p className="text-sm text-muted-foreground">No payout history yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Paid date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payoutPeriods.map((period) => (
+                      <TableRow key={period.id}>
+                        <TableCell className="font-medium">{monthFormat.format(new Date(period.month))}</TableCell>
+                        <TableCell>{period.month.slice(0, 7) === currentMonthKey ? `£${currentMonthPayout.totalCommissionDue.toFixed(2)}` : '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="capitalize">{period.status}</Badge>
+                        </TableCell>
+                        <TableCell>{period.paid_at ? new Date(period.paid_at).toLocaleDateString() : '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -255,5 +467,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
         <p className="mt-1 text-2xl font-semibold">{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function PayoutMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-base font-medium">{value}</p>
+    </div>
   );
 }
