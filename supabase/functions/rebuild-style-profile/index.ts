@@ -22,6 +22,19 @@ serve(async (req) => {
     const { venue_id } = await req.json();
     if (!venue_id) throw new Error("Missing venue_id");
 
+    // Verify the caller is a member of the venue before triggering a SECURITY DEFINER rebuild
+    const { data: isMember, error: memberErr } = await supabase.rpc("is_venue_member", {
+      check_venue_id: venue_id,
+      check_user_id: user.id,
+    });
+    if (memberErr) throw memberErr;
+    if (!isMember) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { error } = await supabase.rpc("rebuild_venue_style_profile", { p_venue_id: venue_id });
     if (error) throw error;
 
