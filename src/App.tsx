@@ -56,6 +56,7 @@ import NotFound from "./pages/NotFound";
 import TermsPage from "./pages/legal/Terms";
 import PrivacyPage from "./pages/legal/Privacy";
 import CookiePolicyPage from "./pages/legal/Cookies";
+import VenueReferralsPage from "./pages/venue/Referrals";
 
 const queryClient = new QueryClient();
 
@@ -201,6 +202,7 @@ function AppRoutes() {
         <Route path="/venue/integrations" element={<Integrations />} />
         <Route path="/venue/team" element={<Navigate to="/setup" replace />} />
         <Route path="/venue/guest-photos" element={<GuestSubmissions />} />
+        <Route path="/venue/referrals" element={<ReferralGuard minimumStage={1}><VenueReferralsPage /></ReferralGuard>} />
 
         {/* Admin Section */}
         <Route path="/admin/platform" element={<PlatformAdminRoute />} />
