@@ -914,16 +914,16 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
   const tasks = pendingTasks || [];
   const urgentNegatives = tasks.filter(task => (task.rating || 0) <= 2 || task.ai_priority === 'P1' || (task.review_text?.toLowerCase().includes('wait') ?? false));
   const readyToApprove = tasks.filter(task => !!task.draft_response?.trim());
-  const urgentQueue = [...tasks]
-    .filter(task => (task.rating || 0) <= 2 || task.ai_priority === 'P1' || !!task.draft_response?.trim())
+  const inboxQueue = [...tasks]
     .sort((a, b) => {
-      const score = (task: ResponseTask) => ((task.rating || 5) <= 2 ? 4 : 0) + (task.ai_priority === 'P1' ? 3 : task.ai_priority === 'P2' ? 2 : 0) + (task.draft_response ? 2 : 0);
+      const score = (task: ResponseTask) => (
+        (task.draft_response ? 4 : 0) +
+        ((task.rating || 5) <= 2 ? 3 : 0) +
+        (task.ai_priority === 'P1' ? 2 : task.ai_priority === 'P2' ? 1 : 0)
+      );
       return score(b) - score(a) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     })
-    .slice(0, 8);
-  const draftQueue = [...readyToApprove]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 10);
+    .slice(0, 12);
 
   const topPositiveTheme = topPraiseThemes[0];
   const topRecurringIssue = recurringIssues[0];
@@ -934,23 +934,23 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-accent" />
-            Pulse reviewed your latest feedback
+            Inbox
           </CardTitle>
-          <CardDescription>Your weekly reputation workflow is ready.</CardDescription>
+          <CardDescription>What needs a reply, and what Pulse already prepared.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 md:grid-cols-3">
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted-foreground">Urgent replies</p>
-              <p className="text-2xl font-semibold text-destructive">{urgentNegatives.length}</p>
+              <p className="text-xs text-muted-foreground">Need reply</p>
+              <p className="text-2xl font-semibold">{tasks.length}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted-foreground">Draft replies ready</p>
+              <p className="text-xs text-muted-foreground">Ready to approve</p>
               <p className="text-2xl font-semibold">{readyToApprove.length}</p>
             </div>
             <div className="rounded-lg border bg-background p-3">
-              <p className="text-xs text-muted-foreground">Recurring issues detected</p>
-              <p className="text-2xl font-semibold">{recurringIssues.length}</p>
+              <p className="text-xs text-muted-foreground">Needs attention</p>
+              <p className="text-2xl font-semibold text-destructive">{urgentNegatives.length}</p>
             </div>
           </div>
         </CardContent>
@@ -958,24 +958,13 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Reputation snapshot</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p><span className="text-muted-foreground">Guests are loving:</span> {topPositiveTheme ? `${themeLabel(topPositiveTheme.theme)} (${topPositiveTheme.praiseCount} positive mentions)` : 'No clear positive theme yet this week.'}</p>
-          <p><span className="text-muted-foreground">Recurring issue:</span> {topRecurringIssue ? `${themeLabel(topRecurringIssue.theme)} (${topRecurringIssue.complaintCount} complaint mentions)` : 'No repeating complaint pattern detected.'}</p>
-          <p><span className="text-muted-foreground">Reviews needing urgent attention:</span> {urgentNegatives.length}</p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Urgent reply queue</CardTitle>
-          <CardDescription>Low ratings, recent negatives, and draft-ready items first.</CardDescription>
+          <CardTitle className="text-sm">Inbox queue</CardTitle>
+          <CardDescription>One clear place to approve, edit, or skip.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {urgentQueue.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No urgent replies right now.</p>
-          ) : urgentQueue.map(task => (
+          {inboxQueue.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No pending replies right now.</p>
+          ) : inboxQueue.map(task => (
             <div key={task.id} className="rounded-lg border p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
@@ -986,7 +975,7 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
                   </div>
                   <p className="text-xs text-muted-foreground">{task.author_name || 'Anonymous'} • {formatReviewDate(task.review_date, task.created_at)}</p>
                 </div>
-                {task.draft_response && <Badge className="text-[10px]">Draft ready</Badge>}
+                {task.draft_response && <Badge className="text-[10px]">Ready</Badge>}
               </div>
               <p className="text-sm text-muted-foreground line-clamp-2">{task.review_text || 'No review text available.'}</p>
               <div className="rounded-md bg-muted/40 p-2">
@@ -994,42 +983,15 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
                 <p className="text-xs line-clamp-2">{task.draft_response || 'No draft yet — click Edit to generate one.'}</p>
               </div>
               <div className="flex gap-2 flex-wrap">
-                {task.draft_response ? (
-                  <Button size="sm" onClick={() => approveDraft(task)}><ThumbsUp className="w-3 h-3 mr-1" />Approve</Button>
-                ) : (
-                  <Button size="sm" onClick={() => setWriterTask(task)}><Edit2 className="w-3 h-3 mr-1" />Write draft</Button>
-                )}
-                <Button size="sm" variant="outline" onClick={() => setWriterTask(task)}><Edit2 className="w-3 h-3 mr-1" />Edit</Button>
-                <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'ignored')}><ThumbsDown className="w-3 h-3 mr-1" />Skip</Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Draft reply queue</CardTitle>
-          <CardDescription>Newest drafted replies awaiting approval.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {draftQueue.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No drafts waiting for approval.</p>
-          ) : draftQueue.map(task => (
-            <div key={task.id} className="rounded-lg border p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">Awaiting approval</Badge>
-                  <SourceBadge source={task.source} />
-                  {renderStars(task.rating)}
-                </div>
-                <span className="text-xs text-muted-foreground">{formatReviewDate(task.review_date, task.created_at)}</span>
-              </div>
-              <p className="text-xs text-muted-foreground line-clamp-2">{task.review_text}</p>
-              <p className="text-sm line-clamp-2">{task.draft_response}</p>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => approveDraft(task)}><ThumbsUp className="w-3 h-3 mr-1" />Approve</Button>
-                <Button size="sm" variant="outline" onClick={() => setWriterTask(task)}><Edit2 className="w-3 h-3 mr-1" />Edit</Button>
+                <Button size="sm" onClick={() => approveDraft(task)} disabled={!task.draft_response}>
+                  <ThumbsUp className="w-3 h-3 mr-1" />Approve
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setWriterTask(task)}>
+                  <Edit2 className="w-3 h-3 mr-1" />Edit
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => updateStatus(task.id, 'ignored')}>
+                  <ThumbsDown className="w-3 h-3 mr-1" />Skip
+                </Button>
               </div>
             </div>
           ))}
@@ -1070,6 +1032,16 @@ function ReputationWorkflowTab({ venueId }: { venueId: string }) {
           ) : reviewContentSuggestions.map((suggestion, i) => (
             <p key={i} className="text-sm text-muted-foreground">• {suggestion}</p>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Quick insight snapshot</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p><span className="text-muted-foreground">Guests are loving:</span> {topPositiveTheme ? `${themeLabel(topPositiveTheme.theme)} (${topPositiveTheme.praiseCount} positive mentions)` : 'No clear positive theme yet this week.'}</p>
+          <p><span className="text-muted-foreground">Recurring issue:</span> {topRecurringIssue ? `${themeLabel(topRecurringIssue.theme)} (${topRecurringIssue.complaintCount} complaint mentions)` : 'No repeating complaint pattern detected.'}</p>
         </CardContent>
       </Card>
 
@@ -1668,15 +1640,13 @@ function AutomationStatusCard({ venueId, venueTimezone, onOpenSetup }: { venueId
   const healthLabel = connected === 0
     ? 'not connected'
     : !latestRun
-      ? 'never run'
-      : hasFailed
-        ? 'failed'
-        : isStale
-          ? 'stale'
-          : 'up to date';
+      ? 'needs attention'
+      : hasFailed || isStale
+        ? 'needs attention'
+        : 'working';
 
   const ctaLabel = connected === 0
-    ? 'Connect sources'
+    ? 'Fetch reviews'
     : hasFailed || isStale || !latestRun
       ? 'Run now'
       : 'Fetch reviews now';
@@ -1697,18 +1667,14 @@ function AutomationStatusCard({ venueId, venueTimezone, onOpenSetup }: { venueId
     <Card className="border-accent/20 bg-accent/5">
       <CardContent className="p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-medium">Review automation health</p>
+          <p className="text-sm font-medium">Review status</p>
           <Button size="sm" onClick={onPrimaryAction} disabled={isLoading || runWeeklyNow.isPending || fetchNow.isPending}>
             <RefreshCw className={`w-4 h-4 mr-2 ${(runWeeklyNow.isPending || fetchNow.isPending) ? 'animate-spin' : ''}`} />
             {ctaLabel}
           </Button>
         </div>
 
-        <div className="grid gap-2 md:grid-cols-5 text-xs">
-          <div className="rounded-md border bg-background p-2">
-            <p className="text-muted-foreground">Reviews connected</p>
-            <p className="font-medium">{connected > 0 ? 'Yes' : 'No'}</p>
-          </div>
+        <div className="grid gap-2 md:grid-cols-3 text-xs">
           <div className="rounded-md border bg-background p-2">
             <p className="text-muted-foreground">Last run</p>
             <p className="font-medium">{lastRunDate ? format(lastRunDate, 'MMM d, HH:mm') : 'Never'}</p>
@@ -1718,19 +1684,14 @@ function AutomationStatusCard({ venueId, venueTimezone, onOpenSetup }: { venueId
             <p className="font-medium capitalize">{healthLabel}</p>
           </div>
           <div className="rounded-md border bg-background p-2">
-            <p className="text-muted-foreground">Needs reply</p>
+            <p className="text-muted-foreground">Replies pending</p>
             <p className="font-medium">{data?.pendingCount || 0}</p>
-          </div>
-          <div className="rounded-md border bg-background p-2">
-            <p className="text-muted-foreground">Ready to approve</p>
-            <p className="font-medium">{data?.draftCount || 0}</p>
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Reviews fetched this week: {data?.fetchedThisWeek || 0}
-          {latestRun?.error_message ? ` • Last error: ${latestRun.error_message}` : ''}
-        </p>
+        {latestRun?.error_message && (
+          <p className="text-xs text-muted-foreground">Needs attention: {latestRun.error_message}</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -1797,18 +1758,17 @@ function WeeklyReport({ venueId, venueTimezone }: { venueId: string; venueTimezo
       ) : (
         <>
           {stats.total_reviews && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card><CardContent className="p-4 text-center"><p className="text-2xl font-semibold">{stats.total_reviews}</p><p className="text-xs text-muted-foreground">Total Reviews</p></CardContent></Card>
-              <Card><CardContent className="p-4 text-center"><p className="text-2xl font-semibold">{stats.avg_rating?.toFixed(1) || '—'}</p><p className="text-xs text-muted-foreground">Avg Rating</p></CardContent></Card>
-              <Card><CardContent className="p-4 text-center"><p className="text-2xl font-semibold text-accent">{stats.five_star_count || 0}</p><p className="text-xs text-muted-foreground">5-Star</p></CardContent></Card>
-              <Card><CardContent className="p-4 text-center"><p className="text-2xl font-semibold text-destructive">{stats.one_two_star_count || 0}</p><p className="text-xs text-muted-foreground">1-2 Star</p></CardContent></Card>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <Card><CardContent className="p-4 text-center"><p className="text-2xl font-semibold">{stats.total_reviews}</p><p className="text-xs text-muted-foreground">Reviews this week</p></CardContent></Card>
+              <Card><CardContent className="p-4 text-center"><p className="text-2xl font-semibold text-accent">{stats.five_star_count || 0}</p><p className="text-xs text-muted-foreground">Guests loved it</p></CardContent></Card>
+              <Card><CardContent className="p-4 text-center"><p className="text-2xl font-semibold text-destructive">{stats.one_two_star_count || 0}</p><p className="text-xs text-muted-foreground">Need follow-up</p></CardContent></Card>
             </div>
           )}
 
           {actionItems.headline && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">{actionItems.headline}</CardTitle>
+                <CardTitle className="text-lg">Weekly summary</CardTitle>
                 <CardDescription>Week of {report.week_start} to {report.week_end}</CardDescription>
               </CardHeader>
               <CardContent className="prose prose-sm prose-invert max-w-none">
@@ -1820,13 +1780,13 @@ function WeeklyReport({ venueId, venueTimezone }: { venueId: string; venueTimezo
           <div className="grid gap-4 md:grid-cols-2">
             {actionItems.what_went_well?.length > 0 && (
               <Card>
-                <CardHeader><CardTitle className="text-base text-accent">✓ What Went Well</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base text-accent">✓ What guests love</CardTitle></CardHeader>
                 <CardContent><ul className="space-y-1.5 text-sm">{actionItems.what_went_well.map((item: string, i: number) => <li key={i} className="text-muted-foreground">• {item}</li>)}</ul></CardContent>
               </Card>
             )}
             {actionItems.what_to_fix?.length > 0 && (
               <Card>
-                <CardHeader><CardTitle className="text-base text-destructive">✗ What to Fix</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base text-destructive">✗ Recurring issues</CardTitle></CardHeader>
                 <CardContent><ul className="space-y-1.5 text-sm">{actionItems.what_to_fix.map((item: string, i: number) => <li key={i} className="text-muted-foreground">• {item}</li>)}</ul></CardContent>
               </Card>
             )}
@@ -1874,8 +1834,8 @@ function ReviewsSetupTab({ venueId }: { venueId: string }) {
       <ReviewSourcesSetup venueId={venueId} />
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Manual fetch</CardTitle>
-          <CardDescription>Use this if you just changed source settings.</CardDescription>
+          <CardTitle className="text-sm">Fetch reviews</CardTitle>
+          <CardDescription>Use this in setup after changing a source connection.</CardDescription>
         </CardHeader>
         <CardContent>
           <IngestionPanel venueId={venueId} />
@@ -1886,7 +1846,7 @@ function ReviewsSetupTab({ venueId }: { venueId: string }) {
         <Card>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" className="w-full justify-between">
-              <span className="text-sm font-medium">Advanced diagnostics & raw feed</span>
+              <span className="text-sm font-medium">Setup / Advanced: diagnostics & raw feed</span>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </CollapsibleTrigger>
@@ -1936,7 +1896,7 @@ export default function ReviewsAnalytics() {
         <TabsList>
           <TabsTrigger value="inbox" className="gap-2"><Sparkles className="w-4 h-4" />Inbox</TabsTrigger>
           <TabsTrigger value="insights" className="gap-2"><FileText className="w-4 h-4" />Insights</TabsTrigger>
-          <TabsTrigger value="setup" className="gap-2"><Settings2 className="w-4 h-4" />Setup</TabsTrigger>
+          <TabsTrigger value="setup" className="gap-2"><Settings2 className="w-4 h-4" />Setup & Advanced</TabsTrigger>
         </TabsList>
 
         <TabsContent value="inbox"><ReputationWorkflowTab venueId={currentVenue.id} /></TabsContent>
