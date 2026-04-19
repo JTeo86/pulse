@@ -1672,39 +1672,63 @@ export type Database = {
       }
       payout_items: {
         Row: {
+          amount: number
           batch_id: string
+          booking_id: string | null
+          commission_id: string | null
           commission_amount: number
           created_at: string
+          external_payout_reference: string | null
           id: string
           net_amount: number
+          paid_at: string | null
+          partner_id: string | null
+          payout_period_id: string | null
           pulse_fee: number
           referral_booking_id: string
           referrer_id: string
           status: string
+          updated_at: string
           venue_id: string
         }
         Insert: {
+          amount?: number
           batch_id: string
+          booking_id?: string | null
+          commission_id?: string | null
           commission_amount?: number
           created_at?: string
+          external_payout_reference?: string | null
           id?: string
           net_amount?: number
+          paid_at?: string | null
+          partner_id?: string | null
+          payout_period_id?: string | null
           pulse_fee?: number
           referral_booking_id: string
           referrer_id: string
           status?: string
+          updated_at?: string
           venue_id: string
         }
         Update: {
+          amount?: number
           batch_id?: string
+          booking_id?: string | null
+          commission_id?: string | null
           commission_amount?: number
           created_at?: string
+          external_payout_reference?: string | null
           id?: string
           net_amount?: number
+          paid_at?: string | null
+          partner_id?: string | null
+          payout_period_id?: string | null
           pulse_fee?: number
           referral_booking_id?: string
           referrer_id?: string
           status?: string
+          updated_at?: string
           venue_id?: string
         }
         Relationships: [
@@ -1713,6 +1737,34 @@ export type Database = {
             columns: ["batch_id"]
             isOneToOne: false
             referencedRelation: "payout_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_items_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "referrals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_items_commission_id_fkey"
+            columns: ["commission_id"]
+            isOneToOne: false
+            referencedRelation: "commissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_items_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "referrers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payout_items_payout_period_id_fkey"
+            columns: ["payout_period_id"]
+            isOneToOne: false
+            referencedRelation: "payout_periods"
             referencedColumns: ["id"]
           },
           {
@@ -1742,36 +1794,114 @@ export type Database = {
         Row: {
           created_at: string
           due_at: string | null
+          external_payment_reference: string | null
+          external_payment_status: string | null
           id: string
           month: string
           paid_at: string | null
           status: string
+          total_bookings: number
+          total_commission: number
+          total_partner_payout: number
+          total_platform_fee: number
           updated_at: string
           venue_id: string
         }
         Insert: {
           created_at?: string
           due_at?: string | null
+          external_payment_reference?: string | null
+          external_payment_status?: string | null
           id?: string
           month: string
           paid_at?: string | null
           status?: string
+          total_bookings?: number
+          total_commission?: number
+          total_partner_payout?: number
+          total_platform_fee?: number
           updated_at?: string
           venue_id: string
         }
         Update: {
           created_at?: string
           due_at?: string | null
+          external_payment_reference?: string | null
+          external_payment_status?: string | null
           id?: string
           month?: string
           paid_at?: string | null
           status?: string
+          total_bookings?: number
+          total_commission?: number
+          total_partner_payout?: number
+          total_platform_fee?: number
           updated_at?: string
           venue_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "payout_periods_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          created_at: string
+          external_payment_id: string | null
+          id: string
+          paid_at: string | null
+          partner_payout_amount: number
+          payout_period_id: string
+          platform_fee_amount: number
+          provider: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_payment_id?: string | null
+          id?: string
+          paid_at?: string | null
+          partner_payout_amount?: number
+          payout_period_id: string
+          platform_fee_amount?: number
+          provider?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          external_payment_id?: string | null
+          id?: string
+          paid_at?: string | null
+          partner_payout_amount?: number
+          payout_period_id?: string
+          platform_fee_amount?: number
+          provider?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_payout_period_id_fkey"
+            columns: ["payout_period_id"]
+            isOneToOne: false
+            referencedRelation: "payout_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
@@ -2632,6 +2762,9 @@ export type Database = {
           id: string
           instagram_handle: string | null
           notes: string | null
+          payout_account_reference: string | null
+          payout_onboarding_status: string | null
+          payout_provider: string | null
           partner_beta_access: boolean
           partner_referral_enabled: boolean
           partner_rollout_changed_at: string | null
@@ -2649,6 +2782,9 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           notes?: string | null
+          payout_account_reference?: string | null
+          payout_onboarding_status?: string | null
+          payout_provider?: string | null
           partner_beta_access?: boolean
           partner_referral_enabled?: boolean
           partner_rollout_changed_at?: string | null
@@ -2666,6 +2802,9 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           notes?: string | null
+          payout_account_reference?: string | null
+          payout_onboarding_status?: string | null
+          payout_provider?: string | null
           partner_beta_access?: boolean
           partner_referral_enabled?: boolean
           partner_rollout_changed_at?: string | null
