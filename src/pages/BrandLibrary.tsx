@@ -651,10 +651,10 @@ export default function BrandLibraryPage() {
       )}
       <PageHeader
         title="Ready"
-        description="Pulse has prepared content for you. Review what is ready now, finish one missing step, then add it to Calendar."
+        description="Review what’s ready, finish one step, then Add to Calendar."
         action={(
           <Button variant="outline" className="gap-2" onClick={() => navigate('/content/feed')}>
-            <ImageIcon className="w-4 h-4" /> Open Photos
+            <ImageIcon className="w-4 h-4" /> Photos
           </Button>
         )}
       />
@@ -683,7 +683,7 @@ export default function BrandLibraryPage() {
         <>
           {topLevelTab === 'ready' && (
             readyNowItems.length === 0 ? (
-              <EmptyState icon={Sparkles} title="Nothing ready yet" description="Add photos or create a plan, then come back here to review ready posts." />
+              <EmptyState icon={Sparkles} title="Nothing ready yet" description="Add a photo or plan, then check back here." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {readyNowItems.map((item) => {
@@ -716,7 +716,7 @@ export default function BrandLibraryPage() {
                       ) : (
                         <div className="h-40 bg-muted/50 flex flex-col items-center justify-center text-center px-4">
                           <ImageIcon className="w-8 h-8 text-muted-foreground/40 mb-2" />
-                          <p className="text-sm font-medium">No image yet</p>
+                          <p className="text-sm font-medium">Add an image</p>
                         </div>
                       )}
                       <CardContent className="p-4 space-y-3">

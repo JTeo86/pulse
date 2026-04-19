@@ -297,7 +297,7 @@ export default function DraftsTab() {
           <DialogHeader>
             <DialogTitle>Request Changes</DialogTitle>
             <DialogDescription>
-              Provide feedback for the AI to improve this content
+              Share a quick note so we can improve this draft.
             </DialogDescription>
           </DialogHeader>
 
@@ -317,7 +317,7 @@ export default function DraftsTab() {
               disabled={!changeReason.trim() || processing}
               className="btn-primary-editorial"
             >
-              Submit Feedback
+              Save Note
             </Button>
           </DialogFooter>
         </DialogContent>

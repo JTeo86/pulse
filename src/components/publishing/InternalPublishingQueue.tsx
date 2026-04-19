@@ -237,7 +237,7 @@ export function InternalPublishingQueue() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={refreshBufferStatus} disabled={!canPublish || refreshingStatus || !bufferConnected}>
             {refreshingStatus ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Refresh Buffer status
+            Refresh status
           </Button>
           <Button onClick={sendToBuffer} disabled={!canSend}>
             {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
@@ -247,17 +247,17 @@ export function InternalPublishingQueue() {
       </div>
 
       {!canPublish && (
-        <p className="text-sm text-muted-foreground">Only venue owner/admin can publish or refresh statuses.</p>
+        <p className="text-sm text-muted-foreground">Only owners and admins can publish or refresh status.</p>
       )}
 
       <div className="space-y-4">
         <section className="space-y-3">
           <div>
             <h3 className="font-medium">Ready to send</h3>
-            <p className="text-sm text-muted-foreground">Approved content that can be sent to selected Buffer channels.</p>
+            <p className="text-sm text-muted-foreground">Approved posts ready to send.</p>
           </div>
           {readyItems.length === 0 ? (
-            <EmptyState icon={Send} title="No ready content" description="Approve content first, then it will appear here for Buffer publishing." />
+            <EmptyState icon={Send} title="Nothing to send yet" description="Approve a post, then it will show up here." />
           ) : (
             <div className="space-y-3">
               {readyItems.map((item) => {
@@ -293,11 +293,11 @@ export function InternalPublishingQueue() {
 
         <section className="space-y-3">
           <div>
-            <h3 className="font-medium">Already in Buffer / publishing history</h3>
-            <p className="text-sm text-muted-foreground">Track queued, scheduled, published, and failed items.</p>
+            <h3 className="font-medium">Sent and scheduled</h3>
+            <p className="text-sm text-muted-foreground">See what’s queued, scheduled, or posted.</p>
           </div>
           {historyItems.length === 0 ? (
-            <EmptyState icon={RefreshCw} title="No Buffer history yet" description="After sending content to Buffer, delivery statuses will appear here." />
+            <EmptyState icon={RefreshCw} title="No activity yet" description="Once you send a post, you’ll see updates here." />
           ) : (
             <div className="space-y-3">
               {historyItems.map((item) => {
