@@ -72,7 +72,7 @@ function ReferralsContent() {
     queryKey: ['referrals-latest-payout-period', currentVenue?.id],
     queryFn: async () => {
       if (!currentVenue) return null;
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('payout_periods')
         .select('id, status')
         .eq('venue_id', currentVenue.id)
