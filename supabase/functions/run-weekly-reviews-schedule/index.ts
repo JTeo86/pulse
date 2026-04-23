@@ -20,6 +20,8 @@ const MONDAY_WINDOW_START_HOUR = 8;
 const MONDAY_WINDOW_END_HOUR = 18;
 const STALE_RUNNING_HOURS = 2;
 
+type AdminClient = ReturnType<typeof createClient<any>>;
+
 function getVenueLocalParts(now: Date, timeZone: string) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -98,7 +100,7 @@ async function invokeInternalStep(path: string, payload: Record<string, unknown>
 }
 
 async function runVenueCycle(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: AdminClient,
   venue: { id: string; timezone?: string | null },
   now: Date,
   force = false,
