@@ -106,25 +106,27 @@ async function invokeInternalStep(path: string, payload: Record<string, unknown>
   return { ok: true, body };
 }
 
-async function isAuthorizedSchedulerRequest(req: Request, supabaseAdmin: AdminClient) {
+function isAuthorizedSchedulerRequest(req: Request) {
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.replace("Bearer ", "").trim();
-  if (token && token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (token && serviceRoleKey && token === serviceRoleKey) {
     return true;
   }
 
-  const schedulerSecret = req.headers.get("x-reviews-scheduler-secret")?.trim();
-  if (!schedulerSecret) {
-    return false;
+  const provided = req.headers.get("x-reviews-scheduler-secret")?.trim();
+  const expected = Deno.env.get("REVIEWS_SCHEDULER_SECRET")?.trim();
+  console.log("auth check", {
+    hasProvided: Boolean(provided),
+    providedLen: provided?.length ?? 0,
+    hasExpected: Boolean(expected),
+    expectedLen: expected?.length ?? 0,
+  });
+  if (provided && expected && provided === expected) {
+    return true;
   }
 
-  const { data, error } = await supabaseAdmin.rpc("get_reviews_scheduler_secret");
-  if (error) {
-    console.error("Failed to load reviews scheduler secret:", error);
-    return false;
-  }
-
-  return typeof data === "string" && data.length > 0 && data === schedulerSecret;
+  return false;
 }
 
 async function runVenueCycle(
@@ -272,7 +274,7 @@ serve(async (req) => {
   try {
     const supabaseAdmin = createAdminClient();
 
-    if (!(await isAuthorizedSchedulerRequest(req, supabaseAdmin))) {
+    if (!isAuthorizedSchedulerRequest(req)) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
