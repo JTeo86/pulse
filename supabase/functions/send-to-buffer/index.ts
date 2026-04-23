@@ -16,7 +16,9 @@ function errorResponse(message: string, status = 400, code = 'bad_request', deta
   return jsonResponse({ error: { code, message, details } }, status);
 }
 
-async function getUserIdFromAuthHeader(supabase: ReturnType<typeof createClient>, authHeader: string | null) {
+type AdminClient = ReturnType<typeof createClient<any>>;
+
+async function getUserIdFromAuthHeader(supabase: AdminClient, authHeader: string | null) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.replace('Bearer ', '');
   const { data, error } = await supabase.auth.getClaims(token);
@@ -24,7 +26,7 @@ async function getUserIdFromAuthHeader(supabase: ReturnType<typeof createClient>
   return String(data.claims.sub);
 }
 
-async function canPublish(supabase: ReturnType<typeof createClient>, venueId: string, userId: string) {
+async function canPublish(supabase: AdminClient, venueId: string, userId: string) {
   const [{ data: isVenueAdmin }, { data: venueRow }] = await Promise.all([
     supabase.rpc('is_venue_admin', { check_venue_id: venueId, check_user_id: userId }),
     supabase.from('venues').select('owner_user_id').eq('id', venueId).maybeSingle(),
