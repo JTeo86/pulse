@@ -268,7 +268,7 @@ serve(async (req) => {
   try {
     const supabaseAdmin = createAdminClient();
 
-    if (!(await isAuthorizedSchedulerRequest(req, supabaseAdmin))) {
+    if (!isAuthorizedSchedulerRequest(req)) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
