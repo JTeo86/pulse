@@ -30,7 +30,9 @@ function base64UrlDecode(value: string) {
   return atob(padded);
 }
 
-async function getUserIdFromAuthHeader(supabase: ReturnType<typeof createClient>, authHeader: string | null) {
+type AdminClient = ReturnType<typeof createClient<any>>;
+
+async function getUserIdFromAuthHeader(supabase: AdminClient, authHeader: string | null) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.replace('Bearer ', '');
   const { data, error } = await supabase.auth.getClaims(token);
@@ -61,7 +63,7 @@ function resolveSafeRedirect(redirectTo: unknown, appBaseUrl: string) {
   }
 }
 
-async function canManageConnection(supabase: ReturnType<typeof createClient>, venueId: string, userId: string) {
+async function canManageConnection(supabase: AdminClient, venueId: string, userId: string) {
   const [{ data: isVenueAdmin }, { data: venueRow }] = await Promise.all([
     supabase.rpc('is_venue_admin', { check_venue_id: venueId, check_user_id: userId }),
     supabase.from('venues').select('owner_user_id').eq('id', venueId).maybeSingle(),
@@ -87,15 +89,11 @@ Deno.serve(async (req) => {
     const defaultRedirect = Deno.env.get('APP_BASE_URL') ?? 'http://localhost:5173';
     const callbackUrl = getCallbackUrl();
 
-    if (!clientId || !clientSecret) {
-      return errorResponse(
-        'Buffer OAuth is not configured. Platform admin must set BUFFER_CLIENT_ID and BUFFER_CLIENT_SECRET edge function secrets.',
-        500,
-        'buffer_not_configured',
-      );
-    }
-
     if (action === 'callback') {
+      if (!clientId || !clientSecret) {
+        return errorResponse('Buffer connection is not configured yet.', 200, 'buffer_not_configured');
+      }
+
       const code = url.searchParams.get('code');
       const state = url.searchParams.get('state');
 
@@ -180,6 +178,10 @@ Deno.serve(async (req) => {
 
     if (action === 'start') {
       if (req.method !== 'POST') return errorResponse('Method not allowed', 405, 'method_not_allowed');
+      if (!clientId || !clientSecret) {
+        return errorResponse('Buffer connection is not configured yet.', 200, 'buffer_not_configured');
+      }
+
       const { venue_id, redirect_to } = await req.json();
       if (!venue_id) return errorResponse('venue_id is required', 400, 'missing_venue_id');
 
