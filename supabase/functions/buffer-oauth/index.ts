@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (error) return errorResponse('Failed to load Buffer connection status.', 500, 'status_lookup_failed', error.message);
-      return jsonResponse({ connected: Boolean(data), connection: data ?? null });
+      return jsonResponse({ configured: Boolean(clientId && clientSecret), connected: Boolean(data), connection: data ?? null });
     }
 
     if (action === 'channels') {
@@ -233,6 +233,8 @@ Deno.serve(async (req) => {
 
       const { data: isMember } = await supabase.rpc('is_venue_member', { check_venue_id: venueId, check_user_id: userId });
       if (!isMember) return errorResponse('Forbidden', 403, 'forbidden');
+
+      if (!clientId || !clientSecret) return jsonResponse({ configured: false, connected: false, channels: [] });
 
       const { data: conn, error: connError } = await supabase
         .from('venue_buffer_connections')
