@@ -2732,6 +2732,7 @@ export type Database = {
           created_at: string
           error_message: string | null
           id: string
+          scheduled_for: string | null
           status: string
           steps_completed: string[]
           updated_at: string
@@ -2743,6 +2744,7 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           id?: string
+          scheduled_for?: string | null
           status?: string
           steps_completed?: string[]
           updated_at?: string
@@ -2754,6 +2756,7 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           id?: string
+          scheduled_for?: string | null
           status?: string
           steps_completed?: string[]
           updated_at?: string
