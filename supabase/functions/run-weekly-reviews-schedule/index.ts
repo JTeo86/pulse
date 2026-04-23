@@ -116,12 +116,6 @@ function isAuthorizedSchedulerRequest(req: Request) {
 
   const provided = req.headers.get("x-reviews-scheduler-secret")?.trim();
   const expected = Deno.env.get("REVIEWS_SCHEDULER_SECRET")?.trim();
-  console.log("auth check", {
-    hasProvided: Boolean(provided),
-    providedLen: provided?.length ?? 0,
-    hasExpected: Boolean(expected),
-    expectedLen: expected?.length ?? 0,
-  });
   if (provided && expected && provided === expected) {
     return true;
   }
