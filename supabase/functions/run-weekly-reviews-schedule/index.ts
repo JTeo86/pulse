@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-reviews-scheduler-secret",
 };
 
 const WEEKDAY_TO_INDEX: Record<string, number> = {
@@ -21,6 +21,13 @@ const MONDAY_WINDOW_END_HOUR = 18;
 const STALE_RUNNING_HOURS = 2;
 
 type AdminClient = ReturnType<typeof createClient<any>>;
+
+function createAdminClient(): AdminClient {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+}
 
 function getVenueLocalParts(now: Date, timeZone: string) {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -97,6 +104,27 @@ async function invokeInternalStep(path: string, payload: Record<string, unknown>
   }
 
   return { ok: true, body };
+}
+
+async function isAuthorizedSchedulerRequest(req: Request, supabaseAdmin: AdminClient) {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (token && token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+    return true;
+  }
+
+  const schedulerSecret = req.headers.get("x-reviews-scheduler-secret")?.trim();
+  if (!schedulerSecret) {
+    return false;
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("get_reviews_scheduler_secret");
+  if (error) {
+    console.error("Failed to load reviews scheduler secret:", error);
+    return false;
+  }
+
+  return typeof data === "string" && data.length > 0 && data === schedulerSecret;
 }
 
 async function runVenueCycle(
@@ -241,24 +269,19 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const token = authHeader.replace("Bearer ", "");
-  if (token !== Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   try {
+    const supabaseAdmin = createAdminClient();
+
+    if (!(await isAuthorizedSchedulerRequest(req, supabaseAdmin))) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const targetVenueId: string | undefined = body?.venue_id;
     const force = Boolean(body?.force);
-
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
 
     const { data: venues, error: vErr } = await supabaseAdmin
       .from("venues")
