@@ -217,13 +217,82 @@ beforeEach(() => {
 });
 
 describe('SetupPage', () => {
-  it('marks profile complete on load when the visible required fields are already saved', async () => {
+  it('marks profile complete on load when the required visible fields are saved', async () => {
     renderSetupPage('/setup');
 
-    expect(await screen.findByRole('button', { name: /Profile Complete/i })).toBeInTheDocument();
+    // Top step card should reflect Profile complete
+    expect(await screen.findByRole('button', { name: /Profile\s+Complete/i })).toBeInTheDocument();
+    // Side rail should also say Profile Complete (same logic)
+    const railButtons = screen.getAllByRole('button', { name: /Profile\s+Complete/i });
+    expect(railButtons.length).toBeGreaterThanOrEqual(2);
+    // Profile section badges
     expect(screen.getByText('Core fields ready')).toBeInTheDocument();
-    expect(screen.getByText('Profile confirmed')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Confirmed/i })).toBeInTheDocument();
+    expect(screen.getByText('Website analysed')).toBeInTheDocument();
+    // No "Confirmation needed" / "Profile confirmed" badges any more
+    expect(screen.queryByText(/Confirmation needed/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Profile confirmed/i)).not.toBeInTheDocument();
+    // Confirm button is non-blocking
+    expect(screen.getByRole('button', { name: /Looks good/i })).toBeInTheDocument();
+    // Progress should include Profile in completion
+    expect(screen.getAllByText(/% complete/).length).toBeGreaterThan(0);
+  });
+
+  it('keeps profile complete after toggling the optional review button', async () => {
+    renderSetupPage('/setup');
+
+    await screen.findByRole('button', { name: /Profile\s+Complete/i });
+    const reviewBtn = screen.getByRole('button', { name: /Looks good/i });
+    fireEvent.click(reviewBtn);
+    // Toggling to "Reviewed" must not flip step to incomplete
+    expect(await screen.findByRole('button', { name: /Reviewed/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Profile\s+Complete/i }).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps profile complete when a non-required field changes', async () => {
+    renderSetupPage('/setup');
+
+    await screen.findByDisplayValue('Pulse Bistro');
+    // Editing the venue name (still non-empty) must keep step complete
+    const venueNameInput = screen.getByDisplayValue('Pulse Bistro');
+    fireEvent.change(venueNameInput, { target: { value: 'Pulse Bistro Updated' } });
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Profile\s+Complete/i }).length).toBeGreaterThanOrEqual(2);
+    });
+    // No "Confirmation needed" reappearance
+    expect(screen.queryByText(/Confirmation needed/i)).not.toBeInTheDocument();
+  });
+
+  it('marks profile incomplete when a required field is cleared and lists what is missing', async () => {
+    renderSetupPage('/setup');
+
+    await screen.findByDisplayValue('Pulse Bistro');
+    const venueNameInput = screen.getByDisplayValue('Pulse Bistro');
+    fireEvent.change(venueNameInput, { target: { value: '' } });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Profile\s+Still needed: Venue name/i })).toBeInTheDocument();
+      expect(screen.getByText('Missing core fields')).toBeInTheDocument();
+      expect(screen.getByText(/Add Venue name to mark Profile complete\./i)).toBeInTheDocument();
+      expect(screen.getByText(/Add Venue name so Pulse has a complete source of truth for the venue\./i)).toBeInTheDocument();
+    });
+  });
+
+  it('keeps profile incomplete on load when a required visible field is missing', async () => {
+    db.profile = {
+      ...db.profile,
+      brand_summary: '',
+    };
+
+    renderSetupPage('/setup');
+
+    expect(await screen.findByRole('button', { name: /Profile\s+Still needed: Brand positioning/i })).toBeInTheDocument();
+    expect(screen.getByText('Missing core fields')).toBeInTheDocument();
+    expect(screen.getByText(/Add Brand positioning to mark Profile complete\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Add Brand positioning so Pulse has a complete source of truth for the venue\./i)).toBeInTheDocument();
+    // Looks good button is still present and never disabled (non-blocking)
+    const reviewBtn = screen.getByRole('button', { name: /Looks good/i });
+    expect(reviewBtn).not.toBeDisabled();
   });
 
   it('maps old tab links into the new guided steps and preserves onboarding copy', async () => {
@@ -245,25 +314,6 @@ describe('SetupPage', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('Fresh Pasta House')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Shoreditch')).toBeInTheDocument();
-    });
-  });
-
-  it('resets profile confirmation when a core field changes after confirmation', async () => {
-    renderSetupPage('/setup');
-
-    await screen.findByDisplayValue('Pulse Bistro');
-    expect(screen.getByRole('button', { name: /Confirmed/i })).toBeInTheDocument();
-
-    const venueNameInput = screen.getByDisplayValue('Pulse Bistro');
-    fireEvent.change(venueNameInput, { target: { value: 'Pulse Bistro Updated' } });
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Confirm profile/i })).toBeInTheDocument();
-      expect(screen.getByText('Confirmation needed')).toBeInTheDocument();
-      expect(screen.getByText('Still needed')).toBeInTheDocument();
-      expect(screen.getByText(/Everything is filled in\. Confirm once to mark Profile complete\./i)).toBeInTheDocument();
-      expect(screen.getByText(/Confirm once more to lock this in/i)).toBeInTheDocument();
-      expect(screen.getByText(/Confirm the profile to finish this step/i)).toBeInTheDocument();
     });
   });
 
@@ -296,21 +346,6 @@ describe('SetupPage', () => {
     expect(await screen.findByText('Ready for reuse')).toBeInTheDocument();
     expect(screen.getByText('Library')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Skip for now/i })).not.toBeInTheDocument();
-  });
-
-  it('keeps profile incomplete if a required visible field is missing on load', async () => {
-    db.profile = {
-      ...db.profile,
-      brand_summary: '',
-    };
-
-    renderSetupPage('/setup');
-
-    expect(await screen.findByRole('button', { name: /Profile Still needed: Brand positioning/i })).toBeInTheDocument();
-    expect(screen.getByText('Missing core fields')).toBeInTheDocument();
-    expect(screen.getByText(/Add Brand positioning to mark Profile complete\./i)).toBeInTheDocument();
-    expect(screen.getByText(/Add Brand positioning so Pulse has a complete source of truth for the venue\./i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Confirm profile/i })).toBeDisabled();
   });
 
   it('saves the same data model and maps the Active preset to creative daily auto-schedule', async () => {
