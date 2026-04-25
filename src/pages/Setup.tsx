@@ -842,25 +842,16 @@ function ProfileStepSection({
             <Badge variant={websiteAnalyzed ? 'default' : 'outline'}>
               {websiteAnalyzed ? 'Website analysed' : 'Website not analysed'}
             </Badge>
-            <Badge variant={coreProfileConfirmed ? 'default' : 'outline'}>
-              {coreProfileConfirmed ? 'Profile confirmed' : 'Confirmation needed'}
-            </Badge>
             <Badge variant={profileHasRequiredFields ? 'default' : 'outline'}>
               {profileHasRequiredFields ? 'Core fields ready' : 'Missing core fields'}
             </Badge>
           </div>
-          {!coreProfileConfirmed || !profileHasRequiredFields ? (
+          {!profileHasRequiredFields ? (
             <div className="rounded-xl border bg-muted/20 p-4">
               <p className="text-sm font-medium">Still needed</p>
-              {missingProfileFields.length > 0 ? (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Add {formatInlineList(missingProfileFields)} to mark Profile complete.
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Everything is filled in. Confirm once to mark Profile complete.
-                </p>
-              )}
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add {formatInlineList(missingProfileFields)} to mark Profile complete.
+              </p>
             </div>
           ) : null}
         </CardContent>
