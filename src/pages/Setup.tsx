@@ -139,17 +139,7 @@ const STEP_COPY: Record<SetupStep, { title: string; description: string }> = {
   },
 };
 
-const PROFILE_FIELDS: Array<keyof SetupState> = [
-  'venueName',
-  'cuisineType',
-  'location',
-  'website',
-  'instagram',
-  'tone',
-  'vibe',
-  'audience',
-  'positioning',
-];
+
 
 export default function SetupPage() {
   const { currentVenue, refreshVenues } = useVenue();
@@ -170,8 +160,7 @@ export default function SetupPage() {
   const [analysisResult, setAnalysisResult] = useState<WebsiteAnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [websiteAnalyzed, setWebsiteAnalyzed] = useState(false);
-  const [coreProfileConfirmed, setCoreProfileConfirmed] = useState(false);
-  const [profileNeedsReconfirm, setProfileNeedsReconfirm] = useState(false);
+  const [profileReviewed, setProfileReviewed] = useState(false);
   const [automationConfigured, setAutomationConfigured] = useState(false);
   const [photosSkipped, setPhotosSkipped] = useState(false);
   const [activeStep, setActiveStep] = useState<SetupStep>(mapQueryTabToStep(searchParams.get('tab')));
@@ -251,12 +240,10 @@ export default function SetupPage() {
         approvalMode: (settingsRes.data?.approval_mode as SetupState['approvalMode']) || 'require_approval',
         frequency: (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week',
       };
-      const savedProfileComplete = hasRequiredProfileFields(nextState);
       setState(nextState);
       setAnalysisUrl(currentVenue.website_url || '');
       setWebsiteAnalyzed(Boolean(currentVenue.website_url && profileRes.data));
-      setCoreProfileConfirmed(savedProfileComplete);
-      setProfileNeedsReconfirm(false);
+      setProfileReviewed(false);
       setAutomationConfigured(Boolean(settingsRes.data));
       await fetchAssets(currentVenue.id);
     })();
@@ -264,10 +251,6 @@ export default function SetupPage() {
 
   const updateField = <K extends keyof SetupState>(field: K, value: SetupState[K]) => {
     setState((prev) => ({ ...prev, [field]: value }));
-    if (PROFILE_FIELDS.includes(field)) {
-      setProfileNeedsReconfirm(coreProfileConfirmed);
-      setCoreProfileConfirmed(false);
-    }
   };
 
   const updateAutomationState = (updates: Partial<Pick<SetupState, 'autopilotMode' | 'frequency' | 'approvalMode' | 'requireAssetForRuns' | 'allowCopyOnlyFallback'>>) => {
@@ -340,8 +323,8 @@ export default function SetupPage() {
       suggestedContentAngles: draft.suggestedContentAngles || prev.suggestedContentAngles,
     }));
 
-    setCoreProfileConfirmed(false);
-    toast({ title: 'Draft applied', description: 'Review the populated fields and confirm the profile when it looks right.' });
+    setProfileReviewed(false);
+    toast({ title: 'Draft applied', description: 'Review the populated fields and tweak anything that needs to change.' });
   };
 
   const saveSetup = async () => {
@@ -495,18 +478,12 @@ export default function SetupPage() {
     }
   };
 
-  const profileComplete = useMemo(
-    () => coreProfileConfirmed && hasRequiredProfileFields(state),
-    [coreProfileConfirmed, state],
-  );
   const missingProfileFields = useMemo(
     () => getMissingProfileFields(state),
     [state],
   );
-  const profileHasRequiredFields = useMemo(
-    () => missingProfileFields.length === 0,
-    [missingProfileFields],
-  );
+  const profileHasRequiredFields = missingProfileFields.length === 0;
+  const profileComplete = profileHasRequiredFields;
   const brandComplete = useMemo(
     () => hasBrandGuidance(state),
     [state],
@@ -567,7 +544,11 @@ export default function SetupPage() {
                       )}
                     </div>
                     <p className="font-medium">{STEP_COPY[step].title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{STEP_COPY[step].description}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {stepStatus[step]
+                        ? 'Complete'
+                        : getStepSummary(step, false, assets.length, photosSkipped, missingProfileFields)}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -608,7 +589,6 @@ export default function SetupPage() {
                         assets.length,
                         photosSkipped,
                         missingProfileFields,
-                        profileHasRequiredFields && !coreProfileConfirmed,
                       )}
                     </p>
                   </div>
@@ -626,19 +606,15 @@ export default function SetupPage() {
                 analysisLoading={analysisLoading}
                 analysisError={analysisError}
                 analysisResult={analysisResult}
-                coreProfileConfirmed={coreProfileConfirmed}
+                profileReviewed={profileReviewed}
                 profileHasRequiredFields={profileHasRequiredFields}
                 missingProfileFields={missingProfileFields}
-                profileNeedsReconfirm={profileNeedsReconfirm}
                 onUrlChange={setAnalysisUrl}
                 onAnalyze={analyzeWebsite}
                 onApplySuggestions={applySuggestions}
                 onDismissSuggestions={() => setAnalysisResult(null)}
                 onFieldChange={updateField}
-                onConfirm={() => {
-                  setCoreProfileConfirmed((value) => !value);
-                  setProfileNeedsReconfirm(false);
-                }}
+                onConfirm={() => setProfileReviewed((value) => !value)}
               />
             ) : null}
 
@@ -772,7 +748,6 @@ export default function SetupPage() {
                     photosSkipped,
                     assets.length,
                     missingProfileFields,
-                    profileHasRequiredFields && !coreProfileConfirmed,
                   )}
               </p>
             </div>
@@ -796,10 +771,9 @@ function ProfileStepSection({
   analysisLoading,
   analysisError,
   analysisResult,
-  coreProfileConfirmed,
+  profileReviewed,
   profileHasRequiredFields,
   missingProfileFields,
-  profileNeedsReconfirm,
   onUrlChange,
   onAnalyze,
   onApplySuggestions,
@@ -813,10 +787,9 @@ function ProfileStepSection({
   analysisLoading: boolean;
   analysisError: string | null;
   analysisResult: WebsiteAnalysisResult | null;
-  coreProfileConfirmed: boolean;
+  profileReviewed: boolean;
   profileHasRequiredFields: boolean;
   missingProfileFields: string[];
-  profileNeedsReconfirm: boolean;
   onUrlChange: (value: string) => void;
   onAnalyze: () => void;
   onApplySuggestions: () => void;
@@ -859,25 +832,16 @@ function ProfileStepSection({
             <Badge variant={websiteAnalyzed ? 'default' : 'outline'}>
               {websiteAnalyzed ? 'Website analysed' : 'Website not analysed'}
             </Badge>
-            <Badge variant={coreProfileConfirmed ? 'default' : 'outline'}>
-              {coreProfileConfirmed ? 'Profile confirmed' : 'Confirmation needed'}
-            </Badge>
             <Badge variant={profileHasRequiredFields ? 'default' : 'outline'}>
               {profileHasRequiredFields ? 'Core fields ready' : 'Missing core fields'}
             </Badge>
           </div>
-          {!coreProfileConfirmed || !profileHasRequiredFields ? (
+          {!profileHasRequiredFields ? (
             <div className="rounded-xl border bg-muted/20 p-4">
               <p className="text-sm font-medium">Still needed</p>
-              {missingProfileFields.length > 0 ? (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Add {formatInlineList(missingProfileFields)} to mark Profile complete.
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Everything is filled in. Confirm once to mark Profile complete.
-                </p>
-              )}
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add {formatInlineList(missingProfileFields)} to mark Profile complete.
+              </p>
             </div>
           ) : null}
         </CardContent>
@@ -967,21 +931,18 @@ function ProfileStepSection({
 
           <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium">Confirm what Pulse should use</p>
+              <p className="text-sm font-medium">Mark this as reviewed</p>
               <p className="text-sm text-muted-foreground">
-                {profileNeedsReconfirm
-                  ? 'You changed the profile. Confirm once more to lock this in.'
-                  : 'Confirmation makes the setup feel deliberate. Any later edits will ask for confirmation again.'}
+                Optional. Step 1 is already complete as soon as the required fields are filled — this just lets you flag the profile as reviewed.
               </p>
             </div>
             <Button
               size="sm"
-              variant={coreProfileConfirmed ? 'secondary' : 'default'}
+              variant={profileReviewed ? 'secondary' : 'default'}
               onClick={onConfirm}
-              disabled={!profileHasRequiredFields}
             >
               <CheckCircle2 className="mr-1 h-4 w-4" />
-              {coreProfileConfirmed ? 'Confirmed' : 'Confirm profile'}
+              {profileReviewed ? 'Reviewed' : 'Looks good'}
             </Button>
           </div>
         </CardContent>
@@ -1446,10 +1407,6 @@ function mapQueryTabToStep(tab: string | null): SetupStep {
   return 'profile';
 }
 
-function hasRequiredProfileFields(state: SetupState) {
-  return getMissingProfileFields(state).length === 0;
-}
-
 function getMissingProfileFields(state: SetupState) {
   return PROFILE_REQUIRED_FIELDS
     .filter(({ key }) => !String(state[key] ?? '').trim())
@@ -1487,7 +1444,6 @@ function getStepSummary(
   assetCount: number,
   photosSkipped: boolean,
   missingProfileFields: string[] = [],
-  profileConfirmationNeeded = false,
 ) {
   if (complete) {
     if (step === 'photos') {
@@ -1500,9 +1456,6 @@ function getStepSummary(
     case 'profile':
       if (missingProfileFields.length > 0) {
         return `Still needed: ${formatInlineList(missingProfileFields.slice(0, 2))}`;
-      }
-      if (profileConfirmationNeeded) {
-        return 'Confirm the profile to finish this step';
       }
       return 'Review the core profile';
     case 'brand':
@@ -1519,17 +1472,13 @@ function getStickyCopy(
   photosSkipped: boolean,
   assetCount: number,
   missingProfileFields: string[] = [],
-  profileConfirmationNeeded = false,
 ) {
   switch (step) {
     case 'profile':
       if (missingProfileFields.length > 0) {
         return `Add ${formatInlineList(missingProfileFields)} so Pulse has a complete source of truth for the venue.`;
       }
-      if (profileConfirmationNeeded) {
-        return 'Everything is filled in. Confirm the profile once to finish this step.';
-      }
-      return 'Confirm the core profile so Pulse has a clean source of truth for the venue.';
+      return 'Profile is set. Save when you are ready and continue with the next step.';
     case 'brand':
       return 'Add a little brand guidance so generated ideas sound more intentional.';
     case 'photos':
