@@ -222,6 +222,7 @@ describe('SetupPage', () => {
 
     expect(await screen.findByRole('button', { name: /Profile Complete/i })).toBeInTheDocument();
     expect(screen.getByText('Core fields ready')).toBeInTheDocument();
+    expect(screen.getByText('Profile confirmed')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Confirmed/i })).toBeInTheDocument();
   });
 
@@ -258,7 +259,11 @@ describe('SetupPage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Confirm profile/i })).toBeInTheDocument();
+      expect(screen.getByText('Confirmation needed')).toBeInTheDocument();
+      expect(screen.getByText('Still needed')).toBeInTheDocument();
+      expect(screen.getByText(/Everything is filled in\. Confirm once to mark Profile complete\./i)).toBeInTheDocument();
       expect(screen.getByText(/Confirm once more to lock this in/i)).toBeInTheDocument();
+      expect(screen.getByText(/Confirm the profile to finish this step/i)).toBeInTheDocument();
     });
   });
 
@@ -301,7 +306,10 @@ describe('SetupPage', () => {
 
     renderSetupPage('/setup');
 
-    expect(await screen.findByRole('button', { name: /Profile Review and confirm the core profile/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Profile Still needed: Brand positioning/i })).toBeInTheDocument();
+    expect(screen.getByText('Missing core fields')).toBeInTheDocument();
+    expect(screen.getByText(/Add Brand positioning to mark Profile complete\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Add Brand positioning so Pulse has a complete source of truth for the venue\./i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Confirm profile/i })).toBeDisabled();
   });
 
