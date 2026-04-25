@@ -1458,7 +1458,6 @@ function getStepSummary(
   assetCount: number,
   photosSkipped: boolean,
   missingProfileFields: string[] = [],
-  profileConfirmationNeeded = false,
 ) {
   if (complete) {
     if (step === 'photos') {
@@ -1471,9 +1470,6 @@ function getStepSummary(
     case 'profile':
       if (missingProfileFields.length > 0) {
         return `Still needed: ${formatInlineList(missingProfileFields.slice(0, 2))}`;
-      }
-      if (profileConfirmationNeeded) {
-        return 'Confirm the profile to finish this step';
       }
       return 'Review the core profile';
     case 'brand':
@@ -1490,17 +1486,13 @@ function getStickyCopy(
   photosSkipped: boolean,
   assetCount: number,
   missingProfileFields: string[] = [],
-  profileConfirmationNeeded = false,
 ) {
   switch (step) {
     case 'profile':
       if (missingProfileFields.length > 0) {
         return `Add ${formatInlineList(missingProfileFields)} so Pulse has a complete source of truth for the venue.`;
       }
-      if (profileConfirmationNeeded) {
-        return 'Everything is filled in. Confirm the profile once to finish this step.';
-      }
-      return 'Confirm the core profile so Pulse has a clean source of truth for the venue.';
+      return 'Profile is set. Save when you are ready and continue with the next step.';
     case 'brand':
       return 'Add a little brand guidance so generated ideas sound more intentional.';
     case 'photos':
