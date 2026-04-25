@@ -170,8 +170,7 @@ export default function SetupPage() {
   const [analysisResult, setAnalysisResult] = useState<WebsiteAnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [websiteAnalyzed, setWebsiteAnalyzed] = useState(false);
-  const [coreProfileConfirmed, setCoreProfileConfirmed] = useState(false);
-  const [profileNeedsReconfirm, setProfileNeedsReconfirm] = useState(false);
+  const [profileReviewed, setProfileReviewed] = useState(false);
   const [automationConfigured, setAutomationConfigured] = useState(false);
   const [photosSkipped, setPhotosSkipped] = useState(false);
   const [activeStep, setActiveStep] = useState<SetupStep>(mapQueryTabToStep(searchParams.get('tab')));
