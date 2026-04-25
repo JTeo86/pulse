@@ -250,12 +250,10 @@ export default function SetupPage() {
         approvalMode: (settingsRes.data?.approval_mode as SetupState['approvalMode']) || 'require_approval',
         frequency: (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week',
       };
-      const savedProfileComplete = hasRequiredProfileFields(nextState);
       setState(nextState);
       setAnalysisUrl(currentVenue.website_url || '');
       setWebsiteAnalyzed(Boolean(currentVenue.website_url && profileRes.data));
-      setCoreProfileConfirmed(savedProfileComplete);
-      setProfileNeedsReconfirm(false);
+      setProfileReviewed(false);
       setAutomationConfigured(Boolean(settingsRes.data));
       await fetchAssets(currentVenue.id);
     })();
