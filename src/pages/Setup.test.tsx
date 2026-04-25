@@ -217,6 +217,14 @@ beforeEach(() => {
 });
 
 describe('SetupPage', () => {
+  it('marks profile complete on load when the visible required fields are already saved', async () => {
+    renderSetupPage('/setup');
+
+    expect(await screen.findByRole('button', { name: /Profile Complete/i })).toBeInTheDocument();
+    expect(screen.getByText('Core fields ready')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Confirmed/i })).toBeInTheDocument();
+  });
+
   it('maps old tab links into the new guided steps and preserves onboarding copy', async () => {
     renderSetupPage('/setup?onboarding=1&tab=assets');
 
@@ -250,6 +258,7 @@ describe('SetupPage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Confirm profile/i })).toBeInTheDocument();
+      expect(screen.getByText(/Confirm once more to lock this in/i)).toBeInTheDocument();
     });
   });
 
@@ -260,6 +269,40 @@ describe('SetupPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }));
 
     expect(await screen.findByText(/Photos skipped for now/i)).toBeInTheDocument();
+  });
+
+  it('shows the calmer photos upload-first layout when assets exist', async () => {
+    db.assets = [
+      {
+        id: 'asset-1',
+        asset_type: 'image',
+        title: 'Dining room',
+        public_url: 'https://example.com/photo.jpg',
+        thumbnail_url: null,
+        storage_path: null,
+        storage_bucket: null,
+        metadata: { tags: ['interior', 'dish'], visual_type: 'interior' },
+        created_at: new Date().toISOString(),
+      },
+    ];
+
+    renderSetupPage('/setup?tab=assets');
+
+    expect(await screen.findByText('Ready for reuse')).toBeInTheDocument();
+    expect(screen.getByText('Library')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Skip for now/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps profile incomplete if a required visible field is missing on load', async () => {
+    db.profile = {
+      ...db.profile,
+      brand_summary: '',
+    };
+
+    renderSetupPage('/setup');
+
+    expect(await screen.findByRole('button', { name: /Profile Review and confirm the core profile/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Confirm profile/i })).toBeDisabled();
   });
 
   it('saves the same data model and maps the Active preset to creative daily auto-schedule', async () => {

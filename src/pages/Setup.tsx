@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BackButton } from '@/components/navigation/BackButton';
 import { Button } from '@/components/ui/button';
@@ -162,6 +162,7 @@ export default function SetupPage() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [websiteAnalyzed, setWebsiteAnalyzed] = useState(false);
   const [coreProfileConfirmed, setCoreProfileConfirmed] = useState(false);
+  const [profileNeedsReconfirm, setProfileNeedsReconfirm] = useState(false);
   const [automationConfigured, setAutomationConfigured] = useState(false);
   const [photosSkipped, setPhotosSkipped] = useState(false);
   const [activeStep, setActiveStep] = useState<SetupStep>(mapQueryTabToStep(searchParams.get('tab')));
@@ -216,7 +217,7 @@ export default function SetupPage() {
       const rules = parseRules(kitRes.data?.rules_text);
       const city = currentVenue.city || '';
 
-      setState({
+      const nextState: SetupState = {
         venueName: currentVenue.name || '',
         cuisineType: profileRes.data?.cuisine_type || '',
         location: city,
@@ -240,16 +241,13 @@ export default function SetupPage() {
         allowCopyOnlyFallback: settingsRes.data?.allow_copy_only_fallback ?? false,
         approvalMode: (settingsRes.data?.approval_mode as SetupState['approvalMode']) || 'require_approval',
         frequency: (settingsRes.data?.frequency as SetupState['frequency']) || '3x_week',
-      });
+      };
+      const savedProfileComplete = hasRequiredProfileFields(nextState);
+      setState(nextState);
       setAnalysisUrl(currentVenue.website_url || '');
       setWebsiteAnalyzed(Boolean(currentVenue.website_url && profileRes.data));
-      setCoreProfileConfirmed(Boolean(
-        currentVenue.name &&
-        profileRes.data?.cuisine_type &&
-        profileRes.data?.brand_summary &&
-        profileRes.data?.venue_tone &&
-        profileRes.data?.target_audience,
-      ));
+      setCoreProfileConfirmed(savedProfileComplete);
+      setProfileNeedsReconfirm(false);
       setAutomationConfigured(Boolean(settingsRes.data));
       await fetchAssets(currentVenue.id);
     })();
@@ -258,6 +256,7 @@ export default function SetupPage() {
   const updateField = <K extends keyof SetupState>(field: K, value: SetupState[K]) => {
     setState((prev) => ({ ...prev, [field]: value }));
     if (PROFILE_FIELDS.includes(field)) {
+      setProfileNeedsReconfirm(coreProfileConfirmed);
       setCoreProfileConfirmed(false);
     }
   };
@@ -491,6 +490,10 @@ export default function SetupPage() {
     () => coreProfileConfirmed && hasRequiredProfileFields(state),
     [coreProfileConfirmed, state],
   );
+  const profileHasRequiredFields = useMemo(
+    () => hasRequiredProfileFields(state),
+    [state],
+  );
   const brandComplete = useMemo(
     () => hasBrandGuidance(state),
     [state],
@@ -602,12 +605,17 @@ export default function SetupPage() {
                 analysisError={analysisError}
                 analysisResult={analysisResult}
                 coreProfileConfirmed={coreProfileConfirmed}
+                profileHasRequiredFields={profileHasRequiredFields}
+                profileNeedsReconfirm={profileNeedsReconfirm}
                 onUrlChange={setAnalysisUrl}
                 onAnalyze={analyzeWebsite}
                 onApplySuggestions={applySuggestions}
                 onDismissSuggestions={() => setAnalysisResult(null)}
                 onFieldChange={updateField}
-                onConfirm={() => setCoreProfileConfirmed((value) => !value)}
+                onConfirm={() => {
+                  setCoreProfileConfirmed((value) => !value);
+                  setProfileNeedsReconfirm(false);
+                }}
               />
             ) : null}
 
@@ -760,6 +768,8 @@ function ProfileStepSection({
   analysisError,
   analysisResult,
   coreProfileConfirmed,
+  profileHasRequiredFields,
+  profileNeedsReconfirm,
   onUrlChange,
   onAnalyze,
   onApplySuggestions,
@@ -774,6 +784,8 @@ function ProfileStepSection({
   analysisError: string | null;
   analysisResult: WebsiteAnalysisResult | null;
   coreProfileConfirmed: boolean;
+  profileHasRequiredFields: boolean;
+  profileNeedsReconfirm: boolean;
   onUrlChange: (value: string) => void;
   onAnalyze: () => void;
   onApplySuggestions: () => void;
@@ -815,6 +827,7 @@ function ProfileStepSection({
           <div className="flex flex-wrap gap-2 text-xs">
             <Badge variant={websiteAnalyzed ? 'default' : 'outline'}>Website analysed</Badge>
             <Badge variant={coreProfileConfirmed ? 'default' : 'outline'}>Profile confirmed</Badge>
+            <Badge variant={profileHasRequiredFields ? 'default' : 'outline'}>Core fields ready</Badge>
           </div>
         </CardContent>
       </Card>
@@ -905,10 +918,17 @@ function ProfileStepSection({
             <div>
               <p className="text-sm font-medium">Confirm what Pulse should use</p>
               <p className="text-sm text-muted-foreground">
-                Confirmation makes the setup feel deliberate. Any later edits will ask for confirmation again.
+                {profileNeedsReconfirm
+                  ? 'You changed the profile. Confirm once more to lock this in.'
+                  : 'Confirmation makes the setup feel deliberate. Any later edits will ask for confirmation again.'}
               </p>
             </div>
-            <Button size="sm" variant={coreProfileConfirmed ? 'secondary' : 'default'} onClick={onConfirm}>
+            <Button
+              size="sm"
+              variant={coreProfileConfirmed ? 'secondary' : 'default'}
+              onClick={onConfirm}
+              disabled={!profileHasRequiredFields}
+            >
               <CheckCircle2 className="mr-1 h-4 w-4" />
               {coreProfileConfirmed ? 'Confirmed' : 'Confirm profile'}
             </Button>
@@ -977,6 +997,9 @@ function PhotosStepSection({
   onDelete: (asset: SetupAsset) => void;
   onEditTags: (asset: SetupAsset) => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const featuredAssets = assets.slice(0, 3);
+
   return (
     <Card>
       <CardHeader>
@@ -986,21 +1009,77 @@ function PhotosStepSection({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="rounded-2xl border bg-muted/20 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-2xl border bg-muted/20 p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
-              <p className="text-sm font-medium">Upload starter photos or videos</p>
+              <p className="text-sm font-medium">Add reusable venue photos</p>
               <p className="text-sm text-muted-foreground">
-                Pulse will treat uploads here as reusable library assets for future automation runs.
+                Upload real venue photos or short videos Pulse can safely reuse in future automation runs.
               </p>
             </div>
             <Badge variant="outline">{assets.length} asset{assets.length === 1 ? '' : 's'}</Badge>
           </div>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Input type="file" accept="image/*,video/*" multiple onChange={(e) => onUpload(e.target.files)} disabled={uploading} />
-            <Button type="button" variant="ghost" onClick={onSkip}>
-              {photosSkipped ? 'Skipped for now' : 'Skip for now'}
-            </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            className="hidden"
+            onChange={(e) => onUpload(e.target.files)}
+            disabled={uploading}
+          />
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="rounded-2xl border border-dashed bg-background/60 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Upload new assets</p>
+                  <p className="text-sm text-muted-foreground">
+                    {assets.length > 0
+                      ? `${assets.length} reusable asset${assets.length === 1 ? '' : 's'} ready for Pulse already.`
+                      : 'A few strong venue images are enough to make automation much more dependable.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      'Choose files'
+                    )}
+                  </Button>
+                  {assets.length === 0 ? (
+                    <Button type="button" variant="ghost" onClick={onSkip}>
+                      {photosSkipped ? 'Skipped for now' : 'Skip for now'}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {featuredAssets.length > 0 ? (
+              <div className="rounded-2xl border bg-background/60 p-4">
+                <p className="text-sm font-medium">Ready for reuse</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Pulse will use these as a reusable starter library for future automation runs.
+                </p>
+                <div className="mt-3 flex -space-x-3 overflow-hidden">
+                  {featuredAssets.map((asset) => (
+                    <div key={asset.id} className="h-16 w-16 overflow-hidden rounded-2xl border bg-muted shadow-sm">
+                      {asset.asset_type === 'image' && asset.resolved_url ? (
+                        <img src={asset.resolved_url} alt={asset.title || 'Venue asset'} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          <ImageIcon className="h-4 w-4" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1015,59 +1094,83 @@ function PhotosStepSection({
             <p className="mt-1 text-sm text-muted-foreground">
               {photosSkipped
                 ? 'Pulse can still work from your profile and brand guidance, and you can add assets later.'
-                : 'Uploading even a few real venue images makes automation much more reliable.'}
+                : 'Add a few real venue images to give Pulse a reusable starter library.'}
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {assets.map((asset) => {
-              const tags = normalizeAssetTags(asset.metadata?.tags);
-              const label = asset.metadata?.label || asset.metadata?.visual_type || null;
-              const legacyTags = splitAssetTags(tags).legacy;
-              return (
-                <div key={asset.id} className="overflow-hidden rounded-2xl border bg-card">
-                  <div className="relative aspect-square bg-muted">
-                    {asset.asset_type === 'image' && asset.resolved_url ? (
-                      <img src={asset.resolved_url} alt={asset.title || 'Venue asset'} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-                        <ImageIcon className="mr-1 h-4 w-4" />
-                        {asset.asset_type}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">Library</p>
+                <p className="text-sm text-muted-foreground">Manage the reusable photos Pulse can draw from.</p>
+              </div>
+              <Badge variant="secondary">{assets.length} reusable asset{assets.length === 1 ? '' : 's'} ready</Badge>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {assets.map((asset) => {
+                const tags = normalizeAssetTags(asset.metadata?.tags);
+                const label = asset.metadata?.label || asset.metadata?.visual_type || null;
+                const legacyTags = splitAssetTags(tags).legacy;
+                const visibleTags = tags.slice(0, 2);
+                const extraTagCount = Math.max(tags.length - visibleTags.length, 0);
+                return (
+                  <div key={asset.id} className="overflow-hidden rounded-2xl border bg-card">
+                    <div className="relative aspect-[4/3] bg-muted">
+                      {asset.asset_type === 'image' && asset.resolved_url ? (
+                        <img src={asset.resolved_url} alt={asset.title || 'Venue asset'} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+                          <ImageIcon className="mr-1 h-4 w-4" />
+                          {asset.asset_type}
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3 p-4">
+                      <div className="space-y-1">
+                        <p className="truncate text-sm font-medium">{asset.title || 'Untitled asset'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {asset.asset_type === 'video' ? 'Video asset' : 'Image asset'}
+                          {label ? ` • ${label}` : ''}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                  <div className="space-y-3 p-3">
-                    <p className="truncate text-sm font-medium">{asset.title || 'Untitled asset'}</p>
-                    <div className="flex flex-wrap gap-1">
-                      {tags.length > 0 ? tags.map((tag) => {
-                        const isLegacy = legacyTags.includes(tag);
-                        return (
-                          <Badge
-                            key={`${asset.id}-${tag}`}
-                            variant={isLegacy ? 'outline' : 'secondary'}
-                            className={isLegacy ? 'border-dashed text-muted-foreground' : undefined}
-                          >
-                            {tag}
-                            {isLegacy ? ' (legacy)' : ''}
-                          </Badge>
-                        );
-                      }) : <Badge variant="outline">No tags</Badge>}
-                      {label ? <Badge variant="outline">{label}</Badge> : null}
+                      <div className="flex flex-wrap gap-1">
+                        {tags.length > 0 ? visibleTags.map((tag) => {
+                          const isLegacy = legacyTags.includes(tag);
+                          return (
+                            <Badge
+                              key={`${asset.id}-${tag}`}
+                              variant={isLegacy ? 'outline' : 'secondary'}
+                              className={isLegacy ? 'border-dashed text-muted-foreground' : undefined}
+                            >
+                              {tag}
+                              {isLegacy ? ' (legacy)' : ''}
+                            </Badge>
+                          );
+                        }) : <Badge variant="outline">No tags yet</Badge>}
+                        {extraTagCount > 0 ? <Badge variant="outline">+{extraTagCount} more</Badge> : null}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => onEditTags(asset)} className="flex-1">
+                          <Pencil className="mr-1 h-3.5 w-3.5" />
+                          Edit tags
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => onDelete(asset)}
+                          disabled={deletingAssetId === asset.id}
+                          aria-label={`Delete ${asset.title || 'asset'}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => onEditTags(asset)}>
-                        <Pencil className="mr-1 h-3.5 w-3.5" />
-                        Edit tags
-                      </Button>
-                      <Button size="sm" variant="destructive" onClick={() => onDelete(asset)} disabled={deletingAssetId === asset.id}>
-                        <X className="mr-1 h-3.5 w-3.5" />
-                        Delete
-                      </Button>
-                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>
@@ -1295,6 +1398,7 @@ function mapQueryTabToStep(tab: string | null): SetupStep {
 function hasRequiredProfileFields(state: SetupState) {
   return Boolean(
     state.venueName.trim() &&
+    state.website.trim() &&
     state.cuisineType.trim() &&
     state.tone.trim() &&
     state.audience.trim() &&
