@@ -139,17 +139,7 @@ const STEP_COPY: Record<SetupStep, { title: string; description: string }> = {
   },
 };
 
-const PROFILE_FIELDS: Array<keyof SetupState> = [
-  'venueName',
-  'cuisineType',
-  'location',
-  'website',
-  'instagram',
-  'tone',
-  'vibe',
-  'audience',
-  'positioning',
-];
+
 
 export default function SetupPage() {
   const { currentVenue, refreshVenues } = useVenue();
