@@ -781,10 +781,9 @@ function ProfileStepSection({
   analysisLoading,
   analysisError,
   analysisResult,
-  coreProfileConfirmed,
+  profileReviewed,
   profileHasRequiredFields,
   missingProfileFields,
-  profileNeedsReconfirm,
   onUrlChange,
   onAnalyze,
   onApplySuggestions,
@@ -798,10 +797,9 @@ function ProfileStepSection({
   analysisLoading: boolean;
   analysisError: string | null;
   analysisResult: WebsiteAnalysisResult | null;
-  coreProfileConfirmed: boolean;
+  profileReviewed: boolean;
   profileHasRequiredFields: boolean;
   missingProfileFields: string[];
-  profileNeedsReconfirm: boolean;
   onUrlChange: (value: string) => void;
   onAnalyze: () => void;
   onApplySuggestions: () => void;
