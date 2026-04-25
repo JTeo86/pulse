@@ -333,8 +333,8 @@ export default function SetupPage() {
       suggestedContentAngles: draft.suggestedContentAngles || prev.suggestedContentAngles,
     }));
 
-    setCoreProfileConfirmed(false);
-    toast({ title: 'Draft applied', description: 'Review the populated fields and confirm the profile when it looks right.' });
+    setProfileReviewed(false);
+    toast({ title: 'Draft applied', description: 'Review the populated fields and tweak anything that needs to change.' });
   };
 
   const saveSetup = async () => {
