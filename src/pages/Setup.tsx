@@ -1408,8 +1408,6 @@ function mapQueryTabToStep(tab: string | null): SetupStep {
 }
 
 function getMissingProfileFields(state: SetupState) {
-
-function getMissingProfileFields(state: SetupState) {
   return PROFILE_REQUIRED_FIELDS
     .filter(({ key }) => !String(state[key] ?? '').trim())
     .map(({ label }) => label);
