@@ -554,7 +554,11 @@ export default function SetupPage() {
                       )}
                     </div>
                     <p className="font-medium">{STEP_COPY[step].title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{STEP_COPY[step].description}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {stepStatus[step]
+                        ? 'Complete'
+                        : getStepSummary(step, false, assets.length, photosSkipped, missingProfileFields)}
+                    </p>
                   </button>
                 ))}
               </div>
