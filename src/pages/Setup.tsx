@@ -1407,9 +1407,7 @@ function mapQueryTabToStep(tab: string | null): SetupStep {
   return 'profile';
 }
 
-function hasRequiredProfileFields(state: SetupState) {
-  return getMissingProfileFields(state).length === 0;
-}
+function getMissingProfileFields(state: SetupState) {
 
 function getMissingProfileFields(state: SetupState) {
   return PROFILE_REQUIRED_FIELDS
