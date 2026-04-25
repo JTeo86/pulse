@@ -616,19 +616,15 @@ export default function SetupPage() {
                 analysisLoading={analysisLoading}
                 analysisError={analysisError}
                 analysisResult={analysisResult}
-                coreProfileConfirmed={coreProfileConfirmed}
+                profileReviewed={profileReviewed}
                 profileHasRequiredFields={profileHasRequiredFields}
                 missingProfileFields={missingProfileFields}
-                profileNeedsReconfirm={profileNeedsReconfirm}
                 onUrlChange={setAnalysisUrl}
                 onAnalyze={analyzeWebsite}
                 onApplySuggestions={applySuggestions}
                 onDismissSuggestions={() => setAnalysisResult(null)}
                 onFieldChange={updateField}
-                onConfirm={() => {
-                  setCoreProfileConfirmed((value) => !value);
-                  setProfileNeedsReconfirm(false);
-                }}
+                onConfirm={() => setProfileReviewed((value) => !value)}
               />
             ) : null}
 
