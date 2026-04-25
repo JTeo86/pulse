@@ -488,18 +488,12 @@ export default function SetupPage() {
     }
   };
 
-  const profileComplete = useMemo(
-    () => coreProfileConfirmed && hasRequiredProfileFields(state),
-    [coreProfileConfirmed, state],
-  );
   const missingProfileFields = useMemo(
     () => getMissingProfileFields(state),
     [state],
   );
-  const profileHasRequiredFields = useMemo(
-    () => missingProfileFields.length === 0,
-    [missingProfileFields],
-  );
+  const profileHasRequiredFields = missingProfileFields.length === 0;
+  const profileComplete = profileHasRequiredFields;
   const brandComplete = useMemo(
     () => hasBrandGuidance(state),
     [state],
