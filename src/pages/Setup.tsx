@@ -941,21 +941,18 @@ function ProfileStepSection({
 
           <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium">Confirm what Pulse should use</p>
+              <p className="text-sm font-medium">Mark this as reviewed</p>
               <p className="text-sm text-muted-foreground">
-                {profileNeedsReconfirm
-                  ? 'You changed the profile. Confirm once more to lock this in.'
-                  : 'Confirmation makes the setup feel deliberate. Any later edits will ask for confirmation again.'}
+                Optional. Step 1 is already complete as soon as the required fields are filled — this just lets you flag the profile as reviewed.
               </p>
             </div>
             <Button
               size="sm"
-              variant={coreProfileConfirmed ? 'secondary' : 'default'}
+              variant={profileReviewed ? 'secondary' : 'default'}
               onClick={onConfirm}
-              disabled={!profileHasRequiredFields}
             >
               <CheckCircle2 className="mr-1 h-4 w-4" />
-              {coreProfileConfirmed ? 'Confirmed' : 'Confirm profile'}
+              {profileReviewed ? 'Reviewed' : 'Looks good'}
             </Button>
           </div>
         </CardContent>
