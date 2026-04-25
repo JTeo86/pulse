@@ -599,7 +599,6 @@ export default function SetupPage() {
                         assets.length,
                         photosSkipped,
                         missingProfileFields,
-                        profileHasRequiredFields && !coreProfileConfirmed,
                       )}
                     </p>
                   </div>
