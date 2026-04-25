@@ -261,10 +261,6 @@ export default function SetupPage() {
 
   const updateField = <K extends keyof SetupState>(field: K, value: SetupState[K]) => {
     setState((prev) => ({ ...prev, [field]: value }));
-    if (PROFILE_FIELDS.includes(field)) {
-      setProfileNeedsReconfirm(coreProfileConfirmed);
-      setCoreProfileConfirmed(false);
-    }
   };
 
   const updateAutomationState = (updates: Partial<Pick<SetupState, 'autopilotMode' | 'frequency' | 'approvalMode' | 'requireAssetForRuns' | 'allowCopyOnlyFallback'>>) => {
