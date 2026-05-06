@@ -24,7 +24,7 @@ export function RecentActivity() {
 
       return (data ?? []).map((edit) => ({
         id: edit.id,
-        title: 'Pro Photo generated',
+        title: 'Asset prepared',
         timestamp: edit.created_at,
       }));
     },
@@ -66,7 +66,7 @@ export function RecentActivity() {
       {!activity?.length ? (
         <Card className="border-dashed">
           <CardContent className="py-8 text-center text-muted-foreground">
-            <p className="text-sm">No recent activity yet. Start creating content!</p>
+            <p className="text-sm">No recent Pulse activity yet. Campaign, review, and asset work will appear here.</p>
           </CardContent>
         </Card>
       ) : (

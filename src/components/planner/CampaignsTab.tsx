@@ -36,10 +36,10 @@ export function CampaignsTab() {
   const handleGenerateImage = (project?: CopyProject) => {
     const params = new URLSearchParams({
       campaign_context: 'campaigns',
-      brief_title: project ? `${project.goal.replace(/_/g, ' ')} campaign image` : 'Campaign image',
+      brief_title: project ? `${project.goal.replace(/_/g, ' ')} campaign asset` : 'Campaign asset',
     });
     if (project?.id) params.set('campaign_id', project.id);
-    navigate(`/studio/pro-photo?${params.toString()}`);
+    navigate(`/assets?${params.toString()}`);
   };
 
   if (wizardOpen) {
@@ -91,7 +91,7 @@ export function CampaignsTab() {
             variant="outline"
             onClick={() => handleGenerateImage()}
           >
-            Generate image
+            Open asset library
           </Button>
         </div>
       </div>

@@ -344,7 +344,7 @@ export default function ContentFeed() {
                   <button
                     type="button"
                     className="w-full text-left"
-                    onClick={() => navigate('/studio/pro-photo')}
+                    onClick={() => navigate('/assets')}
                   >
                     <div className="aspect-square bg-muted">
                       {(asset.resolved_url || asset.public_url) ? (
@@ -359,7 +359,7 @@ export default function ContentFeed() {
                         <span className="text-xs text-muted-foreground">{usage.count} uses</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{asset.title || 'Uploaded image'}</p>
-                      <p className="text-xs text-accent inline-flex items-center gap-1"><Sparkles className="w-3 h-3" />Edit in Studio</p>
+                      <p className="text-xs text-accent inline-flex items-center gap-1"><Sparkles className="w-3 h-3" />Review in Assets</p>
                     </div>
                   </button>
                 </Card>

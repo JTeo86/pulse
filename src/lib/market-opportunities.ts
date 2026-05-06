@@ -36,7 +36,7 @@ const themeCopy: Record<'food' | 'service' | 'ambiance' | 'value', { positiveTit
   },
   ambiance: {
     positiveTitle: 'Guests are noticing the vibe',
-    positiveAction: 'Post a short reel showing your space at peak time.',
+    positiveAction: 'Schedule a peak-time atmosphere post to reinforce that demand signal.',
     negativeAction: 'Show improvements to comfort, pacing, and atmosphere.',
   },
   value: {

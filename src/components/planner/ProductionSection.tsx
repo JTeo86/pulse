@@ -81,12 +81,7 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
     })();
   }, [workspace.assets]);
 
-  const handleCreateInStudio = (brief: PlanAssetBrief) => {
-    const route = brief.asset_type === 'reel' || brief.asset_type === 'video'
-      ? '/studio/reel-creator'
-      : '/studio/pro-photo';
-    
-    // Pass plan context via URL params so Studio can auto-link on save
+  const handleOpenAssets = (brief: PlanAssetBrief) => {
     const params = new URLSearchParams({
       plan_id: planId,
       brief_id: brief.id,
@@ -94,8 +89,8 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
       asset_type: brief.asset_type,
     });
     if (brief.intended_channel) params.set('channel', brief.intended_channel);
-    
-    navigate(`${route}?${params.toString()}`);
+
+    navigate(`/assets?${params.toString()}`);
   };
 
   const handleAttachExisting = (briefId: string, assetType: string) => {
@@ -124,10 +119,7 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
     }
   };
 
-  const getRouteForAsset = (assetType: string) => {
-    if (assetType === 'reel' || assetType === 'video') return '/studio/reel-creator';
-    return '/studio/pro-photo';
-  };
+  const getRouteForAsset = (_assetType: string) => '/assets';
 
   return (
     <div className="space-y-6">
@@ -151,7 +143,7 @@ export function ProductionSection({ planId, plan, workspace }: ProductionSection
                   brief={brief}
                   linkedPlanAsset={linkedPlanAsset || null}
                   realAsset={realAsset}
-                  onCreateInStudio={() => handleCreateInStudio(brief)}
+                  onCreateInStudio={() => handleOpenAssets(brief)}
                   onAttachExisting={() => handleAttachExisting(brief.id, brief.asset_type)}
                   onOpenAsset={() => realAsset && navigate(getRouteForAsset(realAsset.asset_type))}
                   onApprove={() => linkedPlanAsset && handleApproveAsset(linkedPlanAsset)}
@@ -319,7 +311,7 @@ function BriefCard({
       ) : (
         <div className="grid grid-cols-2 gap-2 w-full">
           <Button size="sm" variant="default" className="w-full min-w-0 text-xs gap-1.5 h-8" onClick={onCreateInStudio}>
-            <Plus className="w-3 h-3 shrink-0" /> Create in Studio
+            <Plus className="w-3 h-3 shrink-0" /> Open Assets
           </Button>
           <Button size="sm" variant="outline" className="w-full min-w-0 text-xs gap-1.5 h-8" onClick={onAttachExisting}>
             <Link2 className="w-3 h-3 shrink-0" /> Attach Existing

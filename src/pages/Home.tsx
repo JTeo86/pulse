@@ -2,7 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarDays, ClipboardList, Home as HomeIcon, Sparkles, AlertTriangle } from 'lucide-react';
+import {
+  CalendarDays,
+  ClipboardList,
+  Home as HomeIcon,
+  Sparkles,
+  AlertTriangle,
+  ShieldAlert,
+  TrendingUp,
+  Megaphone,
+  ArrowRight,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useVenue } from '@/lib/venue-context';
 import { supabase } from '@/integrations/supabase/client';
@@ -144,7 +154,7 @@ export default function Home() {
           .limit(6),
         supabase
           .from('content_items')
-          .select('id, scheduled_for', { count: 'exact' })
+          .select('id, scheduled_for')
           .eq('venue_id', currentVenue.id)
           .not('scheduled_for', 'is', null)
           .gte('scheduled_for', now.toISOString())
@@ -163,7 +173,7 @@ export default function Home() {
           .limit(80),
         supabase
           .from('autopilot_runs')
-          .select('status, run_status, created_at, items_saved, saved_count, output_summary')
+          .select('status, run_status, created_at, items_saved, saved_count')
           .eq('venue_id', currentVenue.id)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -199,8 +209,6 @@ export default function Home() {
         reviewMentions: recentReviewsRows.map((review: any) => String(review.review_text || '')),
         frequencyPerWeek: recentContentRows.length,
       };
-      const performanceInsights = generatePerformanceInsights(performanceInput);
-      const weeklyPerformanceReport = generateWeeklyPulseReport(performanceInput);
 
       return {
         preparedContentCount: pendingContentRows.length,
@@ -212,8 +220,8 @@ export default function Home() {
         coverageGaps: coverage.gaps,
         pendingReplies: pendingReplyRows,
         pendingContent: pendingContentRows,
-        performanceInsights,
-        weeklyPerformanceReport,
+        performanceInsights: generatePerformanceInsights(performanceInput),
+        weeklyPerformanceReport: generateWeeklyPulseReport(performanceInput),
         lastAutopilotRun: run
           ? {
               status: run.run_status || run.status || 'completed',
@@ -268,16 +276,15 @@ export default function Home() {
       }
 
       const assets = assetsRes.data || [];
-      const unusedCount = assets.filter((asset) => !usedIds.has(asset.id)).length;
 
       return {
-        unusedCount,
+        unusedCount: assets.filter((asset) => !usedIds.has(asset.id)).length,
         lastUploadAt: assets[0]?.created_at || null,
       };
     },
   });
 
-  const { data: latestPulseReport, isLoading: pulseReportLoading } = useQuery({
+  const { data: latestPulseReport } = useQuery({
     queryKey: ['latest-pulse-report', currentVenue?.id],
     enabled: !!currentVenue,
     queryFn: async (): Promise<WeeklyPulseBrief | null> => {
@@ -301,17 +308,14 @@ export default function Home() {
     setActiveTab(next);
 
     const nextParams = new URLSearchParams(searchParams);
-    if (next === 'today') {
-      nextParams.delete('tab');
-    } else {
-      nextParams.set('tab', next);
-    }
+    if (next === 'today') nextParams.delete('tab');
+    else nextParams.set('tab', next);
     setSearchParams(nextParams, { replace: true });
   };
 
   const greeting = getGreeting();
   const venueName = currentVenue?.name?.trim() || 'there';
-  const headerTitle = currentVenue ? `${greeting}, ${venueName}` : `${greeting}`;
+  const headerTitle = currentVenue ? `${greeting}, ${venueName}` : greeting;
 
   return (
     <motion.div
@@ -322,7 +326,7 @@ export default function Home() {
     >
       <PageHeader
         title={headerTitle}
-        description="Your calm command centre: what needs attention, what Pulse prepared, and what to do next."
+        description="Your calm command centre for reputation, visibility, approvals, and commercial opportunities."
       />
 
       <ReferralHomeCards />
@@ -330,96 +334,177 @@ export default function Home() {
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
         <TabsList className="bg-muted/20 p-1">
           <TabsTrigger value="today" className="gap-2 data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <HomeIcon className="w-4 h-4" /> Today
+            <HomeIcon className="w-4 h-4" /> Command Centre
           </TabsTrigger>
           <TabsTrigger value="opportunities" className="gap-2 opacity-60 data-[state=active]:opacity-100 data-[state=active]:bg-card data-[state=active]:text-foreground">
             <CalendarDays className="w-4 h-4" /> Opportunities
           </TabsTrigger>
           <TabsTrigger value="plans" className="gap-2 opacity-60 data-[state=active]:opacity-100 data-[state=active]:bg-card data-[state=active]:text-foreground">
-            <ClipboardList className="w-4 h-4" /> Plans
+            <ClipboardList className="w-4 h-4" /> Campaigns
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryMetric
+              icon={ShieldAlert}
+              label="Approvals Needed"
+              value={(overview?.pendingContent?.length ?? 0) + (overview?.pendingRepliesCount ?? 0)}
+              detail="Replies, campaigns, and publishing work waiting on approval"
+            />
+            <SummaryMetric
+              icon={AlertTriangle}
+              label="Urgent Review Risk"
+              value={overview?.urgentReviewsCount ?? 0}
+              detail="Low-rating or priority review issues requiring attention"
+            />
+            <SummaryMetric
+              icon={Megaphone}
+              label="Visibility Gaps"
+              value={overview?.coverageGaps?.length ?? 0}
+              detail={overview?.coverageGaps?.[0] || 'No critical visibility gaps detected'}
+            />
+            <SummaryMetric
+              icon={TrendingUp}
+              label="Open Opportunities"
+              value={safeOpportunities.length}
+              detail={safeOpportunities[0]?.title || 'No immediate opportunities detected'}
+            />
+          </div>
+
           <Card className="border-amber-400/50 bg-amber-50/40 dark:bg-amber-500/5">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
-                Needs attention
+                Approvals Needed
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
-              <ActionRow title="Posts ready to approve" detail={`${overview?.pendingContent?.length ?? 0} waiting for your approval`} to="/content/library" actionLabel="Approve" />
-              <ActionRow title="Replies needing approval" detail={`${overview?.pendingRepliesCount ?? 0} waiting to send`} to="/reputation/reviews?tab=inbox" actionLabel="Approve" />
+              <ActionRow
+                title="Campaigns and posts ready to approve"
+                detail={`${overview?.pendingContent?.length ?? 0} waiting for approval`}
+                to="/assets"
+                actionLabel="Review"
+              />
+              <ActionRow
+                title="Review replies awaiting approval"
+                detail={`${overview?.pendingRepliesCount ?? 0} waiting to send`}
+                to="/reputation/reviews?tab=inbox"
+                actionLabel="Review"
+              />
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-accent" />
-                Pulse prepared
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-3 text-sm">
-              {overview?.lastAutopilotRun ? (
-                <>
-                  <p>Pulse prepared {overview.lastAutopilotRun.generatedPosts} posts and drafted {overview.lastAutopilotRun.generatedReplies} replies.</p>
-                  <p className="text-muted-foreground">Last run: {formatLastRun(overview.lastAutopilotRun.createdAt)}.</p>
-                </>
-              ) : (
-                <p className="text-muted-foreground">Pulse is standing by and ready to prepare your next week.</p>
-              )}
-              <p className="text-muted-foreground">
-                {overview?.autopilotSettings?.isEnabled ? 'Pulse is running.' : 'Pulse is paused.'} Next run {getNextRunLabel(overview?.autopilotSettings?.frequency, overview?.autopilotSettings?.runTime, overview?.autopilotSettings?.isEnabled ?? false)}.
-              </p>
-              <div>
-                <Button size="sm" asChild>
-                  <Link to="/content/scheduler">Calendar</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-accent" />
+                  Reputation Snapshot
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3 text-sm">
+                <CommandInsight title="Positive guest theme" body={overview?.positiveTheme || 'No clear positive signal yet'} />
+                <CommandInsight title="Recurring complaint" body={overview?.negativeTheme || 'No recurring complaint trend detected yet'} />
+                <CommandInsight
+                  title="Response coverage"
+                  body={`${overview?.pendingRepliesCount ?? 0} reviews remain in the response queue${overview?.urgentReviewsCount ? `, including ${overview.urgentReviewsCount} urgent` : ''}.`}
+                />
+                {latestPulseReport?.pulse_report?.reputation_summary ? (
+                  <CommandInsight title="Weekly summary" body={latestPulseReport.pulse_report.reputation_summary} />
+                ) : null}
+                <InlineLink to="/reputation/reviews" label="Open Reputation" />
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Opportunities</CardTitle></CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              {opportunitiesLoading ? (
-                <Skeleton className="h-20 rounded-lg" />
-              ) : safeOpportunities.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No open opportunities right now.</p>
-              ) : (
-                safeOpportunities.slice(0, 3).map((opportunity) => (
-                  <div key={opportunity.title} className="rounded-lg bg-muted/20 p-3 space-y-2">
-                    <p className="text-sm font-medium">{opportunity.title}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{opportunity.description}</p>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link to="/home?tab=plans">Plan</Link>
-                    </Button>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Megaphone className="w-4 h-4 text-accent" />
+                  Visibility Coverage
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3 text-sm">
+                {overviewLoading || contentHealthLoading ? (
+                  <Skeleton className="h-24 rounded-lg" />
+                ) : (
+                  <>
+                    <CommandInsight title="Days ahead covered" body={`${overview?.coveredDaysCount ?? 0} active days covered in the next two weeks.`} />
+                    <CommandInsight title="Content gaps" body={overview?.coverageGaps?.join(' • ') || 'No major gaps detected right now.'} />
+                    <CommandInsight
+                      title="Asset readiness"
+                      body={contentHealth?.unusedCount
+                        ? `${contentHealth.unusedCount} uploaded assets are still unused.${contentHealth.lastUploadAt ? ` Last upload ${formatDistanceToNow(new Date(contentHealth.lastUploadAt), { addSuffix: true })}.` : ''}`
+                        : 'Uploaded assets are already being used across campaigns.'}
+                    />
+                  </>
+                )}
+                <InlineLink to="/campaigns" label="Open Campaigns" />
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Plans</CardTitle></CardHeader>
-            <CardContent className="pt-0 space-y-2 text-sm">
-              <p className="text-muted-foreground">
-                {overview?.coveredDaysCount ? `${overview.coveredDaysCount} active posting days in your next two weeks.` : 'No active plans yet.'}
-              </p>
-              {overview?.coverageGaps?.length ? (
-                <p className="text-muted-foreground">Up next: {overview.coverageGaps[0]}.</p>
-              ) : (
-                <p className="text-muted-foreground">You are covered across the week.</p>
-              )}
-              <div>
-                <Button size="sm" variant="outline" asChild>
-                  <Link to="/home?tab=plans">Continue</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-accent" />
+                  Revenue Opportunities
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3">
+                {opportunitiesLoading ? (
+                  <Skeleton className="h-24 rounded-lg" />
+                ) : safeOpportunities.length ? (
+                  safeOpportunities.slice(0, 3).map((opportunity) => (
+                    <div key={opportunity.title} className="rounded-lg bg-muted/20 p-3 space-y-1.5">
+                      <p className="text-sm font-medium">{opportunity.title}</p>
+                      <p className="text-xs text-muted-foreground">{opportunity.description}</p>
+                      <p className="text-xs text-foreground/85">{opportunity.suggestedAction}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No open opportunities right now.</p>
+                )}
+                <InlineLink to="/opportunities" label="Open Opportunities" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-accent" />
+                  Pulse Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3 text-sm">
+                {overview?.lastAutopilotRun ? (
+                  <>
+                    <CommandInsight
+                      title="Prepared by Pulse"
+                      body={`Pulse prepared ${overview.lastAutopilotRun.generatedPosts} posts and drafted ${overview.lastAutopilotRun.generatedReplies} replies.`}
+                    />
+                    <CommandInsight title="Last run" body={formatLastRun(overview.lastAutopilotRun.createdAt)} />
+                  </>
+                ) : (
+                  <CommandInsight title="Pulse status" body="Pulse is standing by and ready to prepare your next week." />
+                )}
+                <CommandInsight
+                  title="Automation"
+                  body={`${overview?.autopilotSettings?.isEnabled ? 'Pulse is running.' : 'Pulse is paused.'} Next run ${getNextRunLabel(
+                    overview?.autopilotSettings?.frequency,
+                    overview?.autopilotSettings?.runTime,
+                    overview?.autopilotSettings?.isEnabled ?? false,
+                  )}.`}
+                />
+                {overview?.performanceInsights?.[0] ? (
+                  <CommandInsight title="Commercial readout" body={overview.performanceInsights[0]} />
+                ) : null}
+                {latestPulseReport?.pulse_report?.next_week_focus?.length ? (
+                  <CommandInsight title="Next focus" body={latestPulseReport.pulse_report.next_week_focus.slice(0, 2).join(' • ')} />
+                ) : null}
+                <InlineLink to="/publishing" label="Open Publishing" />
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="opportunities">
@@ -445,6 +530,51 @@ function ActionRow({ title, detail, to, actionLabel = 'Open' }: { title: string;
         <Link to={to}>{actionLabel}</Link>
       </Button>
     </div>
+  );
+}
+
+function SummaryMetric({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: any;
+  label: string;
+  value: number;
+  detail: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Icon className="w-4 h-4" />
+          <span className="text-xs uppercase tracking-wide">{label}</span>
+        </div>
+        <p className="text-2xl font-semibold">{value}</p>
+        <p className="text-xs text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CommandInsight({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg bg-muted/20 p-3 space-y-1">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="text-sm">{body}</p>
+    </div>
+  );
+}
+
+function InlineLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Button size="sm" variant="outline" asChild>
+      <Link to={to}>
+        {label}
+        <ArrowRight className="w-3.5 h-3.5 ml-1" />
+      </Link>
+    </Button>
   );
 }
 
@@ -500,7 +630,7 @@ function getNextRunLabel(
   isEnabled?: boolean,
 ) {
   if (!isEnabled) return 'disabled';
-  if (!frequency || !runTime) return 'is set in Setup';
+  if (!frequency || !runTime) return 'is set in Settings';
 
   const now = new Date();
   const [hour, minute] = runTime.split(':').map(Number);
@@ -516,16 +646,6 @@ function getNextRunLabel(
   }
 
   return formatDistanceToNow(next, { addSuffix: true });
-}
-
-function getAutomationHealth(status?: string, createdAt?: string) {
-  if (!status || !createdAt) return 'Stale';
-  if (status.toLowerCase() === 'failed') return 'Needs attention';
-
-  const ageMs = Date.now() - new Date(createdAt).getTime();
-  const ageDays = ageMs / (1000 * 60 * 60 * 24);
-  if (ageDays > 10) return 'Stale';
-  return 'Healthy';
 }
 
 function getGreeting() {

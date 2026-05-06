@@ -163,9 +163,9 @@ function GeneratePackCard({ planId, plan, brain, workspace }: CreateSectionProps
           <Sparkles className="w-5 h-5 text-accent" />
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-semibold text-foreground">Create campaign assets</h3>
+          <h3 className="text-sm font-semibold text-foreground">Prepare campaign assets</h3>
           <p className="text-xs text-muted-foreground">
-            This is your production workspace for this plan: generate copy, briefs, and campaign-ready assets in one place.
+            This is your production workspace for this plan: generate copy, briefs, and campaign-ready materials in one place.
           </p>
         </div>
         <Button onClick={handleGeneratePack} disabled={generating} size="sm" className="gap-2 shrink-0">
@@ -394,10 +394,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
     })();
   }, [workspace.assets]);
 
-  const handleCreateInStudio = (brief: PlanAssetBrief) => {
-    const route = brief.asset_type === 'reel' || brief.asset_type === 'video'
-      ? '/studio/reel-creator'
-      : '/studio/pro-photo';
+  const handleOpenAssets = (brief: PlanAssetBrief) => {
     const params = new URLSearchParams({
       plan_id: planId,
       brief_id: brief.id,
@@ -405,7 +402,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
       asset_type: brief.asset_type,
     });
     if (brief.intended_channel) params.set('channel', brief.intended_channel);
-    navigate(`${route}?${params.toString()}`);
+    navigate(`/assets?${params.toString()}`);
   };
 
   const handleAttachExisting = (briefId: string, assetType: string) => {
@@ -431,13 +428,12 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
     if (!error) workspace.fetchWorkspace();
   };
 
-  const getRouteForAsset = (assetType: string) =>
-    assetType === 'reel' || assetType === 'video' ? '/studio/reel-creator' : '/studio/pro-photo';
+  const getRouteForAsset = (_assetType: string) => '/assets';
 
   return (
     <div className="space-y-6">
       <p className="text-xs text-muted-foreground">
-        Build assets in context for this plan. Create in Studio or Add Image, then mark preferred options for Post Packs.
+        Build assets in context for this plan. Open your asset library or attach an approved image, then mark preferred options for Post Packs.
       </p>
 
       {/* Creative Briefs */}
@@ -459,7 +455,7 @@ function AssetsWorkspace({ planId, plan, workspace }: { planId: string; plan: an
                   brief={brief}
                   linkedPlanAsset={linkedPlanAsset || null}
                   realAsset={realAsset}
-                  onCreateInStudio={() => handleCreateInStudio(brief)}
+                  onCreateInStudio={() => handleOpenAssets(brief)}
                   onAttachExisting={() => handleAttachExisting(brief.id, brief.asset_type)}
                   onOpenAsset={() => realAsset && navigate(getRouteForAsset(realAsset.asset_type))}
                   onToggleFavorite={() => linkedPlanAsset && handleToggleFavorite(linkedPlanAsset)}
@@ -622,7 +618,7 @@ function AssetBriefCard({
       ) : (
         <div className="grid grid-cols-2 gap-2 w-full">
           <Button size="sm" variant="default" className="w-full min-w-0 text-xs gap-1.5 h-8" onClick={onCreateInStudio}>
-            <Plus className="w-3 h-3 shrink-0" /> Create in Studio
+            <Plus className="w-3 h-3 shrink-0" /> Open Assets
           </Button>
           <Button size="sm" variant="outline" className="w-full min-w-0 text-xs gap-1.5 h-8" onClick={onAttachExisting}>
             <Link2 className="w-3 h-3 shrink-0" /> Add Image

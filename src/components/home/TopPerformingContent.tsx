@@ -77,15 +77,15 @@ export function TopPerformingContent() {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Top Performing Content
           </h2>
-          <Link to="/studio">
+          <Link to="/campaigns">
             <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
-              Create Content <ArrowRight className="w-3 h-3 ml-1" />
+              Build Campaign <ArrowRight className="w-3 h-3 ml-1" />
             </Button>
           </Link>
         </div>
         <Card className="border-dashed">
           <CardContent className="py-8 text-center text-muted-foreground">
-            <p className="text-sm">Create content in Studio to see performance data here.</p>
+            <p className="text-sm">Launch a campaign and publish approved posts to start building performance history here.</p>
           </CardContent>
         </Card>
       </section>

@@ -3,8 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home,
-  FolderOpen,
-  Images,
   CalendarCheck2,
   MessageSquareText,
   Settings,
@@ -16,8 +14,10 @@ import {
   Plus,
   PenSquare,
   Upload,
-  Zap,
-  Handshake
+  Handshake,
+  TrendingUp,
+  Megaphone,
+  FolderOpen,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -53,17 +53,17 @@ interface AppLayoutProps {
 }
 
 const workflowNavigation: NavItem[] = [
-  { name: 'Home', href: '/home', icon: Home },
-  { name: 'Reviews', href: '/reputation/reviews', icon: MessageSquareText },
-  { name: 'Photos', href: '/content/feed', icon: Images },
-  { name: 'Ready', href: '/content/library', icon: FolderOpen },
-  { name: 'Calendar', href: '/content/calendar', icon: CalendarCheck2 },
-  { name: 'Referrals', href: '/venue/referrals', icon: Handshake },
+  { name: 'Command Centre', href: '/home', icon: Home },
+  { name: 'Reputation', href: '/reputation/reviews', icon: MessageSquareText },
+  { name: 'Opportunities', href: '/opportunities', icon: TrendingUp },
+  { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
+  { name: 'Publishing', href: '/publishing', icon: CalendarCheck2 },
+  { name: 'Referrals', href: '/referrals', icon: Handshake },
+  { name: 'Assets', href: '/assets', icon: FolderOpen },
 ];
 
 const setupNavigation: NavItem[] = [
-  { name: 'Autopilot', href: '/autopilot', icon: Zap },
-  { name: 'Setup', href: '/setup', icon: Settings },
+  { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', icon: Shield, badge: 'Admin' };
@@ -71,22 +71,22 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 // Quick manual entry actions for the global manual actions menu
 const quickActions = [
   {
-    name: 'Add Photos',
-    description: 'Add photos that fuel automatic post prep',
-    href: '/content/feed',
+    name: 'Add Assets',
+    description: 'Upload approved venue assets for campaigns and publishing',
+    href: '/assets',
     icon: Upload,
   },
   {
-    name: 'New Plan',
-    description: 'Create an intentional campaign plan',
-    href: '/home?tab=plans',
+    name: 'New Campaign',
+    description: 'Create a campaign plan and close a visibility gap',
+    href: '/campaigns',
     icon: PenSquare,
   },
   {
-    name: 'Run Pulse Now',
-    description: 'Open automation status and run diagnostics',
-    href: '/autopilot',
-    icon: Zap,
+    name: 'Review Queue',
+    description: 'Open publishing and approval work that needs attention',
+    href: '/publishing',
+    icon: CalendarCheck2,
   },
 ];
 

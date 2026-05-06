@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, format, isAfter, isBefore, startOfDay } from 'date-fns';
 import {
   Archive, ArrowLeft, Clock3, Edit3, Image as ImageIcon, Loader2,
-  Sparkles, Trash2, Wand2, MoreHorizontal, Check, Maximize2
+  Sparkles, Trash2, MoreHorizontal, Check, Maximize2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
@@ -744,9 +744,6 @@ export default function BrandLibraryPage() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openEdit(item)}>
                                 <Edit3 className="w-4 h-4 mr-2" />Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/studio/pro-photo?contentItemId=${item.id}`)}>
-                                <Wand2 className="w-4 h-4 mr-2" />Open Pro Photo
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => archiveItem(item)}>
                                 <Archive className="w-4 h-4 mr-2" />Archive
