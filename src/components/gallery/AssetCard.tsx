@@ -63,12 +63,12 @@ interface AssetCardProps {
 }
 
 const sourceLabels: Record<string, { label: string; className: string }> = {
-  generated_image: { label: 'Generated', className: 'bg-accent/20 text-accent' },
+  generated_image: { label: 'Prepared', className: 'bg-accent/20 text-accent' },
   variation: { label: 'Variation', className: 'bg-info/20 text-info' },
   approved_output: { label: 'Approved', className: 'bg-success/20 text-success' },
   upload: { label: 'Upload', className: 'bg-muted text-muted-foreground' },
-  generated_video: { label: 'AI Reel', className: 'bg-accent/20 text-accent' },
-  reel_source: { label: 'Reel Source', className: 'bg-warning/20 text-warning' },
+  generated_video: { label: 'Video asset', className: 'bg-accent/20 text-accent' },
+  reel_source: { label: 'Source asset', className: 'bg-warning/20 text-warning' },
 };
 
 const statusIcons: Record<string, typeof CheckCircle2> = {
@@ -90,7 +90,7 @@ export function AssetCard({
   onUpdateStatus,
   onPreview,
   showVariation = true,
-  showReel = true,
+  showReel = false,
   showLineage = true,
   isCreatingVariation = false,
   isCreatingReel = false,

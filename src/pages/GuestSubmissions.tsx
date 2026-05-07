@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { ArrowLeft, Camera, CheckCircle2, XCircle, Clock, QrCode, Copy, Sparkles, Download } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle2, XCircle, Clock, QrCode, Copy, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 function QRCodeSVG({ url, size = 200 }: { url: string; size?: number }) {
@@ -53,16 +53,6 @@ export default function GuestSubmissions() {
         .eq('id', id);
       if (error) throw error;
 
-      // If approving, trigger AI enhancement
-      if (status === 'approved') {
-        try {
-          await supabase.functions.invoke('enhance-guest-submission', {
-            body: { submissionId: id },
-          });
-        } catch (err) {
-          console.warn('AI enhancement failed, submission still approved:', err);
-        }
-      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['guest-submissions'] });
@@ -83,13 +73,13 @@ export default function GuestSubmissions() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/setup')}>
-        <ArrowLeft className="w-4 h-4" /> Back to Setup
+      <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/assets')}>
+        <ArrowLeft className="w-4 h-4" /> Back to Assets
       </Button>
 
       <PageHeader
         title="Guest Photos"
-        description="Review and approve guest-submitted photos for your content library."
+        description="Review and approve guest-submitted photos for your venue asset library."
         action={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setQrOpen(true)}>
@@ -165,7 +155,7 @@ export default function GuestSubmissions() {
                 {sub.generated_caption && (
                   <div className="absolute bottom-2 left-2">
                     <Badge className="bg-info/90 text-white text-[10px]">
-                      <Sparkles className="w-3 h-3 mr-1" /> AI Enhanced
+                      Suggested caption
                     </Badge>
                   </div>
                 )}

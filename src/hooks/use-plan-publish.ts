@@ -24,8 +24,6 @@ export interface PlanPublishItem {
 export const PUBLISH_CHANNELS = [
   { value: 'instagram_feed', label: 'Instagram Feed', icon: 'image', category: 'social' },
   { value: 'instagram_stories', label: 'Instagram Stories', icon: 'play', category: 'social' },
-  { value: 'instagram_reels', label: 'Instagram Reels', icon: 'video', category: 'social' },
-  { value: 'tiktok', label: 'TikTok', icon: 'video', category: 'social' },
   { value: 'email', label: 'Email', icon: 'mail', category: 'direct' },
   { value: 'sms', label: 'SMS / Push Notification', icon: 'message', category: 'direct' },
 ] as const;

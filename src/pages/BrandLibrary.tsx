@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { resolveAssetMediaUrl, isSignedUrl } from '@/hooks/use-resolved-media';
 import { MediaImage } from '@/components/ui/media-image';
 import { generateExplanation } from '@/lib/explanations';
+import { useCommandCentre } from '@/hooks/use-command-centre';
 
 interface LibraryItem {
   id: string;
@@ -79,6 +80,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 export default function BrandLibraryPage() {
   const { currentVenue } = useVenue();
+  const { data: commandCentre } = useCommandCentre();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -669,6 +671,25 @@ export default function BrandLibraryPage() {
         </CardContent>
       </Card>
 
+      {!!commandCentre?.assetTasks.length && (
+        <Card className="border-dashed">
+          <CardContent className="p-4 space-y-3">
+            <div>
+              <p className="text-sm font-medium">Requested shots for upcoming campaigns</p>
+              <p className="text-xs text-muted-foreground">Assets support campaigns and visibility coverage. Pulse will fall back to text-only where needed.</p>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {commandCentre.assetTasks.map((task) => (
+                <div key={task.id} className="rounded-lg border border-border bg-muted/20 p-3">
+                  <p className="text-sm font-medium">{task.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{task.description}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs value={topLevelTab} onValueChange={handleTopLevelTabChange}>
         <TabsList>
           <TabsTrigger value="ready">Ready</TabsTrigger>
@@ -922,7 +943,7 @@ export default function BrandLibraryPage() {
 
           <div className="space-y-3">
             <Input
-              placeholder="Search by title or source (uploaded, pro_photo, reusable...)"
+              placeholder="Search by title or source (uploaded, approved, reusable...)"
               value={assetSearch}
               onChange={(event) => setAssetSearch(event.target.value)}
             />
@@ -1257,7 +1278,6 @@ function getSourceLabel(item: LibraryItem): string {
     item.source === 'autopilot' ||
     item.source === 'generated' ||
     sourceType.includes('generated') ||
-    sourceType.includes('pro_photo') ||
     sourceType.includes('editor') ||
     sourceType.includes('ai') ||
     runType.includes('photo') ||
