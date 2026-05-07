@@ -179,28 +179,22 @@ export default function Home() {
         </SectionCard>
 
         <SectionCard
-          title="Asset Requests"
-          description="Simple asset asks that support campaigns without turning Pulse into a generation tool."
-          actionLabel="Open Assets"
-          actionTo="/assets"
+          title="Referral & Membership Activity"
+          description="The current state of partner demand, verification work, rewards, and the membership foundation."
+          actionLabel="Open Members & Referrals"
+          actionTo="/members"
         >
           {isLoading ? (
             <SectionSkeleton />
-          ) : data?.assetTasks.length ? (
-            <div className="space-y-3">
-              {data.assetTasks.map((task) => (
-                <ActionRow
-                  key={task.id}
-                  title={task.title}
-                  reason={task.description}
-                  status="Needs upload"
-                  ctaLabel={task.ctaLabel}
-                  ctaTo={task.ctaTo}
-                />
-              ))}
-            </div>
           ) : (
-            <EmptyMessage message="No specific asset request is blocking the current campaign cycle." />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <StatTile label="New referrals" value={String(data?.membersReferrals.newReferrals ?? 0)} />
+              <StatTile label="Need bill verification" value={String(data?.membersReferrals.bookingsNeedingVerification ?? 0)} tone="warning" />
+              <StatTile label="Top referrer" value={data?.membersReferrals.topReferrer || 'No referral activity yet'} tone="positive" />
+              <StatTile label="Active offers" value={String(data?.membersReferrals.activeOffers ?? 0)} />
+              <StatTile label="Commissions owed" value={`£${(data?.membersReferrals.commissionsOwed ?? 0).toFixed(0)}`} />
+              <StatTile label="Membership status" value={data?.membersReferrals.membershipState || 'Not configured'} />
+            </div>
           )}
         </SectionCard>
       </div>

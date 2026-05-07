@@ -46,7 +46,7 @@ export function ReferralHomeCards() {
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Grow your bookings</h2>
-        <Link to="/growth/referrals">
+        <Link to="/members">
           <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
             View referral activity <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
@@ -63,7 +63,7 @@ export function ReferralHomeCards() {
             icon={TrendingUp}
             label="Referral Revenue"
             value={`£${(stats?.totalRevenue ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 0 })}`}
-            href="/growth/referrals"
+            href="/members"
           />
           {stage >= 2 ? (
             <ReferralStatCard
@@ -77,7 +77,7 @@ export function ReferralHomeCards() {
               icon={Receipt}
               label="Pending Verifications"
               value={String(stats?.pendingVerify ?? 0)}
-              href="/growth/referrals"
+              href="/members"
               warn={!!stats?.pendingVerify}
             />
           )}
@@ -100,7 +100,7 @@ export function ReferralHomeCards() {
               icon={Receipt}
               label="Open Referrals"
               value={String(stats?.pendingVerify ?? 0)}
-              href="/growth/referrals"
+              href="/members"
             />
           )}
         </div>

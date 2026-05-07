@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home,
-  CalendarCheck2,
   MessageSquareText,
   Settings,
   ChevronDown,
@@ -13,11 +12,9 @@ import {
   Shield,
   Plus,
   PenSquare,
-  Upload,
   Handshake,
-  TrendingUp,
   Megaphone,
-  FolderOpen,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useVenue } from '@/lib/venue-context';
@@ -55,11 +52,8 @@ interface AppLayoutProps {
 const workflowNavigation: NavItem[] = [
   { name: 'Command Centre', href: '/home', icon: Home },
   { name: 'Reputation', href: '/reputation/reviews', icon: MessageSquareText },
-  { name: 'Opportunities', href: '/opportunities', icon: TrendingUp },
   { name: 'Campaigns', href: '/campaigns', icon: Megaphone },
-  { name: 'Publishing', href: '/publishing', icon: CalendarCheck2 },
-  { name: 'Referrals', href: '/referrals', icon: Handshake },
-  { name: 'Assets', href: '/assets', icon: FolderOpen },
+  { name: 'Members & Referrals', href: '/members', icon: Handshake },
 ];
 
 const setupNavigation: NavItem[] = [
@@ -71,22 +65,22 @@ const platformAdminItem = { name: 'Platform Admin', href: '/admin/platform', ico
 // Quick manual entry actions for the global manual actions menu
 const quickActions = [
   {
-    name: 'Add Assets',
-    description: 'Upload approved venue assets for campaigns and publishing',
-    href: '/assets',
-    icon: Upload,
-  },
-  {
     name: 'New Campaign',
-    description: 'Create a campaign plan and close a visibility gap',
+    description: 'Create a commercial campaign and close a visibility gap',
     href: '/campaigns',
     icon: PenSquare,
   },
   {
-    name: 'Review Queue',
-    description: 'Open publishing and approval work that needs attention',
-    href: '/publishing',
-    icon: CalendarCheck2,
+    name: 'Reputation Queue',
+    description: 'Review replies and urgent guest feedback that need approval',
+    href: '/reputation/reviews?tab=inbox',
+    icon: MessageSquareText,
+  },
+  {
+    name: 'Members & Referrals',
+    description: 'Check incoming referrals, verification blockers, and partner payouts',
+    href: '/members',
+    icon: ShieldCheck,
   },
 ];
 

@@ -57,6 +57,7 @@ import VenueReferralsPage from "./pages/venue/Referrals";
 import ReferralRedirect from "./pages/ReferralRedirect";
 import Opportunities from "./pages/Opportunities";
 import Campaigns from "./pages/Campaigns";
+import MembersReferrals from "./pages/MembersReferrals";
 
 const queryClient = new QueryClient();
 
@@ -161,7 +162,8 @@ function AppRoutes() {
         <Route path="/opportunities" element={<Opportunities />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/publishing" element={<Publishing />} />
-        <Route path="/referrals" element={<ReferralGuard minimumStage={1}><ReferralsPage /></ReferralGuard>} />
+        <Route path="/members" element={<ReferralGuard minimumStage={1}><MembersReferrals /></ReferralGuard>} />
+        <Route path="/referrals" element={<Navigate to="/members" replace />} />
         <Route path="/assets" element={<BrandLibrary />} />
         <Route path="/settings" element={<Setup />} />
         <Route path="/reviews" element={<Navigate to="/reputation/reviews" replace />} />
@@ -182,7 +184,7 @@ function AppRoutes() {
         <Route path="/setup" element={<Setup />} />
 
         {/* Content Section */}
-        <Route path="/content/library" element={<BrandLibrary />} />
+        <Route path="/content/library" element={<Navigate to="/assets" replace />} />
         <Route path="/content/feed" element={<ContentFeed />} />
         <Route path="/content/planner" element={<Navigate to="/campaigns" replace />} />
         <Route path="/content/planner/plan/:planId" element={<EventPlanDetail />} />
@@ -198,7 +200,7 @@ function AppRoutes() {
         {/* Growth Section */}
         <Route path="/growth/performance" element={<BrandPerformance />} />
         <Route path="/growth/industry-insights" element={<IndustryInsights />} />
-        <Route path="/growth/referrals" element={<ReferralGuard minimumStage={1}><ReferralsPage /></ReferralGuard>} />
+        <Route path="/growth/referrals" element={<Navigate to="/members" replace />} />
         <Route path="/growth/marketplace" element={<ReferralGuard minimumStage={3}><MarketplacePage /></ReferralGuard>} />
         <Route path="/growth/partners" element={<ReferralGuard minimumStage={2}><PartnersPage /></ReferralGuard>} />
         <Route path="/growth/payouts" element={<ReferralGuard minimumStage={1}><PayoutsPage /></ReferralGuard>} />

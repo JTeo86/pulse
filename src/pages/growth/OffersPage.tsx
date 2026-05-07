@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { ReferralGuard } from '@/components/referral/ReferralGuard';
+import { BackButton } from '@/components/navigation/BackButton';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,7 @@ function OffersContent() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <BackButton fallbackTo="/members" label="Back to Members & Referrals" />
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <PageHeader

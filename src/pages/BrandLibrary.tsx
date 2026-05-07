@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, format, isAfter, isBefore, startOfDay } from 'date-fns';
 import {
-  Archive, ArrowLeft, Clock3, Edit3, Image as ImageIcon, Loader2,
+  Archive, Clock3, Edit3, Image as ImageIcon, Loader2,
   Sparkles, Trash2, MoreHorizontal, Check, Maximize2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { normalizeContentAssetType } from '@/lib/content-item-utils';
+import { BackButton } from '@/components/navigation/BackButton';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -646,17 +647,16 @@ export default function BrandLibraryPage() {
 
   return (
     <div className="space-y-6">
-      {autopilotRunIdFilter && (
-        <Button variant="ghost" size="sm" className="w-fit gap-2" onClick={() => navigate('/home')}>
-          <ArrowLeft className="w-4 h-4" /> Back to Home
-        </Button>
-      )}
+      <BackButton
+        fallbackTo={autopilotRunIdFilter ? '/home' : '/campaigns'}
+        label={autopilotRunIdFilter ? 'Back to Command Centre' : 'Back to Campaigns'}
+      />
       <PageHeader
-        title="Ready"
-        description="Review what’s ready, finish one step, then Add to Calendar."
+        title="Campaign Assets"
+        description="Lightweight asset organisation for campaigns, publishing support, and venue visibility."
         action={(
-          <Button variant="outline" className="gap-2" onClick={() => navigate('/content/feed')}>
-            <ImageIcon className="w-4 h-4" /> Photos
+          <Button variant="outline" className="gap-2" onClick={() => navigate('/venue/guest-photos')}>
+            <ImageIcon className="w-4 h-4" /> Guest Photos
           </Button>
         )}
       />

@@ -122,7 +122,7 @@ export function TodaysOpportunities() {
           title: `Verify ${billVerify.count} referral bill${(billVerify.count ?? 0) > 1 ? 's' : ''}`,
           description: 'Bills awaiting spend verification',
           count: billVerify.count ?? 0,
-          route: '/growth/referrals',
+          route: '/members',
           actionLabel: 'Verify',
           priority: 'high',
         });

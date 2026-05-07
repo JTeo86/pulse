@@ -68,6 +68,14 @@ interface CommandCentrePayload {
     noRecentAssetSignal: boolean;
     lastAssetAt: string | null;
   };
+  membersReferrals: {
+    newReferrals: number;
+    bookingsNeedingVerification: number;
+    topReferrer: string | null;
+    activeOffers: number;
+    membershipState: string;
+    commissionsOwed: number;
+  };
   opportunities: CommandOpportunity[];
   activity: CommandActionItem[];
   assetTasks: AssetRequestTask[];
@@ -174,6 +182,8 @@ export function useCommandCentre() {
         assetsRes,
         referralsRes,
         eventsRes,
+        offersRes,
+        walletCountRes,
       ] = await Promise.all([
         supabase
           .from('review_response_tasks')
@@ -219,7 +229,7 @@ export function useCommandCentre() {
           .limit(120),
         supabase
           .from('referrals')
-          .select('id, guest_name, status, created_at, booking_date, bill_amount, commission, source_type')
+          .select('id, partner_id, guest_name, status, created_at, booking_date, bill_amount, commission, source_type, referrers(full_name)')
           .eq('venue_id', venueId)
           .order('created_at', { ascending: false })
           .limit(120),
@@ -231,6 +241,15 @@ export function useCommandCentre() {
           .or(`country_code.eq.${(currentVenue as any).country_code || 'GB'},country_code.is.null`)
           .order('starts_at', { ascending: true })
           .limit(24),
+        supabase
+          .from('venue_offers')
+          .select('id, status')
+          .eq('venue_id', venueId)
+          .limit(100),
+        supabase
+          .from('credit_wallets')
+          .select('id', { count: 'exact', head: true })
+          .eq('venue_id', venueId),
       ]);
 
       const pendingReplies = pendingRepliesRes.data ?? [];
@@ -241,6 +260,8 @@ export function useCommandCentre() {
       const assets = assetsRes.data ?? [];
       const referrals = referralsRes.data ?? [];
       const events = eventsRes.data ?? [];
+      const offers = offersRes.data ?? [];
+      const walletCount = walletCountRes.count ?? 0;
       const planIds = plans.map((plan: any) => plan.id).filter(Boolean);
       const publishItems = planIds.length
         ? ((await supabase
@@ -266,6 +287,22 @@ export function useCommandCentre() {
       const { praiseTheme, complaintTheme, praiseRollup, complaintRollup } = getThemeSummary(reviewsRollups);
       const pendingReferralVerifications = referrals.filter((ref: any) => ['visited', 'bill_entered'].includes(ref.status)).length;
       const trackedReferrals = referrals.filter((ref: any) => !['created', 'submitted', 'clicked'].includes(ref.status)).length;
+      const newReferrals = referrals.filter((ref: any) => ['created', 'submitted', 'clicked', 'booking_confirmed'].includes(ref.status)).length;
+      const commissionsOwed = referrals
+        .filter((ref: any) => ref.status !== 'paid')
+        .reduce((sum: number, ref: any) => sum + (Number(ref.commission) || 0), 0);
+      const topReferrer = Array.from(
+        referrals.reduce((map: Map<string, { name: string; count: number }>, ref: any) => {
+          const name = ref.referrers?.full_name || 'Partner';
+          const current = map.get(name) ?? { name, count: 0 };
+          current.count += 1;
+          map.set(name, current);
+          return map;
+        }, new Map()),
+      )
+        .map(([, value]) => value)
+        .sort((a, b) => b.count - a.count)[0]?.name ?? null;
+      const activeOffers = offers.filter((offer: any) => offer.status === 'active').length;
 
       const approvals: CommandActionItem[] = [
         ...pendingReplies.slice(0, 4).map((task: any) => ({
@@ -308,8 +345,8 @@ export function useCommandCentre() {
             title: item.guest_name ? `Verify bill for ${item.guest_name}` : 'Verify referral booking bill',
             reason: 'Commission and payout progress are blocked until this booking is verified.',
             status: item.status === 'bill_entered' ? 'Bill entered' : 'Needs bill verification',
-            ctaLabel: 'Open Referrals',
-            ctaTo: '/referrals',
+            ctaLabel: 'Open Members & Referrals',
+            ctaTo: '/members',
             priority: 'high' as OpportunityPriority,
           })),
       ].sort((a, b) => {
@@ -407,8 +444,8 @@ export function useCommandCentre() {
           priority: getPriorityFromCount(pendingReferralVerifications),
           status: 'tracked',
           suggestedAction: 'Verify bills and move eligible bookings toward commission approval.',
-          ctaLabel: 'Open Referrals',
-          ctaTo: '/referrals',
+          ctaLabel: 'Open Members & Referrals',
+          ctaTo: '/members',
         });
       }
 
@@ -465,8 +502,8 @@ export function useCommandCentre() {
           title: `${trackedReferrals} referral${trackedReferrals === 1 ? '' : 's'} tracked`,
           reason: 'Lead and partner activity is being captured in the referral pipeline.',
           status: trackedReferrals > 0 ? 'Tracked' : 'Quiet',
-          ctaLabel: 'Open Referrals',
-          ctaTo: '/referrals',
+          ctaLabel: 'Open Members & Referrals',
+          ctaTo: '/members',
         },
       ];
 
@@ -528,6 +565,14 @@ export function useCommandCentre() {
           staleCampaignCount,
           noRecentAssetSignal,
           lastAssetAt,
+        },
+        membersReferrals: {
+          newReferrals,
+          bookingsNeedingVerification: pendingReferralVerifications,
+          topReferrer,
+          activeOffers,
+          membershipState: walletCount > 0 ? `${walletCount} wallet placeholder${walletCount === 1 ? '' : 's'} configured` : 'Membership not configured yet',
+          commissionsOwed,
         },
         opportunities: opportunities.slice(0, 12),
         activity,

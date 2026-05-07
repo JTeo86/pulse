@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useVenue } from '@/lib/venue-context';
 import { useAuth } from '@/lib/auth-context';
 import { ReferralGuard } from '@/components/referral/ReferralGuard';
+import { BackButton } from '@/components/navigation/BackButton';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -365,6 +366,7 @@ function PayoutsContent() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <BackButton fallbackTo="/members" label="Back to Members & Referrals" />
       <PageHeader title="Payouts" description="Create manual payout batches, send them off-platform, and confirm when money lands." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

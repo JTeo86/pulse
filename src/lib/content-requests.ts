@@ -2,8 +2,8 @@ export type ContentRequest = {
   id: string;
   title: string;
   context?: string;
-  ctaLabel: 'Add Photos';
-  ctaTo: '/content/feed';
+  ctaLabel: 'Open Assets';
+  ctaTo: '/assets';
   priority: number;
   reason: 'content_gap' | 'content_mix' | 'low_asset_count' | 'review_signal';
 };
@@ -67,8 +67,8 @@ export function generateContentRequests(
       id: 'gap-lunch',
       title: 'Capture your lunch dishes',
       context: 'You have no lunch content this week.',
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 100,
       reason: 'content_gap',
     });
@@ -79,8 +79,8 @@ export function generateContentRequests(
       id: 'gap-dinner',
       title: 'Capture dinner service',
       context: 'Dinner coverage is missing this week.',
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 96,
       reason: 'content_gap',
     });
@@ -91,8 +91,8 @@ export function generateContentRequests(
       id: 'gap-weekend',
       title: 'Take photos for weekend promotion',
       context: 'You have no weekend content queued.',
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 92,
       reason: 'content_gap',
     });
@@ -104,8 +104,8 @@ export function generateContentRequests(
       id: 'mix-drinks',
       title: 'Photograph your cocktails or drinks',
       context: 'Your current mix has no drinks content.',
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 74,
       reason: 'content_mix',
     });
@@ -116,8 +116,8 @@ export function generateContentRequests(
       id: 'mix-venue',
       title: 'Capture your dining room or atmosphere',
       context: 'Venue and atmosphere shots are missing.',
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 72,
       reason: 'content_mix',
     });
@@ -129,8 +129,8 @@ export function generateContentRequests(
       id: 'assets-low',
       title: 'Add more photos to keep content running',
       context: `Only ${normalized.assets.unusedImageCount} unused photos are available.`,
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 68,
       reason: 'low_asset_count',
     });
@@ -142,8 +142,8 @@ export function generateContentRequests(
       id: 'review-desserts',
       title: 'Capture your desserts',
       context: 'Recent reviews keep mentioning desserts.',
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 66,
       reason: 'review_signal',
     });
@@ -154,8 +154,8 @@ export function generateContentRequests(
       id: 'review-cocktails',
       title: 'Photograph your drinks',
       context: 'Recent reviews mention cocktails often.',
-      ctaLabel: 'Add Photos',
-      ctaTo: '/content/feed',
+      ctaLabel: 'Open Assets',
+      ctaTo: '/assets',
       priority: 65,
       reason: 'review_signal',
     });
